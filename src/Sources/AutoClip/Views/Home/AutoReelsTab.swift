@@ -8,11 +8,23 @@ import AppKit
 struct AutoReelRecord: Identifiable, Codable {
     var id: UUID
     var title: String
-    var path: String
+    var path: String          // primary file (first reel / single reel)
+    var paths: [String]       // all files (for multiple reels)
     var format: String
     var duration: Double
     var clipCount: Int
     var dateCreated: Double
+    var cutPoints: [Double]   // fractional [0,1] cut positions for scrubber
+
+    init(id: UUID, title: String, path: String, paths: [String] = [],
+         format: String, duration: Double, clipCount: Int, dateCreated: Double,
+         cutPoints: [Double] = []) {
+        self.id = id; self.title = title; self.path = path
+        self.paths = paths.isEmpty ? [path] : paths
+        self.format = format; self.duration = duration
+        self.clipCount = clipCount; self.dateCreated = dateCreated
+        self.cutPoints = cutPoints
+    }
 }
 
 // MARK: - Active job (lives in store, survives tab switches)
@@ -25,13 +37,90 @@ struct AutoReelJob: Identifiable {
     var isFinished: Bool
     var error: String?
     var outputURL: URL?          // single reel
-    var outputURLs: [URL]?       // individual clips
+    var outputURLs: [URL]?       // multiple reels or individual clips
+    var cutPoints: [Double]      // fractional positions [0,1] for scrubber tick marks
+    var reelDuration: Double     // total duration of the primary reel (for cut point math)
+
+    init(id: UUID, title: String, progress: Double, statusMsg: String,
+         isFinished: Bool, error: String? = nil, outputURL: URL? = nil,
+         outputURLs: [URL]? = nil, cutPoints: [Double] = [], reelDuration: Double = 0) {
+        self.id = id; self.title = title; self.progress = progress
+        self.statusMsg = statusMsg; self.isFinished = isFinished
+        self.error = error; self.outputURL = outputURL; self.outputURLs = outputURLs
+        self.cutPoints = cutPoints; self.reelDuration = reelDuration
+    }
 }
 
 enum ExportMode: String, CaseIterable {
     case reel            = "Reel"
     case multipleReels   = "Multiple Reels"
     case individualClips = "Individual Clips"
+}
+
+enum StorylineMode: String, CaseIterable, Identifiable {
+    case linear    = "Linear Journey"
+    case contrast  = "Contrast Mode"
+    case flashback = "Flashback Loop"
+    case random    = "Random Vibes"
+    case hero      = "Hero's Journey"
+
+    var id: String { rawValue }
+
+    var icon: String {
+        switch self {
+        case .linear:    return "arrow.right"
+        case .contrast:  return "arrow.left.arrow.right"
+        case .flashback: return "arrow.counterclockwise"
+        case .random:    return "shuffle"
+        case .hero:      return "star"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .linear:    return "Follow the story from start to finish."
+        case .contrast:  return "Put opposites side by side for impact."
+        case .flashback: return "Show the ending first, then reveal how."
+        case .random:    return "Connect moments by mood, not time."
+        case .hero:      return "Shape the story around one emotional arc."
+        }
+    }
+
+    func order(_ clips: [Clip]) -> [Clip] {
+        guard clips.count > 1 else { return clips }
+        switch self {
+        case .linear:
+            return clips.sorted { $0.startTime < $1.startTime }
+        case .contrast:
+            // Interleave high-score and low-score clips
+            let sorted = clips.sorted { $0.score > $1.score }
+            var result: [Clip] = []
+            var lo = 0, hi = sorted.count - 1
+            var toggle = true
+            while lo <= hi {
+                result.append(toggle ? sorted[lo] : sorted[hi])
+                if toggle { lo += 1 } else { hi -= 1 }
+                toggle.toggle()
+            }
+            return result
+        case .flashback:
+            // Best clip first, rest in chronological order
+            var s = clips.sorted { $0.score > $1.score }
+            let top = s.removeFirst()
+            return [top] + s.sorted { $0.startTime < $1.startTime }
+        case .random:
+            return clips.shuffled()
+        case .hero:
+            // Chronological but with the highest-score clip placed in the middle
+            var s = clips.sorted { $0.startTime < $1.startTime }
+            if let peakIdx = s.indices.max(by: { s[$0].score < s[$1].score }), s.count >= 3 {
+                let peak = s.remove(at: peakIdx)
+                let mid = s.count / 2
+                s.insert(peak, at: mid)
+            }
+            return s
+        }
+    }
 }
 
 // MARK: - Store
@@ -94,6 +183,7 @@ struct AutoReelsTab: View {
     @State private var previewDuration: Double = 1
     @State private var previewTimeObserver: Any?
     @State private var isScrubbing = false
+    @State private var previewCutPoints: [Double] = []
 
     // Settings
     @State private var selectedFormat: VideoExportService.ExportFormat = .vertical9x16
@@ -110,6 +200,7 @@ struct AutoReelsTab: View {
     // Export mode
     @State private var exportMode: ExportMode = .reel
     @State private var numberOfReels: Double = 2
+    @State private var storylineMode: StorylineMode = .linear
 
     private let gold = Color(red: 1.0, green: 0.75, blue: 0.0)
     private let captionStyles = CaptionStyle.all
@@ -341,6 +432,9 @@ struct AutoReelsTab: View {
             // Export mode
             exportModeSection
 
+            // Storyline structure
+            storylineSection
+
             // AI-powered clip selection
             aiSettingsSection
         }
@@ -402,6 +496,46 @@ struct AutoReelsTab: View {
             .cornerRadius(7)
         }
         .buttonStyle(.plain)
+    }
+
+    private var storylineSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: "film.stack").foregroundColor(gold).font(.system(size: 12))
+                Text("Storyline").font(.system(size: 12, weight: .semibold)).foregroundColor(.white)
+            }
+            VStack(spacing: 4) {
+                ForEach(StorylineMode.allCases) { mode in
+                    Button(action: { storylineMode = mode }) {
+                        HStack(spacing: 8) {
+                            Image(systemName: mode.icon)
+                                .font(.system(size: 11))
+                                .foregroundColor(storylineMode == mode ? .black : gold.opacity(0.7))
+                                .frame(width: 16)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(mode.rawValue)
+                                    .font(.system(size: 11, weight: storylineMode == mode ? .semibold : .regular))
+                                    .foregroundColor(storylineMode == mode ? .black : .white)
+                                Text(mode.description)
+                                    .font(.system(size: 10))
+                                    .foregroundColor(storylineMode == mode ? .black.opacity(0.6) : Color.white.opacity(0.4))
+                                    .lineLimit(1)
+                            }
+                            Spacer()
+                            if storylineMode == mode {
+                                Image(systemName: "checkmark").font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(.black)
+                            }
+                        }
+                        .padding(.horizontal, 10).padding(.vertical, 7)
+                        .background(storylineMode == mode ? gold : Color.white.opacity(0.04))
+                        .cornerRadius(7)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(14).background(Color.white.opacity(0.04)).cornerRadius(10)
     }
 
     private var aiSettingsSection: some View {
@@ -685,34 +819,67 @@ struct AutoReelsTab: View {
     }
 
     func reelRow(_ reel: AutoReelRecord) -> some View {
-        HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.07)).frame(width: 50, height: 50)
-                Image(systemName: "play.rectangle.fill").font(.system(size: 18)).foregroundColor(gold.opacity(0.7))
-            }
-            VStack(alignment: .leading, spacing: 3) {
-                Text(reel.title).font(.system(size: 13, weight: .medium)).foregroundColor(.white).lineLimit(1)
-                HStack(spacing: 6) {
-                    Text(reel.format).font(.system(size: 11)).foregroundColor(Color.white.opacity(0.4))
-                    Text("·").foregroundColor(Color.white.opacity(0.2))
-                    Text(formatDur(reel.duration)).font(.system(size: 11)).foregroundColor(Color.white.opacity(0.4))
+        let isMulti = reel.paths.count > 1
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.07)).frame(width: 50, height: 50)
+                    Image(systemName: isMulti ? "rectangle.stack.fill" : "play.rectangle.fill")
+                        .font(.system(size: 18)).foregroundColor(gold.opacity(0.7))
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(reel.title).font(.system(size: 13, weight: .medium)).foregroundColor(.white).lineLimit(1)
+                    HStack(spacing: 6) {
+                        Text(reel.format).font(.system(size: 11)).foregroundColor(Color.white.opacity(0.4))
+                        Text("·").foregroundColor(Color.white.opacity(0.2))
+                        Text(formatDur(reel.duration)).font(.system(size: 11)).foregroundColor(Color.white.opacity(0.4))
+                    }
+                }
+                Spacer()
+                HStack(spacing: 10) {
+                    Button(action: {
+                        let urls = reel.paths.map { URL(fileURLWithPath: $0) }.filter { FileManager.default.fileExists(atPath: $0.path) }
+                        if !urls.isEmpty { NSWorkspace.shared.activateFileViewerSelecting(urls) }
+                    }) {
+                        Image(systemName: "folder").font(.system(size: 13)).foregroundColor(Color.white.opacity(0.3))
+                    }
+                    .buttonStyle(.plain)
+                    .help(isMulti ? "Show all reels in Finder" : "Show in Finder")
+
+                    Button(action: { showPreview(url: URL(fileURLWithPath: reel.path), id: reel.id, cutPoints: reel.cutPoints, reelDuration: reel.duration) }) {
+                        Image(systemName: "play.circle.fill").font(.system(size: 18)).foregroundColor(gold.opacity(0.7))
+                    }
+                    .buttonStyle(.plain)
+                    Button(action: { store.remove(id: reel.id) }) {
+                        Image(systemName: "trash").font(.system(size: 12)).foregroundColor(Color.white.opacity(0.2))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Remove from history")
                 }
             }
-            Spacer()
-            HStack(spacing: 10) {
-                Button(action: { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: reel.path)]) }) {
-                    Image(systemName: "folder").font(.system(size: 13)).foregroundColor(Color.white.opacity(0.3))
+            // Sub-list for multiple reels
+            if isMulti {
+                VStack(spacing: 3) {
+                    ForEach(Array(reel.paths.enumerated()), id: \.offset) { i, path in
+                        let url = URL(fileURLWithPath: path)
+                        HStack(spacing: 8) {
+                            Text("Reel \(i + 1)")
+                                .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.5))
+                            Spacer()
+                            Button(action: { NSWorkspace.shared.activateFileViewerSelecting([url]) }) {
+                                Image(systemName: "folder").font(.system(size: 11))
+                                    .foregroundColor(Color.white.opacity(0.25))
+                            }.buttonStyle(.plain)
+                            Button(action: { showPreview(url: url, id: reel.id) }) {
+                                Image(systemName: "play.circle.fill").font(.system(size: 14))
+                                    .foregroundColor(gold.opacity(0.6))
+                            }.buttonStyle(.plain)
+                        }
+                        .padding(.horizontal, 8).padding(.vertical, 4)
+                        .background(Color.white.opacity(0.03)).cornerRadius(5)
+                    }
                 }
-                .buttonStyle(.plain)
-                Button(action: { showPreview(url: URL(fileURLWithPath: reel.path), id: reel.id) }) {
-                    Image(systemName: "play.circle.fill").font(.system(size: 18)).foregroundColor(gold.opacity(0.7))
-                }
-                .buttonStyle(.plain)
-                Button(action: { store.remove(id: reel.id) }) {
-                    Image(systemName: "trash").font(.system(size: 12)).foregroundColor(Color.white.opacity(0.2))
-                }
-                .buttonStyle(.plain)
-                .help("Remove from history")
+                .padding(.top, 6).padding(.leading, 62)
             }
         }
         .padding(.horizontal, 20).padding(.vertical, 10)
@@ -802,6 +969,13 @@ struct AutoReelsTab: View {
                                 .fill(gold)
                                 .frame(width: max(0, CGFloat(previewProgress) * w), height: 4)
                                 .animation(isScrubbing ? nil : .linear(duration: 0.1), value: previewProgress)
+                            // Cut-point tick marks
+                            ForEach(previewCutPoints, id: \.self) { cut in
+                                Rectangle()
+                                    .fill(gold.opacity(0.85))
+                                    .frame(width: 2, height: 10)
+                                    .offset(x: CGFloat(cut) * w - 1, y: -3)
+                            }
                             Circle()
                                 .fill(gold)
                                 .frame(width: 14, height: 14)
@@ -894,7 +1068,7 @@ struct AutoReelsTab: View {
         let styleIdx = captionStyleIndex; let dur = targetDuration
         let ai = useAI; let prov = aiProvider
         let key = apiKeys[aiProvider] ?? ""; let mode = exportMode
-        let numReels = Int(numberOfReels)
+        let numReels = Int(numberOfReels); let sMode = storylineMode
 
         Task.detached(priority: .userInitiated) {
             let videosDir = URL(fileURLWithPath: NSHomeDirectory())
@@ -971,7 +1145,8 @@ struct AutoReelsTab: View {
                 await self.startPipelineAsync(videoURL: videoURL, format: fmt, captions: captions,
                                               styleIdx: styleIdx, targetDur: dur,
                                               useAI: ai, provider: prov, apiKey: key,
-                                              exportMode: mode, numberOfReels: numReels, outputDir: outDir)
+                                              exportMode: mode, numberOfReels: numReels,
+                                              storylineMode: sMode, outputDir: outDir)
             } catch {
                 await MainActor.run { self.isDownloading = false; self.downloadError = error.localizedDescription }
             }
@@ -1000,12 +1175,13 @@ struct AutoReelsTab: View {
         let styleIdx = captionStyleIndex; let dur = targetDuration
         let ai = useAI; let prov = aiProvider
         let key = apiKeys[aiProvider] ?? ""; let mode = exportMode
-        let numReels = Int(numberOfReels)
+        let numReels = Int(numberOfReels); let sMode = storylineMode
         Task.detached(priority: .userInitiated) {
             await self.startPipelineAsync(videoURL: videoURL, format: fmt, captions: captions,
                                           styleIdx: styleIdx, targetDur: dur,
                                           useAI: ai, provider: prov, apiKey: key,
-                                          exportMode: mode, numberOfReels: numReels, outputDir: outDir)
+                                          exportMode: mode, numberOfReels: numReels,
+                                          storylineMode: sMode, outputDir: outDir)
         }
     }
 
@@ -1016,6 +1192,7 @@ struct AutoReelsTab: View {
                                     provider: LLMClipService.AIProvider = .anthropic,
                                     apiKey: String = "",
                                     exportMode: ExportMode = .reel, numberOfReels: Int = 2,
+                                    storylineMode: StorylineMode = .linear,
                                     outputDir: URL = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first!) async {
         let jobID = UUID()
         let title = videoURL.deletingPathExtension().lastPathComponent
@@ -1051,21 +1228,27 @@ struct AutoReelsTab: View {
                 throw NSError(domain: "AutoClip", code: 4, userInfo: [NSLocalizedDescriptionKey: "Not enough speech segments to build a reel."])
             }
 
-            let clips: [Clip]
+            // For multiple reels each reel gets its own full targetDur budget
+            let selectionBudget = exportMode == .multipleReels ? targetDur * Double(numberOfReels) : targetDur
+
+            var clips: [Clip]
             if useAI && !apiKey.isEmpty {
                 // Smart AI mode: LLM picks WHICH segments are best — cuts stay clean
                 await upd(0.47, "AI choosing the best segments…")
                 let selected = try await LLMClipService.shared.selectSegments(
-                    from: segments, provider: provider, apiKey: apiKey, targetDuration: targetDur)
+                    from: segments, provider: provider, apiKey: apiKey, targetDuration: selectionBudget)
                 clips = selected
             } else {
                 // Local mode: score-based selection with hook boost
-                let (hook, rest) = svc.selectHookAndClips(from: segments, targetDuration: targetDur)
+                let (hook, rest) = svc.selectHookAndClips(from: segments, targetDuration: selectionBudget)
                 guard let hook else {
                     throw NSError(domain: "AutoClip", code: 4, userInfo: [NSLocalizedDescriptionKey: "Not enough speech segments to build a reel."])
                 }
                 clips = [hook] + rest
             }
+
+            // Apply storyline ordering to shape the narrative structure
+            clips = storylineMode.order(clips)
 
             let desktop = outputDir
 
@@ -1090,17 +1273,31 @@ struct AutoReelsTab: View {
                                                       outputURL: outURL, options: opts) { _, _ in }
                     outURLs.append(outURL)
                 }
-                let totalDur = clips.reduce(0) { $0 + $1.duration }
+                // Duration of the primary (first) reel
+                let firstGroup = validGroups.first ?? []
+                let firstReelDur = firstGroup.reduce(0) { $0 + $1.duration }
+                // Cut points as fractions of first reel duration (for scrubber ticks)
+                var cutPts: [Double] = []
+                if firstReelDur > 0 {
+                    var acc = 0.0
+                    for clip in firstGroup.dropLast() {
+                        acc += clip.duration
+                        cutPts.append(acc / firstReelDur)
+                    }
+                }
                 let record = AutoReelRecord(id: UUID(), title: "\(title) – \(validGroups.count) Reels",
                                             path: outURLs.first?.path ?? "",
-                                            format: fmtLabel(format), duration: totalDur,
-                                            clipCount: clips.count, dateCreated: Date().timeIntervalSince1970)
+                                            paths: outURLs.map { $0.path },
+                                            format: fmtLabel(format), duration: firstReelDur,
+                                            clipCount: clips.count, dateCreated: Date().timeIntervalSince1970,
+                                            cutPoints: cutPts)
                 await MainActor.run {
                     AutoReelsStore.shared.add(record)
                     store.updateJob(AutoReelJob(id: jobID, title: title, progress: 1.0,
                                                statusMsg: "\(validGroups.count) reels saved",
                                                isFinished: true, error: nil,
-                                               outputURL: outURLs.first, outputURLs: outURLs))
+                                               outputURL: outURLs.first, outputURLs: outURLs,
+                                               cutPoints: cutPts, reelDuration: firstReelDur))
                 }
             } else if exportMode == .individualClips {
                 // Export each clip as its own file
@@ -1134,13 +1331,24 @@ struct AutoReelsTab: View {
                 }
                 let asset = AVURLAsset(url: outURL)
                 let dur = (try? await asset.load(.duration)).map { CMTimeGetSeconds($0) } ?? 0
+                // Compute cut points as fractions of total duration
+                var cutPts: [Double] = []
+                if dur > 0 {
+                    var acc = 0.0
+                    for clip in clips.dropLast() {
+                        acc += clip.duration
+                        cutPts.append(acc / dur)
+                    }
+                }
                 let record = AutoReelRecord(id: UUID(), title: "\(title) Reel", path: outURL.path,
                                             format: fmtLabel(format), duration: dur,
-                                            clipCount: clips.count, dateCreated: Date().timeIntervalSince1970)
+                                            clipCount: clips.count, dateCreated: Date().timeIntervalSince1970,
+                                            cutPoints: cutPts)
                 await MainActor.run {
                     AutoReelsStore.shared.add(record)
                     store.updateJob(AutoReelJob(id: jobID, title: title, progress: 1.0,
-                                               statusMsg: "Done!", isFinished: true, error: nil, outputURL: outURL))
+                                               statusMsg: "Done!", isFinished: true, error: nil, outputURL: outURL,
+                                               cutPoints: cutPts, reelDuration: dur))
                 }
             }
 
@@ -1158,8 +1366,9 @@ struct AutoReelsTab: View {
         panel.begin { if $0 == .OK, let url = panel.url { pickedVideoURL = url } }
     }
 
-    private func showPreview(url: URL, id: UUID) {
+    private func showPreview(url: URL, id: UUID, cutPoints: [Double] = [], reelDuration: Double = 0) {
         previewURL = url; showingPreviewFor = id
+        previewCutPoints = cutPoints
     }
 
     private func closePreview() {

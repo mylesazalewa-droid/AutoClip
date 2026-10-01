@@ -164,7 +164,8 @@ class VideoExportService {
 
         // Re-encode path (format change or captions)
         try? FileManager.default.removeItem(at: outputURL)
-        guard let session = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality) else {
+        let preset = bestExportPreset(for: composition)
+        guard let session = AVAssetExportSession(asset: composition, presetName: preset) else {
             throw ExportError.exportFailed("Failed to create export session")
         }
         session.outputURL = outputURL
@@ -180,6 +181,19 @@ class VideoExportService {
 
         if let err = session.error { throw ExportError.exportFailed(err.localizedDescription) }
         progress(1.0)
+    }
+
+    // MARK: - Export preset selection
+
+    /// Pick the best compatible export preset for the composition.
+    /// HEVC (H.265) source files (e.g. iPhone videos) fail with HighestQuality
+    /// on some Mac configurations — fall back to 1920x1080 H.264 in that case.
+    private func bestExportPreset(for asset: AVAsset) -> String {
+        let preferred = AVAssetExportPresetHighestQuality
+        guard AVAssetExportSession.exportPresets(compatibleWith: asset).contains(preferred) else {
+            return AVAssetExportPreset1920x1080
+        }
+        return preferred
     }
 
     // MARK: - Geometry
@@ -265,9 +279,9 @@ class VideoExportService {
     private func smoothSamples(_ samples: [(time: Double, centerX: Double)]) -> [(time: Double, centerX: Double)] {
         guard samples.count > 2 else { return samples }
 
-        // Pass 1: wide moving average (window = 9) to kill jitter
+        // Pass 1: wide moving average (window = 15, ~7.5s at 0.5s interval) to kill jitter
         var pass1 = samples
-        let w = 9
+        let w = 15
         for i in 0..<samples.count {
             let lo = max(0, i - w / 2)
             let hi = min(samples.count - 1, i + w / 2)
@@ -275,11 +289,12 @@ class VideoExportService {
             pass1[i] = (time: samples[i].time, centerX: avg)
         }
 
-        // Pass 2: dead-zone — only commit a new center if it moved > 12% of the smoothed range
+        // Pass 2: dead-zone — only commit a new center if it moved > 22% of range
+        // (wider zone = camera stays put longer before panning)
         guard let minX = pass1.map(\.centerX).min(),
               let maxX = pass1.map(\.centerX).max() else { return pass1 }
         let range = max(maxX - minX, 1)
-        let threshold = range * 0.18
+        let threshold = range * 0.22
 
         var out = pass1
         var committed = pass1[0].centerX
@@ -290,9 +305,9 @@ class VideoExportService {
             out[i] = (time: pass1[i].time, centerX: committed)
         }
 
-        // Pass 3: exponential smooth to ease between committed positions
+        // Pass 3: slow exponential smooth — camera barely moves between frames
         var expOut = out
-        let alpha = 0.07  // lower = smoother, less reactive to sudden jumps
+        let alpha = 0.04  // very low = very smooth, cinematic pan
         for i in 1..<out.count {
             expOut[i] = (time: out[i].time,
                          centerX: expOut[i-1].centerX * (1 - alpha) + out[i].centerX * alpha)
@@ -534,8 +549,8 @@ class VideoExportService {
         var usedDuration = hook.duration
         var usedIDs: Set<UUID> = [hookCandidate.id]
 
-        // Auto-ceiling: at most one clip per ~45s of source content, capped at 20
-        let autoCeiling = max(3, min(20, clips.count))
+        // Auto-ceiling: allow up to all available clips (duration budget is the real limiter)
+        let autoCeiling = clips.count
 
         var selected: [Clip] = []
         for clip in byScore {
@@ -807,7 +822,8 @@ class VideoExportService {
         // AVAssetExportSession requires output URL to not already exist
         try? FileManager.default.removeItem(at: outputURL)
 
-        guard let session = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality) else {
+        let preset = bestExportPreset(for: composition)
+        guard let session = AVAssetExportSession(asset: composition, presetName: preset) else {
             throw ExportError.exportFailed("Could not create export session")
         }
         session.outputURL  = outputURL
