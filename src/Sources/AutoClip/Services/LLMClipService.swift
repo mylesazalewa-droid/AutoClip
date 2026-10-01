@@ -65,67 +65,48 @@ actor LLMClipService {
         return String(data: data, encoding: .utf8)
     }
 
-    // MARK: - Transcript formatting
+    // MARK: - Segment-based prompt builder
+    // Segments come from the local model (clean sentence-boundary cuts).
+    // The LLM's only job is to rank and select them — it never touches timestamps.
 
-    private func formatTranscript(_ words: [Word]) -> String {
-        var lines: [String] = []
-        var buf = ""
-        var lineStart: Double = 0
-        for w in words {
-            if buf.isEmpty { lineStart = w.startTime }
-            buf += w.word + " "
-            if w.word.last.map({ ".!?".contains($0) }) ?? false {
-                lines.append("[\(String(format: "%.1f", lineStart))s] \(buf.trimmingCharacters(in: .whitespaces))")
-                buf = ""
-            }
-        }
-        if !buf.isEmpty {
-            lines.append("[\(String(format: "%.1f", lineStart))s] \(buf.trimmingCharacters(in: .whitespaces))")
-        }
-        return lines.joined(separator: "\n")
+    private func formatSegments(_ segments: [Clip]) -> String {
+        segments.enumerated().map { i, clip in
+            let dur = String(format: "%.0fs", clip.endTime - clip.startTime)
+            let preview = clip.words.prefix(20).map { $0.word }.joined(separator: " ")
+            return "#\(i): [\(dur)] \(preview)"
+        }.joined(separator: "\n")
     }
 
-    // MARK: - Result type
-
-    struct ClipSuggestion {
-        let start: Double
-        let end: Double
-        let hook: String
-        let reason: String
-    }
-
-    // MARK: - Shared prompt builder
-
-    private func buildPrompt(transcript: String, targetCount: Int, targetDuration: Double) -> String {
+    private func buildSegmentPrompt(segmentList: String, targetCount: Int, targetDuration: Double) -> String {
         """
 You are a viral short-form content editor specialising in sermons, podcasts, and long-form video.
 
-Analyze the transcript below and choose the \(targetCount) best moments for social media clips.
+Below is a numbered list of pre-cut segments (already trimmed at sentence boundaries). \
+Choose the \(targetCount) best segments for social media clips.
 
 RULES:
-• Every clip must start AND end at a complete sentence boundary — never cut mid-sentence
-• Each clip should be self-contained (makes sense with no surrounding context)
-• Duration per clip: 15–60 seconds; aim for 20–45 s each
-• Total combined duration must not exceed \(Int(targetDuration)) seconds
+• Each segment is self-contained and already cut cleanly — do NOT suggest custom timestamps
+• Total combined duration should not exceed \(Int(targetDuration)) seconds
 • Rank by virality: emotional resonance, quotable insight, surprising revelation, strong hook, clear call-to-action
-• Skip repetitive content or sections that reference visual aids the viewer cannot see
+• Skip repetitive content or anything that references visual aids the viewer cannot see
+• Prefer segments with a strong opening hook (first 3 words grab attention)
 
-Transcript (format: [SS.s] sentence):
-\(transcript)
+Segments (format: #index: [duration] first-words…):
+\(segmentList)
 
 Respond with ONLY valid JSON — no markdown fences, no explanation, nothing else:
-[{"start":12.5,"end":47.0,"hook":"Opening line of the clip","reason":"Why this moment works"}]
+[{"index":3,"hook":"Opening words of this segment","reason":"Why this moment works"}]
 """
     }
 
-    // MARK: - API call
+    // MARK: - API call — segments in, selected Clips out
 
-    func selectClips(from words: [Word], provider: AIProvider, apiKey: String,
-                     targetDuration: Double) async throws -> [ClipSuggestion] {
-        let transcript = formatTranscript(words)
-        let totalMin = max(1, Int((words.last?.endTime ?? 0)) / 60)
+    func selectSegments(from segments: [Clip], provider: AIProvider, apiKey: String,
+                        targetDuration: Double) async throws -> [Clip] {
+        let totalMin = max(1, Int((segments.last?.endTime ?? 0)) / 60)
         let targetCount = max(3, min(20, totalMin / 4))
-        let prompt = buildPrompt(transcript: transcript, targetCount: targetCount, targetDuration: targetDuration)
+        let list = formatSegments(segments)
+        let prompt = buildSegmentPrompt(segmentList: list, targetCount: targetCount, targetDuration: targetDuration)
 
         let text: String
         switch provider {
@@ -134,7 +115,7 @@ Respond with ONLY valid JSON — no markdown fences, no explanation, nothing els
         case .google:    text = try await callGoogle(prompt: prompt, apiKey: apiKey)
         }
 
-        return try parseClipJSON(from: text)
+        return try parseSegmentJSON(from: text, segments: segments)
     }
 
     // MARK: - Anthropic
@@ -231,40 +212,32 @@ Respond with ONLY valid JSON — no markdown fences, no explanation, nothing els
         NSError(domain: "LLM", code: 1, userInfo: [NSLocalizedDescriptionKey: msg])
     }
 
-    private func parseClipJSON(from text: String) throws -> [ClipSuggestion] {
+    private func parseSegmentJSON(from text: String, segments: [Clip]) throws -> [Clip] {
         guard let start = text.firstIndex(of: "["),
               let end   = text.lastIndex(of: "]") else {
             throw llmError("AI returned no parseable JSON.\n\nResponse: \(text.prefix(300))")
         }
         guard let arr = try? JSONSerialization.jsonObject(
             with: Data(String(text[start...end]).utf8)) as? [[String: Any]] else {
-            throw llmError("Could not parse AI clip array")
+            throw llmError("Could not parse AI segment array")
         }
-        return arr.compactMap { d -> ClipSuggestion? in
-            guard let s = d["start"] as? Double, let e = d["end"] as? Double, e > s else { return nil }
-            return ClipSuggestion(start: s, end: e,
-                                  hook:   d["hook"]   as? String ?? "",
-                                  reason: d["reason"] as? String ?? "")
+        var seen = Set<Int>()
+        var result: [Clip] = []
+        for (rank, d) in arr.enumerated() {
+            guard let idx = d["index"] as? Int,
+                  idx >= 0, idx < segments.count,
+                  !seen.contains(idx) else { continue }
+            seen.insert(idx)
+            var clip = segments[idx]
+            // Preserve the segment's clean boundaries; just update score and notes from LLM
+            clip.score       = max(10, 100 - Double(rank) * 6)
+            clip.scoreReason = d["reason"] as? String ?? clip.scoreReason
+            clip.notes       = d["hook"]   as? String ?? clip.notes
+            result.append(clip)
         }
-    }
-
-    // MARK: - Convert suggestions → Clip objects
-
-    func clipsFromSuggestions(_ suggestions: [ClipSuggestion], allWords: [Word]) -> [Clip] {
-        suggestions.enumerated().compactMap { idx, sug -> Clip? in
-            let inRange = allWords.filter {
-                $0.startTime >= sug.start - 0.5 && $0.endTime <= sug.end + 0.5
-            }
-            guard !inRange.isEmpty else { return nil }
-            let score = max(10, 100 - Double(idx) * 6)
-            let title = inRange.prefix(8).map { $0.word }.joined(separator: " ")
-            return Clip(id: UUID(), title: title,
-                        startTime: max(0, (inRange.first?.startTime ?? sug.start) - 0.1),
-                        endTime:   (inRange.last?.endTime ?? sug.end) + 0.15,
-                        score: score, scoreReason: sug.reason,
-                        words: inRange, isLiked: false, starRating: 0,
-                        captionStyleName: "Karaoke", aspectRatio: "9:16",
-                        notes: sug.hook, thumbnailData: nil)
+        guard !result.isEmpty else {
+            throw llmError("AI returned no valid segment indices.")
         }
+        return result
     }
 }

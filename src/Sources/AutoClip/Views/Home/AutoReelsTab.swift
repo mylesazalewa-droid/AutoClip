@@ -1042,22 +1042,24 @@ struct AutoReelsTab: View {
             }
 
             let svc = VideoExportService.shared
-            let clips: [Clip]
 
+            // Always generate clean sentence-boundary segments first.
+            // This guarantees cuts land on real word boundaries regardless of mode.
+            await upd(0.45, "Finding best moments…")
+            let segments = svc.autoSegmentsFromWords(words)
+            guard !segments.isEmpty else {
+                throw NSError(domain: "AutoClip", code: 4, userInfo: [NSLocalizedDescriptionKey: "Not enough speech segments to build a reel."])
+            }
+
+            let clips: [Clip]
             if useAI && !apiKey.isEmpty {
-                await upd(0.45, "Asking Claude AI to find best moments…")
-                let llm = LLMClipService.shared
-                let suggestions = try await llm.selectClips(from: words, provider: provider, apiKey: apiKey, targetDuration: targetDur)
-                guard !suggestions.isEmpty else {
-                    throw NSError(domain: "AutoClip", code: 4, userInfo: [NSLocalizedDescriptionKey: "AI returned no clip suggestions."])
-                }
-                clips = await llm.clipsFromSuggestions(suggestions, allWords: words)
-                guard !clips.isEmpty else {
-                    throw NSError(domain: "AutoClip", code: 5, userInfo: [NSLocalizedDescriptionKey: "Could not map AI suggestions to transcript words."])
-                }
+                // Smart AI mode: LLM picks WHICH segments are best — cuts stay clean
+                await upd(0.47, "AI choosing the best segments…")
+                let selected = try await LLMClipService.shared.selectSegments(
+                    from: segments, provider: provider, apiKey: apiKey, targetDuration: targetDur)
+                clips = selected
             } else {
-                await upd(0.45, "Finding best moments…")
-                let segments = svc.autoSegmentsFromWords(words)
+                // Local mode: score-based selection with hook boost
                 let (hook, rest) = svc.selectHookAndClips(from: segments, targetDuration: targetDur)
                 guard let hook else {
                     throw NSError(domain: "AutoClip", code: 4, userInfo: [NSLocalizedDescriptionKey: "Not enough speech segments to build a reel."])
