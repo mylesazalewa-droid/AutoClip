@@ -40,14 +40,17 @@ struct AutoReelJob: Identifiable {
     var outputURLs: [URL]?       // multiple reels or individual clips
     var cutPoints: [Double]      // fractional positions [0,1] for scrubber tick marks
     var reelDuration: Double     // total duration of the primary reel (for cut point math)
+    var pendingClips: [Clip]?    // non-nil = waiting for user to confirm export
 
     init(id: UUID, title: String, progress: Double, statusMsg: String,
          isFinished: Bool, error: String? = nil, outputURL: URL? = nil,
-         outputURLs: [URL]? = nil, cutPoints: [Double] = [], reelDuration: Double = 0) {
+         outputURLs: [URL]? = nil, cutPoints: [Double] = [], reelDuration: Double = 0,
+         pendingClips: [Clip]? = nil) {
         self.id = id; self.title = title; self.progress = progress
         self.statusMsg = statusMsg; self.isFinished = isFinished
         self.error = error; self.outputURL = outputURL; self.outputURLs = outputURLs
         self.cutPoints = cutPoints; self.reelDuration = reelDuration
+        self.pendingClips = pendingClips
     }
 }
 
@@ -133,6 +136,7 @@ class AutoReelsStore: ObservableObject {
     @Published var activeJob: AutoReelJob?
 
     private let key = "autoReelsHistory"
+    private var exportContinuation: CheckedContinuation<Bool, Never>?
 
     init() { load() }
 
@@ -143,6 +147,29 @@ class AutoReelsStore: ObservableObject {
 
     func updateJob(_ job: AutoReelJob) { activeJob = job }
     func clearJob() { activeJob = nil }
+
+    func setPendingExport(clips: [Clip], jobID: UUID, jobTitle: String) async -> Bool {
+        if var job = activeJob, job.id == jobID {
+            job.pendingClips = clips
+            job.statusMsg = "\(clips.count) clips selected — ready to export"
+            job.progress = 0.48
+            activeJob = job
+        }
+        return await withCheckedContinuation { cont in
+            exportContinuation = cont
+        }
+    }
+
+    func confirmExport() {
+        exportContinuation?.resume(returning: true)
+        exportContinuation = nil
+    }
+
+    func cancelExport() {
+        exportContinuation?.resume(returning: false)
+        exportContinuation = nil
+        activeJob = nil
+    }
 
     func remove(id: UUID) {
         reels.removeAll { $0.id == id }
@@ -751,6 +778,46 @@ struct AutoReelsTab: View {
                 .frame(height: 4)
             }
 
+            // Pending export confirmation
+            if let clips = job.pendingClips {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Selected \(clips.count) clips · \(formatDur(clips.reduce(0) { $0 + $1.duration })) total")
+                        .font(.system(size: 11, weight: .semibold)).foregroundColor(gold)
+
+                    ScrollView {
+                        VStack(spacing: 3) {
+                            ForEach(Array(clips.enumerated()), id: \.offset) { i, clip in
+                                HStack(spacing: 8) {
+                                    Text("\(i + 1)").font(.system(size: 10, design: .monospaced))
+                                        .foregroundColor(Color.white.opacity(0.4)).frame(width: 16, alignment: .trailing)
+                                    Text(clip.words.prefix(6).map { $0.word }.joined(separator: " "))
+                                        .font(.system(size: 11)).foregroundColor(.white).lineLimit(1)
+                                    Spacer()
+                                    Text(formatDur(clip.duration))
+                                        .font(.system(size: 10, design: .monospaced)).foregroundColor(Color.white.opacity(0.45))
+                                }
+                                .padding(.horizontal, 8).padding(.vertical, 4)
+                                .background(Color.white.opacity(0.04)).cornerRadius(5)
+                            }
+                        }
+                    }
+                    .frame(maxHeight: 140)
+
+                    HStack(spacing: 8) {
+                        Button(action: { store.cancelExport() }) {
+                            Text("Cancel").font(.system(size: 12)).foregroundColor(Color.white.opacity(0.6))
+                                .padding(.horizontal, 14).padding(.vertical, 6)
+                                .background(Color.white.opacity(0.08)).cornerRadius(7)
+                        }.buttonStyle(.plain)
+                        Button(action: { store.confirmExport() }) {
+                            Text("Export Reel").font(.system(size: 12, weight: .semibold)).foregroundColor(.black)
+                                .padding(.horizontal, 14).padding(.vertical, 6)
+                                .background(gold).cornerRadius(7)
+                        }.buttonStyle(.plain)
+                    }
+                }
+            }
+
             if job.isFinished, job.error == nil {
                 if let urls = job.outputURLs, urls.count > 1 {
                     // Individual clips — show a scrollable list
@@ -1204,21 +1271,34 @@ struct AutoReelsTab: View {
             }
         }
 
-        await upd(0.02, "Loading AI model…")
+        await upd(0.01, "Loading AI model…")
 
         do {
             let whisper = WhisperService.shared
-            if !whisper.isModelLoaded { try await whisper.loadModel() }
+            if !whisper.modelExists {
+                await upd(0.01, "Downloading speech model (first time only, ~75 MB)…")
+                try await whisper.downloadModel { p, msg in
+                    Task { await upd(0.01 + p * 0.08, "Downloading model: \(Int(p * 100))%") }
+                }
+            } else if !whisper.isModelLoaded {
+                await upd(0.02, "Loading speech model…")
+                try await whisper.loadModel()
+            }
 
-            await upd(0.05, "Transcribing audio…")
-            let words = try await whisper.transcribe(audioURL: videoURL) { p in
-                Task { await upd(0.05 + p * 0.40, "Transcribing: \(Int(p * 100))%") }
+            let svc = VideoExportService.shared
+
+            // Auto-convert HEVC (iPhone) videos to H.264 before transcription
+            let workingURL = await svc.convertHEVCIfNeeded(videoURL) { msg in
+                Task { await upd(0.10, msg) }
+            }
+
+            await upd(0.12, "Transcribing audio…")
+            let words = try await whisper.transcribe(audioURL: workingURL) { p in
+                Task { await upd(0.12 + p * 0.33, "Transcribing: \(Int(p * 100))%") }
             }
             guard !words.isEmpty else {
                 throw NSError(domain: "AutoClip", code: 3, userInfo: [NSLocalizedDescriptionKey: "No speech detected in video."])
             }
-
-            let svc = VideoExportService.shared
 
             // Always generate clean sentence-boundary segments first.
             // This guarantees cuts land on real word boundaries regardless of mode.
@@ -1250,6 +1330,25 @@ struct AutoReelsTab: View {
             // Apply storyline ordering to shape the narrative structure
             clips = storylineMode.order(clips)
 
+            // Derive reel title from the hook clip's opening words
+            let hookPreview = clips.first.map {
+                $0.words.prefix(7).map { $0.word }.joined(separator: " ")
+            } ?? ""
+            let reelTitle = hookPreview.count > 4 ? hookPreview : title
+
+            // Show clip preview and wait for user confirmation before encoding
+            let shouldExport = await store.setPendingExport(clips: clips, jobID: jobID, jobTitle: reelTitle)
+            guard shouldExport else { return }
+
+            // Clear the pending clips from the job now that export is confirmed
+            await MainActor.run {
+                if var job = store.activeJob, job.id == jobID {
+                    job.pendingClips = nil
+                    job.statusMsg = "Preparing export…"
+                    store.activeJob = job
+                }
+            }
+
             let desktop = outputDir
 
             var opts = VideoExportService.ExportOptions()
@@ -1268,8 +1367,8 @@ struct AutoReelsTab: View {
                 for (i, group) in validGroups.enumerated() {
                     let pct = Double(i) / Double(validGroups.count)
                     await upd(0.50 + pct * 0.48, "Stitching reel \(i + 1) of \(validGroups.count)…")
-                    let outURL = desktop.appendingPathComponent("\(title) – Reel \(i + 1).mp4")
-                    try await svc.createHighlightReel(clips: group, sourceVideoURL: videoURL,
+                    let outURL = desktop.appendingPathComponent("\(reelTitle) – Reel \(i + 1).mp4")
+                    try await svc.createHighlightReel(clips: group, sourceVideoURL: workingURL,
                                                       outputURL: outURL, options: opts) { _, _ in }
                     outURLs.append(outURL)
                 }
@@ -1285,7 +1384,7 @@ struct AutoReelsTab: View {
                         cutPts.append(acc / firstReelDur)
                     }
                 }
-                let record = AutoReelRecord(id: UUID(), title: "\(title) – \(validGroups.count) Reels",
+                let record = AutoReelRecord(id: UUID(), title: "\(reelTitle) – \(validGroups.count) Reels",
                                             path: outURLs.first?.path ?? "",
                                             paths: outURLs.map { $0.path },
                                             format: fmtLabel(format), duration: firstReelDur,
@@ -1293,7 +1392,7 @@ struct AutoReelsTab: View {
                                             cutPoints: cutPts)
                 await MainActor.run {
                     AutoReelsStore.shared.add(record)
-                    store.updateJob(AutoReelJob(id: jobID, title: title, progress: 1.0,
+                    store.updateJob(AutoReelJob(id: jobID, title: reelTitle, progress: 1.0,
                                                statusMsg: "\(validGroups.count) reels saved",
                                                isFinished: true, error: nil,
                                                outputURL: outURLs.first, outputURLs: outURLs,
@@ -1306,18 +1405,18 @@ struct AutoReelsTab: View {
                     let pct = Double(i) / Double(clips.count)
                     let startStr = String(format: "%dm%02ds", Int(clip.startTime) / 60, Int(clip.startTime) % 60)
                     await upd(0.50 + pct * 0.48, "Exporting clip \(i + 1) of \(clips.count)…")
-                    let outURL = desktop.appendingPathComponent("\(title) – Clip \(i + 1) (\(startStr)).mp4")
+                    let outURL = desktop.appendingPathComponent("\(reelTitle) – Clip \(i + 1) (\(startStr)).mp4")
                     try? FileManager.default.removeItem(at: outURL)
-                    try await svc.exportClip(clip, from: videoURL, to: outURL, options: opts)
+                    try await svc.exportClip(clip, from: workingURL, to: outURL, options: opts)
                     outURLs.append(outURL)
                 }
-                let record = AutoReelRecord(id: UUID(), title: "\(title) – \(clips.count) Clips",
+                let record = AutoReelRecord(id: UUID(), title: "\(reelTitle) – \(clips.count) Clips",
                                             path: outURLs.first?.path ?? "",
                                             format: fmtLabel(format), duration: clips.reduce(0) { $0 + $1.duration },
                                             clipCount: clips.count, dateCreated: Date().timeIntervalSince1970)
                 await MainActor.run {
                     AutoReelsStore.shared.add(record)
-                    store.updateJob(AutoReelJob(id: jobID, title: title, progress: 1.0,
+                    store.updateJob(AutoReelJob(id: jobID, title: reelTitle, progress: 1.0,
                                                statusMsg: "\(clips.count) clips saved to Desktop",
                                                isFinished: true, error: nil,
                                                outputURL: outURLs.first, outputURLs: outURLs))
@@ -1325,8 +1424,8 @@ struct AutoReelsTab: View {
             } else {
                 // Stitch all clips into one highlight reel
                 await upd(0.50, "Exporting reel…")
-                let outURL = desktop.appendingPathComponent("\(title) – Auto Reel.mp4")
-                try await svc.createHighlightReel(clips: clips, sourceVideoURL: videoURL, outputURL: outURL, options: opts) { p, msg in
+                let outURL = desktop.appendingPathComponent("\(reelTitle) – Auto Reel.mp4")
+                try await svc.createHighlightReel(clips: clips, sourceVideoURL: workingURL, outputURL: outURL, options: opts) { p, msg in
                     Task { await upd(0.50 + p * 0.50, msg) }
                 }
                 let asset = AVURLAsset(url: outURL)
@@ -1340,13 +1439,13 @@ struct AutoReelsTab: View {
                         cutPts.append(acc / dur)
                     }
                 }
-                let record = AutoReelRecord(id: UUID(), title: "\(title) Reel", path: outURL.path,
+                let record = AutoReelRecord(id: UUID(), title: "\(reelTitle) Reel", path: outURL.path,
                                             format: fmtLabel(format), duration: dur,
                                             clipCount: clips.count, dateCreated: Date().timeIntervalSince1970,
                                             cutPoints: cutPts)
                 await MainActor.run {
                     AutoReelsStore.shared.add(record)
-                    store.updateJob(AutoReelJob(id: jobID, title: title, progress: 1.0,
+                    store.updateJob(AutoReelJob(id: jobID, title: reelTitle, progress: 1.0,
                                                statusMsg: "Done!", isFinished: true, error: nil, outputURL: outURL,
                                                cutPoints: cutPts, reelDuration: dur))
                 }

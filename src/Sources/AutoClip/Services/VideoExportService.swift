@@ -525,16 +525,37 @@ class VideoExportService {
 
     // MARK: - Highlight Reel
 
-    /// Trim a clip's start/end to align with actual spoken word boundaries.
+    // Common filler words/sounds that indicate hesitation or restarts.
+    // Used to trim leading/trailing mess and penalise filler-heavy segments.
+    private let fillerWords: Set<String> = [
+        "um", "uh", "uhh", "hmm", "hm", "er", "ah", "ahh",
+        "like", "okay", "ok", "so", "right", "you know", "i mean",
+        "basically", "literally", "actually", "anyway"
+    ]
+
+    /// Trim a clip's start/end to spoken word boundaries, skipping leading/trailing filler sounds.
     func trimToWordBoundary(_ clip: Clip) -> Clip {
         guard !clip.words.isEmpty else { return clip }
         let inRange = clip.words.filter {
             $0.startTime >= clip.startTime - 0.3 && $0.endTime <= clip.endTime + 0.3
         }
         guard !inRange.isEmpty else { return clip }
+
+        // Skip leading filler words so the clip starts on a real word
+        let firstReal = inRange.first {
+            let w = $0.word.lowercased().trimmingCharacters(in: .punctuationCharacters)
+            return !fillerWords.contains(w)
+        } ?? inRange.first!
+
+        // Skip trailing filler words so the clip ends cleanly
+        let lastReal = inRange.last {
+            let w = $0.word.lowercased().trimmingCharacters(in: .punctuationCharacters)
+            return !fillerWords.contains(w)
+        } ?? inRange.last!
+
         var c = clip
-        c.startTime = max(0, inRange.first!.startTime - 0.05)
-        c.endTime = inRange.last!.endTime + 0.15
+        c.startTime = max(0, firstReal.startTime - 0.05)
+        c.endTime = lastReal.endTime + 0.15
         return c
     }
 
@@ -578,6 +599,42 @@ class VideoExportService {
         let (hook, rest) = selectHookAndClips(from: clips, targetDuration: targetDuration)
         guard let hook else { return [] }
         return [hook] + rest
+    }
+
+    // MARK: - HEVC Auto-conversion
+
+    /// If the source video is HEVC/H.265 (e.g. iPhone), convert it to H.264 via ffmpeg
+    /// before processing. Returns the original URL if already H.264 or if ffmpeg is unavailable.
+    func convertHEVCIfNeeded(_ url: URL, status: @escaping (String) -> Void) async -> URL {
+        let asset = AVURLAsset(url: url)
+        guard let track = try? await asset.loadTracks(withMediaType: .video).first else { return url }
+        let descs = (try? await track.load(.formatDescriptions)) ?? []
+        let isHEVC = descs.compactMap { $0 as? CMFormatDescription }.contains {
+            CMFormatDescriptionGetMediaSubType($0) == kCMVideoCodecType_HEVC
+        }
+        guard isHEVC, let ffmpeg = ffmpegPath() else { return url }
+
+        status("Converting iPhone video to H.264 (one-time step)…")
+        let tempDir = FileManager.default.temporaryDirectory
+        let outURL = tempDir.appendingPathComponent("autoclip_h264_\(UUID().uuidString).mp4")
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: ffmpeg)
+        process.arguments = [
+            "-y", "-i", url.path,
+            "-c:v", "libx264", "-crf", "18", "-preset", "fast",
+            "-c:a", "aac", "-b:a", "192k",
+            "-movflags", "+faststart",
+            outURL.path
+        ]
+        process.standardError = Pipe()
+        try? process.run()
+        return await withCheckedContinuation { cont in
+            DispatchQueue.global().async {
+                process.waitUntilExit()
+                cont.resume(returning: process.terminationStatus == 0 ? outURL : url)
+            }
+        }
     }
 
     // MARK: - Raw transcript segmentation (Opus-style)
@@ -672,6 +729,19 @@ class VideoExportService {
             let endsClean = last.word.last.map { ".!?".contains($0) } ?? false
             guard endsClean else { return nil }
 
+            // Measure filler density — skip segments where >20% of words are fillers
+            let cleanWords = words.map { $0.word.lowercased().trimmingCharacters(in: .punctuationCharacters) }
+            let fillerCount = cleanWords.filter { fillerWords.contains($0) }.count
+            let fillerRatio = Double(fillerCount) / Double(max(1, cleanWords.count))
+            guard fillerRatio <= 0.20 else { return nil }
+
+            // Count long internal pauses (>0.6s) — each one is a hesitation or stumble
+            var internalPauses = 0
+            for i in 1..<words.count {
+                let gap = words[i].startTime - words[i - 1].endTime
+                if gap > 0.6 { internalPauses += 1 }
+            }
+
             let text = words.map { $0.word.lowercased() }.joined(separator: " ")
             // Count hook-word matches in the full text
             let hookCount = Double(hookWords.filter { text.contains($0) }.count)
@@ -681,8 +751,11 @@ class VideoExportService {
             let lenScore: Double = dur < 10 ? dur * 1.5 : (dur <= 30 ? 20.0 : max(0, 20 - (dur - 30) * 0.5))
             // Small bonus for content early in the video (stronger hook potential)
             let posScore = (first.startTime / max(1, totalDuration)) < 0.25 ? 10.0 : 0.0
+            // Penalise filler-heavy and hesitant delivery
+            let fillerPenalty = fillerRatio * 25.0
+            let pausePenalty  = Double(internalPauses) * 4.0
 
-            let score = min(100, lenScore + hookCount * 10 + emphasisBonus + posScore)
+            let score = min(100, max(0, lenScore + hookCount * 10 + emphasisBonus + posScore - fillerPenalty - pausePenalty))
 
             let title = words.prefix(8).map { $0.word }.joined(separator: " ")
             return Clip(id: UUID(), title: title, startTime: max(0, first.startTime - 0.1),
@@ -736,11 +809,14 @@ class VideoExportService {
             try compVideo.insertTimeRange(range, of: srcVideo, at: insertTime)
             if let compAudio, let srcAudio { try? compAudio.insertTimeRange(range, of: srcAudio, at: insertTime) }
 
-            // Remap word times from source → reel timeline
+            // Remap word times from source → reel timeline, filtering filler words from captions
             for w in clip.words {
                 let relS = w.startTime - clip.startTime
                 let relE = w.endTime   - clip.startTime
                 guard relS >= 0, relS < dur else { continue }
+                // Don't display filler sounds in karaoke captions
+                let clean = w.word.lowercased().trimmingCharacters(in: .punctuationCharacters)
+                guard !fillerWords.contains(clean) else { continue }
                 var rw = w; rw.startTime = reelOffset + relS; rw.endTime = reelOffset + relE
                 remappedWords.append(rw)
             }
