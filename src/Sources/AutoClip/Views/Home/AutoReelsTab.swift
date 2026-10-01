@@ -29,7 +29,8 @@ struct AutoReelJob: Identifiable {
 }
 
 enum ExportMode: String, CaseIterable {
-    case reel          = "Reel"
+    case reel            = "Reel"
+    case multipleReels   = "Multiple Reels"
     case individualClips = "Individual Clips"
 }
 
@@ -53,6 +54,11 @@ class AutoReelsStore: ObservableObject {
 
     func updateJob(_ job: AutoReelJob) { activeJob = job }
     func clearJob() { activeJob = nil }
+
+    func remove(id: UUID) {
+        reels.removeAll { $0.id == id }
+        save()
+    }
 
     private func save() {
         if let data = try? JSONEncoder().encode(reels) {
@@ -84,6 +90,10 @@ struct AutoReelsTab: View {
     @State private var previewPlayer: AVPlayer?
     @State private var previewPlaying = false
     @State private var showingPreviewFor: UUID?
+    @State private var previewProgress: Double = 0
+    @State private var previewDuration: Double = 1
+    @State private var previewTimeObserver: Any?
+    @State private var isScrubbing = false
 
     // Settings
     @State private var selectedFormat: VideoExportService.ExportFormat = .vertical9x16
@@ -93,11 +103,13 @@ struct AutoReelsTab: View {
 
     // AI-powered selection
     @State private var useAI = false
-    @State private var anthropicKey = ""
+    @State private var aiProvider: LLMClipService.AIProvider = .anthropic
+    @State private var apiKeys: [LLMClipService.AIProvider: String] = [:]
     @State private var showKey = false
 
     // Export mode
     @State private var exportMode: ExportMode = .reel
+    @State private var clipsPerReel: Double = 4
 
     private let gold = Color(red: 1.0, green: 0.75, blue: 0.0)
     private let captionStyles = CaptionStyle.all
@@ -112,10 +124,14 @@ struct AutoReelsTab: View {
         }
         .background(Color(red: 0.07, green: 0.08, blue: 0.12))
         .task {
-            if let k = await LLMClipService.shared.loadAPIKey(), !k.isEmpty {
-                anthropicKey = k
-                useAI = true
+            var loaded: [LLMClipService.AIProvider: String] = [:]
+            for p in LLMClipService.AIProvider.allCases {
+                if let k = await LLMClipService.shared.loadAPIKey(for: p), !k.isEmpty {
+                    loaded[p] = k
+                }
             }
+            apiKeys = loaded
+            if !loaded.isEmpty { useAI = true }
         }
     }
 
@@ -334,29 +350,58 @@ struct AutoReelsTab: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Export as")
                 .font(.system(size: 12, weight: .semibold)).foregroundColor(.white)
-            HStack(spacing: 6) {
-                ForEach(ExportMode.allCases, id: \.self) { mode in
-                    Button(action: { exportMode = mode }) {
-                        HStack(spacing: 5) {
-                            Image(systemName: mode == .reel ? "film.stack" : "square.stack.3d.up.fill")
-                                .font(.system(size: 11))
-                            Text(mode.rawValue).font(.system(size: 11, weight: exportMode == mode ? .semibold : .regular))
-                        }
-                        .foregroundColor(exportMode == mode ? .black : Color.white.opacity(0.6))
-                        .padding(.horizontal, 10).padding(.vertical, 6)
-                        .background(exportMode == mode ? gold : Color.white.opacity(0.07))
-                        .cornerRadius(7)
-                    }
-                    .buttonStyle(.plain)
+
+            // Three-button row — wrap to avoid clipping
+            VStack(spacing: 6) {
+                HStack(spacing: 6) {
+                    modeButton(.reel,          icon: "film.stack")
+                    modeButton(.multipleReels, icon: "rectangle.stack.fill")
+                }
+                HStack(spacing: 6) {
+                    modeButton(.individualClips, icon: "square.stack.3d.up.fill")
+                    Spacer()
                 }
             }
-            Text(exportMode == .reel
-                 ? "All clips are stitched together into one highlight reel."
-                 : "Each clip is saved as its own separate video file.")
-                .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.4))
-                .fixedSize(horizontal: false, vertical: true)
+
+            // Description
+            Group {
+                switch exportMode {
+                case .reel:
+                    Text("All clips are stitched together into one highlight reel.")
+                case .multipleReels:
+                    Text("Clips are grouped and each group is stitched into its own reel file.")
+                case .individualClips:
+                    Text("Each clip is saved as its own separate video file.")
+                }
+            }
+            .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.4))
+            .fixedSize(horizontal: false, vertical: true)
+
+            // Clips-per-reel slider — only shown for multiple reels
+            if exportMode == .multipleReels {
+                HStack {
+                    Text("Clips per reel").font(.system(size: 12)).foregroundColor(Color.white.opacity(0.6))
+                    Spacer()
+                    Text("\(Int(clipsPerReel))").font(.system(size: 12, design: .monospaced)).foregroundColor(gold)
+                }
+                Slider(value: $clipsPerReel, in: 2...8, step: 1).tint(gold)
+            }
         }
         .padding(14).background(Color.white.opacity(0.04)).cornerRadius(10)
+    }
+
+    private func modeButton(_ mode: ExportMode, icon: String) -> some View {
+        Button(action: { exportMode = mode }) {
+            HStack(spacing: 5) {
+                Image(systemName: icon).font(.system(size: 11))
+                Text(mode.rawValue).font(.system(size: 11, weight: exportMode == mode ? .semibold : .regular))
+            }
+            .foregroundColor(exportMode == mode ? .black : Color.white.opacity(0.6))
+            .padding(.horizontal, 10).padding(.vertical, 6)
+            .background(exportMode == mode ? gold : Color.white.opacity(0.07))
+            .cornerRadius(7)
+        }
+        .buttonStyle(.plain)
     }
 
     private var aiSettingsSection: some View {
@@ -370,28 +415,53 @@ struct AutoReelsTab: View {
             }
 
             if useAI {
-                Text("Uses Claude AI to semantically understand your content and pick the most meaningful moments.")
+                Text("AI understands context, complete thoughts, and emotional tone — not just sentence length.")
                     .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.45))
                     .fixedSize(horizontal: false, vertical: true)
 
+                // Provider picker
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Anthropic API Key").font(.system(size: 11)).foregroundColor(Color.white.opacity(0.5))
+                    Text("Provider").font(.system(size: 11)).foregroundColor(Color.white.opacity(0.5))
                     HStack(spacing: 6) {
+                        ForEach(LLMClipService.AIProvider.allCases) { p in
+                            Button(action: { aiProvider = p }) {
+                                Text(providerShortLabel(p))
+                                    .font(.system(size: 11, weight: aiProvider == p ? .semibold : .regular))
+                                    .foregroundColor(aiProvider == p ? .black : Color.white.opacity(0.6))
+                                    .padding(.horizontal, 8).padding(.vertical, 5)
+                                    .background(aiProvider == p ? gold : Color.white.opacity(0.07))
+                                    .cornerRadius(6)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    Text("Model: \(aiProvider.modelLabel)")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(Color.white.opacity(0.3))
+                }
+
+                // API key for selected provider
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("API Key").font(.system(size: 11)).foregroundColor(Color.white.opacity(0.5))
+                    HStack(spacing: 6) {
+                        let binding = Binding<String>(
+                            get: { apiKeys[aiProvider] ?? "" },
+                            set: { newVal in
+                                apiKeys[aiProvider] = newVal
+                                Task { await LLMClipService.shared.saveAPIKey(newVal, for: aiProvider) }
+                            }
+                        )
                         Group {
                             if showKey {
-                                TextField("sk-ant-...", text: $anthropicKey)
+                                TextField(aiProvider.keyPlaceholder, text: binding)
                             } else {
-                                SecureField("sk-ant-...", text: $anthropicKey)
+                                SecureField(aiProvider.keyPlaceholder, text: binding)
                             }
                         }
                         .font(.system(size: 11, design: .monospaced))
                         .textFieldStyle(.plain)
                         .padding(.horizontal, 8).padding(.vertical, 6)
-                        .background(Color.white.opacity(0.06))
-                        .cornerRadius(6)
-                        .onChange(of: anthropicKey) { _, newVal in
-                            Task { await LLMClipService.shared.saveAPIKey(newVal) }
-                        }
+                        .background(Color.white.opacity(0.06)).cornerRadius(6)
 
                         Button(action: { showKey.toggle() }) {
                             Image(systemName: showKey ? "eye.slash" : "eye")
@@ -400,7 +470,7 @@ struct AutoReelsTab: View {
                         }
                         .buttonStyle(.plain)
                     }
-                    Text("Key is stored in macOS Keychain — never sent anywhere except Anthropic.")
+                    Text("Stored in macOS Keychain. Only sent to the selected provider's API.")
                         .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.3))
                 }
             } else {
@@ -413,11 +483,17 @@ struct AutoReelsTab: View {
         .background(
             RoundedRectangle(cornerRadius: 10)
                 .fill(Color.white.opacity(0.04))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(useAI ? gold.opacity(0.35) : Color.clear, lineWidth: 1)
-                )
+                .overlay(RoundedRectangle(cornerRadius: 10)
+                    .stroke(useAI ? gold.opacity(0.35) : Color.clear, lineWidth: 1))
         )
+    }
+
+    private func providerShortLabel(_ p: LLMClipService.AIProvider) -> String {
+        switch p {
+        case .anthropic: return "Claude"
+        case .openai:    return "GPT-4o"
+        case .google:    return "Gemini"
+        }
     }
 
     // MARK: - Create button
@@ -507,7 +583,11 @@ struct AutoReelsTab: View {
                     } else {
                         ProgressView().scaleEffect(0.65).tint(gold)
                     }
-                    Text(job.isFinished ? (job.error != nil ? "Reel failed" : "Reel ready") : "Creating reel…")
+                    Text(job.isFinished
+                         ? (job.error != nil ? "Failed"
+                            : job.outputURLs != nil ? "\((job.outputURLs?.count ?? 0)) files ready"
+                            : "Reel ready")
+                         : "Creating reel…")
                         .font(.system(size: 13, weight: .semibold)).foregroundColor(.white)
                 }
                 Spacer()
@@ -628,6 +708,11 @@ struct AutoReelsTab: View {
                     Image(systemName: "play.circle.fill").font(.system(size: 18)).foregroundColor(gold.opacity(0.7))
                 }
                 .buttonStyle(.plain)
+                Button(action: { store.remove(id: reel.id) }) {
+                    Image(systemName: "trash").font(.system(size: 12)).foregroundColor(Color.white.opacity(0.2))
+                }
+                .buttonStyle(.plain)
+                .help("Remove from history")
             }
         }
         .padding(.horizontal, 20).padding(.vertical, 10)
@@ -676,8 +761,8 @@ struct AutoReelsTab: View {
 
             Divider().background(Color.white.opacity(0.08))
 
-            // Centre the 9:16 player in the available space without filling the whole panel
-            VStack {
+            VStack(spacing: 0) {
+                // Video — centred 9:16
                 Spacer()
                 HStack {
                     Spacer()
@@ -698,22 +783,94 @@ struct AutoReelsTab: View {
                             previewPlaying.toggle()
                         }
                     }
-                    .frame(width: 280, height: 498)  // 9:16 at a comfortable size
+                    .frame(width: 280, height: 498)
                     .cornerRadius(12)
                     .shadow(color: .black.opacity(0.5), radius: 16)
                     Spacer()
                 }
                 Spacer()
+
+                // Scrubber bar
+                VStack(spacing: 6) {
+                    GeometryReader { geo in
+                        let w = geo.size.width
+                        ZStack(alignment: .leading) {
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(Color.white.opacity(0.12))
+                                .frame(height: 4)
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(gold)
+                                .frame(width: max(0, CGFloat(previewProgress) * w), height: 4)
+                                .animation(isScrubbing ? nil : .linear(duration: 0.1), value: previewProgress)
+                            Circle()
+                                .fill(gold)
+                                .frame(width: 14, height: 14)
+                                .offset(x: max(0, CGFloat(previewProgress) * w - 7), y: -5)
+                                .animation(isScrubbing ? nil : .linear(duration: 0.1), value: previewProgress)
+                        }
+                        .frame(height: 4)
+                        .padding(.vertical, 10)
+                        .contentShape(Rectangle().size(CGSize(width: w, height: 24)))
+                        .gesture(DragGesture(minimumDistance: 0)
+                            .onChanged { v in
+                                isScrubbing = true
+                                let f = max(0, min(1, v.location.x / w))
+                                previewProgress = f
+                                previewPlayer?.seek(to: CMTime(seconds: f * previewDuration, preferredTimescale: 600),
+                                                    toleranceBefore: .zero, toleranceAfter: .zero)
+                            }
+                            .onEnded { _ in isScrubbing = false })
+                    }
+                    .frame(height: 24)
+
+                    HStack {
+                        Text(formatDur(previewProgress * previewDuration))
+                            .font(.system(size: 10, design: .monospaced)).foregroundColor(Color.white.opacity(0.5))
+                        Spacer()
+                        Button(action: {
+                            guard let player = previewPlayer else { return }
+                            if previewPlaying { player.pause() } else { player.play() }
+                            previewPlaying.toggle()
+                        }) {
+                            Image(systemName: previewPlaying ? "pause.fill" : "play.fill")
+                                .font(.system(size: 14)).foregroundColor(.white)
+                        }
+                        .buttonStyle(.plain)
+                        Spacer()
+                        Text(formatDur(previewDuration))
+                            .font(.system(size: 10, design: .monospaced)).foregroundColor(Color.white.opacity(0.5))
+                    }
+                }
+                .padding(.horizontal, 24).padding(.bottom, 16)
             }
             .background(Color(red: 0.08, green: 0.09, blue: 0.12))
             .onAppear {
                 let player = AVPlayer(url: url)
                 previewPlayer = player; player.play(); previewPlaying = true
+                // Load duration
+                Task {
+                    if let item = player.currentItem,
+                       let dur = try? await item.asset.load(.duration) {
+                        previewDuration = max(1, CMTimeGetSeconds(dur))
+                    }
+                }
+                // Periodic time observer
+                let interval = CMTime(seconds: 0.1, preferredTimescale: 600)
+                previewTimeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { t in
+                    guard !isScrubbing else { return }
+                    let s = CMTimeGetSeconds(t)
+                    previewProgress = previewDuration > 0 ? s / previewDuration : 0
+                }
                 NotificationCenter.default.addObserver(
                     forName: .AVPlayerItemDidPlayToEndTime, object: player.currentItem, queue: .main
                 ) { _ in player.seek(to: .zero); player.play() }
             }
-            .onDisappear { previewPlayer?.pause(); previewPlayer = nil }
+            .onDisappear {
+                if let obs = previewTimeObserver { previewPlayer?.removeTimeObserver(obs) }
+                previewTimeObserver = nil
+                previewPlayer?.pause(); previewPlayer = nil
+                previewProgress = 0; previewDuration = 1
+            }
         }
     }
 
@@ -731,9 +888,13 @@ struct AutoReelsTab: View {
         downloadProgress = 0
         downloadStatus = "Starting download…"
 
+        guard let outDir = pickOutputDirectory() else { return }
+
         let fmt = selectedFormat; let captions = burnCaptions
         let styleIdx = captionStyleIndex; let dur = targetDuration
-        let ai = useAI; let key = anthropicKey; let mode = exportMode
+        let ai = useAI; let prov = aiProvider
+        let key = apiKeys[aiProvider] ?? ""; let mode = exportMode
+        let cpr = Int(clipsPerReel)
 
         Task.detached(priority: .userInitiated) {
             let videosDir = URL(fileURLWithPath: NSHomeDirectory())
@@ -809,31 +970,53 @@ struct AutoReelsTab: View {
                 // Auto-start pipeline
                 await self.startPipelineAsync(videoURL: videoURL, format: fmt, captions: captions,
                                               styleIdx: styleIdx, targetDur: dur,
-                                              useAI: ai, apiKey: key, exportMode: mode)
+                                              useAI: ai, provider: prov, apiKey: key,
+                                              exportMode: mode, clipsPerReel: cpr, outputDir: outDir)
             } catch {
                 await MainActor.run { self.isDownloading = false; self.downloadError = error.localizedDescription }
             }
         }
     }
 
+    // MARK: - Save location picker
+
+    @MainActor
+    private func pickOutputDirectory() -> URL? {
+        let panel = NSOpenPanel()
+        panel.title = "Choose where to save your clips"
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
+        panel.prompt = "Save Here"
+        panel.directoryURL = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first
+        return panel.runModal() == .OK ? panel.url : nil
+    }
+
     // MARK: - Reel pipeline
 
     private func startPipeline(videoURL: URL) {
+        guard let outDir = pickOutputDirectory() else { return }
         let fmt = selectedFormat; let captions = burnCaptions
         let styleIdx = captionStyleIndex; let dur = targetDuration
-        let ai = useAI; let key = anthropicKey; let mode = exportMode
+        let ai = useAI; let prov = aiProvider
+        let key = apiKeys[aiProvider] ?? ""; let mode = exportMode
+        let cpr = Int(clipsPerReel)
         Task.detached(priority: .userInitiated) {
             await self.startPipelineAsync(videoURL: videoURL, format: fmt, captions: captions,
                                           styleIdx: styleIdx, targetDur: dur,
-                                          useAI: ai, apiKey: key, exportMode: mode)
+                                          useAI: ai, provider: prov, apiKey: key,
+                                          exportMode: mode, clipsPerReel: cpr, outputDir: outDir)
         }
     }
 
     // Runs fully in background — safe to switch tabs while this executes
     private func startPipelineAsync(videoURL: URL, format: VideoExportService.ExportFormat,
                                     captions: Bool, styleIdx: Int, targetDur: Double,
-                                    useAI: Bool = false, apiKey: String = "",
-                                    exportMode: ExportMode = .reel) async {
+                                    useAI: Bool = false,
+                                    provider: LLMClipService.AIProvider = .anthropic,
+                                    apiKey: String = "",
+                                    exportMode: ExportMode = .reel, clipsPerReel: Int = 4,
+                                    outputDir: URL = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first!) async {
         let jobID = UUID()
         let title = videoURL.deletingPathExtension().lastPathComponent
 
@@ -864,7 +1047,7 @@ struct AutoReelsTab: View {
             if useAI && !apiKey.isEmpty {
                 await upd(0.45, "Asking Claude AI to find best moments…")
                 let llm = LLMClipService.shared
-                let suggestions = try await llm.selectClips(from: words, apiKey: apiKey, targetDuration: targetDur)
+                let suggestions = try await llm.selectClips(from: words, provider: provider, apiKey: apiKey, targetDuration: targetDur)
                 guard !suggestions.isEmpty else {
                     throw NSError(domain: "AutoClip", code: 4, userInfo: [NSLocalizedDescriptionKey: "AI returned no clip suggestions."])
                 }
@@ -882,13 +1065,40 @@ struct AutoReelsTab: View {
                 clips = [hook] + rest
             }
 
-            let desktop = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first!
+            let desktop = outputDir
 
             var opts = VideoExportService.ExportOptions()
             opts.format = format; opts.burnCaptions = captions
             if captions && styleIdx < CaptionStyle.all.count { opts.captionStyle = CaptionStyle.all[styleIdx] }
 
-            if exportMode == .individualClips {
+            if exportMode == .multipleReels {
+                // Split clips into groups, stitch each group into its own reel
+                let groupSize = max(2, clipsPerReel)
+                let groups = stride(from: 0, to: clips.count, by: groupSize).map {
+                    Array(clips[$0..<min($0 + groupSize, clips.count)])
+                }
+                var outURLs: [URL] = []
+                for (i, group) in groups.enumerated() {
+                    let pct = Double(i) / Double(groups.count)
+                    await upd(0.50 + pct * 0.48, "Stitching reel \(i + 1) of \(groups.count)…")
+                    let outURL = desktop.appendingPathComponent("\(title) – Reel \(i + 1) of \(groups.count).mp4")
+                    try await svc.createHighlightReel(clips: group, sourceVideoURL: videoURL,
+                                                      outputURL: outURL, options: opts) { _, _ in }
+                    outURLs.append(outURL)
+                }
+                let totalDur = clips.reduce(0) { $0 + $1.duration }
+                let record = AutoReelRecord(id: UUID(), title: "\(title) – \(groups.count) Reels",
+                                            path: outURLs.first?.path ?? "",
+                                            format: fmtLabel(format), duration: totalDur,
+                                            clipCount: clips.count, dateCreated: Date().timeIntervalSince1970)
+                await MainActor.run {
+                    AutoReelsStore.shared.add(record)
+                    store.updateJob(AutoReelJob(id: jobID, title: title, progress: 1.0,
+                                               statusMsg: "\(groups.count) reels saved to Desktop",
+                                               isFinished: true, error: nil,
+                                               outputURL: outURLs.first, outputURLs: outURLs))
+                }
+            } else if exportMode == .individualClips {
                 // Export each clip as its own file
                 var outURLs: [URL] = []
                 for (i, clip) in clips.enumerated() {
