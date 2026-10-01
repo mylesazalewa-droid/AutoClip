@@ -1333,8 +1333,11 @@ struct AutoReelsTab: View {
                 clips = [hook] + rest
             }
 
-            // Apply storyline ordering to shape the narrative structure
-            clips = storylineMode.order(clips)
+            // Apply storyline ordering for single-reel / individual-clips modes.
+            // Multiple reels apply ordering per-reel during distribution below.
+            if exportMode != .multipleReels {
+                clips = storylineMode.order(clips)
+            }
 
             // Derive reel title from the hook clip's opening words
             let hookPreview = clips.first.map {
@@ -1362,13 +1365,25 @@ struct AutoReelsTab: View {
             if captions && styleIdx < CaptionStyle.all.count { opts.captionStyle = CaptionStyle.all[styleIdx] }
 
             if exportMode == .multipleReels {
-                // Distribute clips round-robin across N reels so each reel gets
-                // a unique variety of the best moments (not just the top chunk vs bottom chunk)
+                // Bin-pack clips into N reels, each targeting targetDur seconds.
+                // Assign each clip (sorted best-first) to whichever reel has the least
+                // content so far, until every reel is full. This guarantees each reel
+                // reaches targetDur rather than getting a random slice of a shared pool.
                 let n = max(2, min(numberOfReels, clips.count))
                 var groups: [[Clip]] = Array(repeating: [], count: n)
-                for (i, clip) in clips.enumerated() { groups[i % n].append(clip) }
-                // Drop any empty groups (when clips.count < n)
-                let validGroups = groups.filter { !$0.isEmpty }
+                var reelFill: [Double] = Array(repeating: 0, count: n)
+                let sortedByScore = clips.sorted { $0.score > $1.score }
+                for clip in sortedByScore {
+                    // Find the reel with the least content that still has room for this clip
+                    let eligible = (0..<n).filter { reelFill[$0] + clip.duration <= targetDur * 1.15 }
+                    let target = eligible.min(by: { reelFill[$0] < reelFill[$1] }) ?? (0..<n).min(by: { reelFill[$0] < reelFill[$1] })!
+                    groups[target].append(clip)
+                    reelFill[target] += clip.duration
+                }
+                // Apply storyline ordering within each reel for narrative flow
+                let validGroups = groups
+                    .filter { !$0.isEmpty }
+                    .map { storylineMode.order($0) }
                 var outURLs: [URL] = []
                 for (i, group) in validGroups.enumerated() {
                     let pct = Double(i) / Double(validGroups.count)

@@ -103,8 +103,12 @@ Respond with ONLY valid JSON — no markdown fences, no explanation, nothing els
 
     func selectSegments(from segments: [Clip], provider: AIProvider, apiKey: String,
                         targetDuration: Double) async throws -> [Clip] {
-        let totalMin = max(1, Int((segments.last?.endTime ?? 0)) / 60)
-        let targetCount = max(3, min(20, totalMin / 4))
+        // Estimate how many clips are needed to fill the budget.
+        // Use average clip duration from the actual segments so the count scales correctly
+        // for both single reels and multi-reel pools.
+        let avgDur = segments.isEmpty ? 15.0
+            : segments.reduce(0.0) { $0 + ($1.endTime - $1.startTime) } / Double(segments.count)
+        let targetCount = max(3, min(40, Int((targetDuration / max(5.0, avgDur)).rounded(.up)) + 2))
         let list = formatSegments(segments)
         let prompt = buildSegmentPrompt(segmentList: list, targetCount: targetCount, targetDuration: targetDuration)
 
