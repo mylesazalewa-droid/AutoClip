@@ -197,14 +197,25 @@ Respond with ONLY valid JSON — no markdown fences, no explanation, nothing els
     private func checkHTTP(_ resp: URLResponse, data: Data) throws {
         guard let http = resp as? HTTPURLResponse else { throw llmError("No HTTP response") }
         guard http.statusCode == 200 else {
+            var rawMsg = String(data: data, encoding: .utf8) ?? ""
             if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                let msg = (json["error"] as? [String: Any])?["message"] as? String
+                rawMsg = (json["error"] as? [String: Any])?["message"] as? String
                     ?? (json["error"] as? String)
-                    ?? String(data: data, encoding: .utf8)?.prefix(300).description
-                    ?? "HTTP \(http.statusCode)"
-                throw llmError(msg)
+                    ?? rawMsg
             }
-            throw llmError("HTTP \(http.statusCode)")
+            // Friendly messages for common Anthropic key issues
+            if rawMsg.contains("not scoped to a workspace") || rawMsg.contains("anthropic-workspace-id") {
+                throw llmError(
+                    "Your Anthropic API key needs to be workspace-scoped.\n\n" +
+                    "Fix: Go to console.anthropic.com → Settings → API Keys → " +
+                    "create a new key inside a Workspace (not a personal key). " +
+                    "Paste the new key in AutoClip."
+                )
+            }
+            if rawMsg.contains("invalid x-api-key") || rawMsg.contains("invalid_api_key") || http.statusCode == 401 {
+                throw llmError("Invalid API key. Check that you copied the full key correctly.")
+            }
+            throw llmError(rawMsg.isEmpty ? "HTTP \(http.statusCode)" : String(rawMsg.prefix(300)))
         }
     }
 
