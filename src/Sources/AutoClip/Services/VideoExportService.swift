@@ -164,7 +164,8 @@ class VideoExportService {
 
         // Re-encode path (format change or captions)
         try? FileManager.default.removeItem(at: outputURL)
-        let preset = bestExportPreset(for: composition)
+        // Pass the original source asset so HEVC/iPhone videos get the correct fallback preset
+        let preset = bestExportPreset(for: composition, sourceAsset: asset)
         guard let session = AVAssetExportSession(asset: composition, presetName: preset) else {
             throw ExportError.exportFailed("Failed to create export session")
         }
@@ -179,18 +180,24 @@ class VideoExportService {
         await session.export()
         timer.invalidate()
 
+        if session.status == .cancelled {
+            throw ExportError.exportFailed("Export failed: video format not supported. Try 'Original' format or captions off.")
+        }
         if let err = session.error { throw ExportError.exportFailed(err.localizedDescription) }
         progress(1.0)
     }
 
     // MARK: - Export preset selection
 
-    /// Pick the best compatible export preset for the composition.
-    /// HEVC (H.265) source files (e.g. iPhone videos) fail with HighestQuality
-    /// on some Mac configurations — fall back to 1920x1080 H.264 in that case.
-    private func bestExportPreset(for asset: AVAsset) -> String {
+    /// Pick the best compatible export preset.
+    /// IMPORTANT: must check the SOURCE asset (the original file), not the AVMutableComposition —
+    /// a composition always reports HighestQuality as compatible regardless of the source codec,
+    /// so checking the composition never triggers the HEVC fallback.
+    private func bestExportPreset(for composition: AVAsset, sourceAsset: AVAsset? = nil) -> String {
+        let checkAsset = sourceAsset ?? composition
+        let compatible = AVAssetExportSession.exportPresets(compatibleWith: checkAsset)
         let preferred = AVAssetExportPresetHighestQuality
-        guard AVAssetExportSession.exportPresets(compatibleWith: asset).contains(preferred) else {
+        guard compatible.contains(preferred) else {
             return AVAssetExportPreset1920x1080
         }
         return preferred
@@ -822,7 +829,9 @@ class VideoExportService {
         // AVAssetExportSession requires output URL to not already exist
         try? FileManager.default.removeItem(at: outputURL)
 
-        let preset = bestExportPreset(for: composition)
+        // Pass the original source asset — compositions always report HighestQuality as compatible
+        // so checking the composition alone never triggers the HEVC/iPhone fallback preset.
+        let preset = bestExportPreset(for: composition, sourceAsset: asset)
         guard let session = AVAssetExportSession(asset: composition, presetName: preset) else {
             throw ExportError.exportFailed("Could not create export session")
         }
@@ -838,6 +847,9 @@ class VideoExportService {
         await session.export()
         timer.invalidate()
 
+        if session.status == .cancelled {
+            throw ExportError.exportFailed("Export failed: video format not supported. Try 'Original' format or ensure the video is H.264 (MP4).")
+        }
         if let err = session.error { throw ExportError.exportFailed(err.localizedDescription) }
         await MainActor.run { progress(1.0, "Done!") }
     }
