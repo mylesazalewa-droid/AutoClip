@@ -57,6 +57,7 @@ struct Clip: Identifiable, Codable {
     var aspectRatio: String
     var notes: String
     var thumbnailData: String?
+    var sourceVideoPath: String = ""  // empty = use the reel's primary source video
 
     var duration: TimeInterval { endTime - startTime }
 

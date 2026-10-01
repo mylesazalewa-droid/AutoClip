@@ -640,7 +640,8 @@ class VideoExportService {
     // MARK: - Raw transcript segmentation (Opus-style)
 
     /// Build reel candidates directly from the full transcript, ignoring existing clip boundaries.
-    func autoSegmentsFromWords(_ allWords: [Word]) -> [Clip] {
+    /// `sourceVideoPath` is stamped onto every returned clip so multi-source reels work.
+    func autoSegmentsFromWords(_ allWords: [Word], sourceVideoPath: String = "") -> [Clip] {
         let sorted = allWords.sorted { $0.startTime < $1.startTime }
         guard !sorted.isEmpty else { return [] }
 
@@ -690,11 +691,10 @@ class VideoExportService {
         }
 
         // Split over-long segments (> 50s) at the nearest sentence boundary to the midpoint.
-        var finalSegs: [[Word]] = []
+        var longSplit: [[Word]] = []
         for seg in merged {
             let dur = (seg.last?.endTime ?? 0) - (seg.first?.startTime ?? 0)
-            guard dur > 50 else { finalSegs.append(seg); continue }
-            // Find sentence-boundary word closest to midpoint
+            guard dur > 50 else { longSplit.append(seg); continue }
             let targetTime = (seg.first?.startTime ?? 0) + dur / 2
             let splitIdx = seg.indices.min(by: { a, b in
                 let aEndsPunct = seg[a].word.last.map { ".!?".contains($0) } ?? false
@@ -704,11 +704,30 @@ class VideoExportService {
                 return abs(seg[a].endTime - targetTime) < abs(seg[b].endTime - targetTime)
             }) ?? seg.count / 2
             if splitIdx > 0 && splitIdx < seg.count - 1 {
-                finalSegs.append(Array(seg[...splitIdx]))
-                finalSegs.append(Array(seg[(splitIdx + 1)...]))
+                longSplit.append(Array(seg[...splitIdx]))
+                longSplit.append(Array(seg[(splitIdx + 1)...]))
             } else {
-                finalSegs.append(seg)
+                longSplit.append(seg)
             }
+        }
+
+        // Split each segment at internal pauses > 0.5s so exported clips have no dead air.
+        // The stitch loop inserts each clip's time range directly; if we remove gaps here
+        // the composition never includes them.
+        var finalSegs: [[Word]] = []
+        for seg in longSplit {
+            var currentRun: [Word] = []
+            for (i, word) in seg.enumerated() {
+                if i > 0 {
+                    let gap = word.startTime - seg[i - 1].endTime
+                    if gap > 0.5 {
+                        if !currentRun.isEmpty { finalSegs.append(currentRun) }
+                        currentRun = []
+                    }
+                }
+                currentRun.append(word)
+            }
+            if !currentRun.isEmpty { finalSegs.append(currentRun) }
         }
 
         // Engaging hook words — phrases/words that signal a strong standalone moment
@@ -723,11 +742,11 @@ class VideoExportService {
         return finalSegs.compactMap { words -> Clip? in
             guard let first = words.first, let last = words.last else { return nil }
             let dur = last.endTime - first.startTime
-            // Must have enough words and time to form a complete thought
-            guard dur >= 6, words.count >= 8 else { return nil }
-            // Must end on a sentence boundary (complete thought)
+            // Allow pause-split fragments down to 4s/5 words; full segments need 6s/8 words
             let endsClean = last.word.last.map { ".!?".contains($0) } ?? false
-            guard endsClean else { return nil }
+            let minDur: Double = endsClean ? 6.0 : 4.0
+            let minWords = endsClean ? 8 : 5
+            guard dur >= minDur, words.count >= minWords else { return nil }
 
             // Measure filler density — skip segments where >20% of words are fillers
             let cleanWords = words.map { $0.word.lowercased().trimmingCharacters(in: .punctuationCharacters) }
@@ -751,17 +770,21 @@ class VideoExportService {
             let lenScore: Double = dur < 10 ? dur * 1.5 : (dur <= 30 ? 20.0 : max(0, 20 - (dur - 30) * 0.5))
             // Small bonus for content early in the video (stronger hook potential)
             let posScore = (first.startTime / max(1, totalDuration)) < 0.25 ? 10.0 : 0.0
+            // Bonus for segments that end on proper punctuation (complete thought)
+            let cleanEndBonus = endsClean ? 5.0 : 0.0
             // Penalise filler-heavy and hesitant delivery
             let fillerPenalty = fillerRatio * 25.0
             let pausePenalty  = Double(internalPauses) * 4.0
 
-            let score = min(100, max(0, lenScore + hookCount * 10 + emphasisBonus + posScore - fillerPenalty - pausePenalty))
+            let score = min(100, max(0, lenScore + hookCount * 10 + emphasisBonus + posScore + cleanEndBonus - fillerPenalty - pausePenalty))
 
             let title = words.prefix(8).map { $0.word }.joined(separator: " ")
-            return Clip(id: UUID(), title: title, startTime: max(0, first.startTime - 0.1),
-                        endTime: last.endTime + 0.15, score: score, scoreReason: "Auto-segmented from transcript",
-                        words: words, isLiked: false, starRating: 0,
-                        captionStyleName: "Karaoke", aspectRatio: "9:16", notes: "", thumbnailData: nil)
+            var clip = Clip(id: UUID(), title: title, startTime: max(0, first.startTime - 0.1),
+                            endTime: last.endTime + 0.15, score: score, scoreReason: "Auto-segmented from transcript",
+                            words: words, isLiked: false, starRating: 0,
+                            captionStyleName: "Karaoke", aspectRatio: "9:16", notes: "", thumbnailData: nil)
+            clip.sourceVideoPath = sourceVideoPath
+            return clip
         }
     }
 
@@ -772,27 +795,32 @@ class VideoExportService {
         options: ExportOptions = ExportOptions(),
         progress: @escaping (Double, String) -> Void
     ) async throws {
-        let asset = AVURLAsset(url: sourceVideoURL)
-
-        let videoTracks = try await asset.loadTracks(withMediaType: .video)
-        let audioTracks = try await asset.loadTracks(withMediaType: .audio)
-
-        guard let srcVideo = videoTracks.first else {
-            throw ExportError.exportFailed("No video track in source file")
+        // Cache loaded assets so multi-source reels don't reload the same file repeatedly
+        var assetCache: [String: AVURLAsset] = [:]
+        func sourceAsset(for clip: Clip) -> AVURLAsset {
+            let path = clip.sourceVideoPath.isEmpty ? sourceVideoURL.path : clip.sourceVideoPath
+            if let cached = assetCache[path] { return cached }
+            let a = AVURLAsset(url: URL(fileURLWithPath: path))
+            assetCache[path] = a
+            return a
         }
 
-        let naturalSize  = try await srcVideo.load(.naturalSize)
-        let prefTransform = try await srcVideo.load(.preferredTransform)
-        let videoSize    = visualSize(naturalSize: naturalSize, transform: prefTransform)
+        // Determine render dimensions from the first clip's source
+        let primaryAsset = sourceAsset(for: clips[0])
+        guard let primaryVideoTrack = try await primaryAsset.loadTracks(withMediaType: .video).first else {
+            throw ExportError.exportFailed("No video track in source file")
+        }
+        let primaryNaturalSize  = try await primaryVideoTrack.load(.naturalSize)
+        let primaryTransform    = try await primaryVideoTrack.load(.preferredTransform)
+        let primaryVideoSize    = visualSize(naturalSize: primaryNaturalSize, transform: primaryTransform)
+        let renderSize          = computeRenderSize(format: options.format, videoSize: primaryVideoSize)
 
         let composition = AVMutableComposition()
         guard let compVideo = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) else {
             throw ExportError.exportFailed("Could not create composition video track")
         }
-        compVideo.preferredTransform = prefTransform
-
+        compVideo.preferredTransform = primaryTransform
         let compAudio = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)
-        let srcAudio  = audioTracks.first
 
         // ── Pass 1: stitch clips + remap words to reel timeline ──────────────
         var insertTime    = CMTime.zero
@@ -801,6 +829,10 @@ class VideoExportService {
 
         for (i, clip) in clips.enumerated() {
             await MainActor.run { progress(Double(i) / Double(clips.count) * 0.25, "Stitching clip \(i + 1) of \(clips.count)...") }
+
+            let clipAsset = sourceAsset(for: clip)
+            guard let srcVideo = try? await clipAsset.loadTracks(withMediaType: .video).first else { continue }
+            let srcAudio = try? await clipAsset.loadTracks(withMediaType: .audio).first
 
             let dur   = clip.endTime - clip.startTime
             let start = CMTime(seconds: clip.startTime, preferredTimescale: 600)
@@ -814,7 +846,6 @@ class VideoExportService {
                 let relS = w.startTime - clip.startTime
                 let relE = w.endTime   - clip.startTime
                 guard relS >= 0, relS < dur else { continue }
-                // Don't display filler sounds in karaoke captions
                 let clean = w.word.lowercased().trimmingCharacters(in: .punctuationCharacters)
                 guard !fillerWords.contains(clean) else { continue }
                 var rw = w; rw.startTime = reelOffset + relS; rw.endTime = reelOffset + relE
@@ -826,14 +857,13 @@ class VideoExportService {
         }
 
         let reelDuration = reelOffset
-        let renderSize   = computeRenderSize(format: options.format, videoSize: videoSize)
         let needsEncode  = options.format != .original || (options.burnCaptions && !remappedWords.isEmpty)
 
         // ── Pass 2: per-segment face tracking + build video composition ───────
         var videoComposition: AVMutableVideoComposition? = nil
 
         if needsEncode {
-            let nomFPS = try await srcVideo.load(.nominalFrameRate)
+            let nomFPS = try await primaryVideoTrack.load(.nominalFrameRate)
             let fps    = nomFPS > 0 ? Int32(nomFPS.rounded()) : 30
             let vc     = AVMutableVideoComposition()
             vc.frameDuration = CMTime(value: 1, timescale: fps)
@@ -841,11 +871,17 @@ class VideoExportService {
 
             let needsFace = options.format == .vertical9x16 || options.format == .square1x1
 
-            var instructions  = [AVMutableVideoCompositionInstruction]()
-            var segStart      = CMTime.zero
+            var instructions = [AVMutableVideoCompositionInstruction]()
+            var segStart     = CMTime.zero
 
             for (i, clip) in clips.enumerated() {
                 await MainActor.run { progress(0.25 + Double(i) / Double(clips.count) * 0.35, "Analyzing clip \(i + 1)...") }
+
+                let clipAsset = sourceAsset(for: clip)
+                // Get this clip's source dimensions for correct crop transform
+                let clipNatSize  = (try? await clipAsset.loadTracks(withMediaType: .video).first?.load(.naturalSize)) ?? primaryNaturalSize
+                let clipTransform = (try? await clipAsset.loadTracks(withMediaType: .video).first?.load(.preferredTransform)) ?? primaryTransform
+                let clipVideoSize = visualSize(naturalSize: clipNatSize, transform: clipTransform)
 
                 let segDur   = CMTime(seconds: clip.endTime - clip.startTime, preferredTimescale: 600)
                 let segRange = CMTimeRange(start: segStart, duration: segDur)
@@ -854,24 +890,23 @@ class VideoExportService {
 
                 let li = AVMutableVideoCompositionLayerInstruction(assetTrack: compVideo)
 
-                if needsFace && videoSize.width > videoSize.height {
+                if needsFace && clipVideoSize.width > clipVideoSize.height {
                     let srcRange = CMTimeRange(start: CMTime(seconds: clip.startTime, preferredTimescale: 600), duration: segDur)
-                    let faces    = await detectFaces(in: asset, clipRange: srcRange, videoSize: videoSize)
+                    let faces    = await detectFaces(in: clipAsset, clipRange: srcRange, videoSize: clipVideoSize)
                     let segBase  = CMTimeGetSeconds(segStart)
 
                     if faces.isEmpty {
-                        // Fallback: center crop when face detection yields nothing
-                        let t = cropTransform(centerX: videoSize.width / 2, videoSize: videoSize, renderSize: renderSize, preferredTransform: prefTransform)
+                        let t = cropTransform(centerX: clipVideoSize.width / 2, videoSize: clipVideoSize, renderSize: renderSize, preferredTransform: clipTransform)
                         li.setTransform(t, at: segStart)
                     } else {
                         for f in faces {
                             let tStart = CMTime(seconds: segBase + f.time, preferredTimescale: 600)
-                            let tFrom  = cropTransform(centerX: f.centerX, videoSize: videoSize, renderSize: renderSize, preferredTransform: prefTransform)
+                            let tFrom  = cropTransform(centerX: f.centerX, videoSize: clipVideoSize, renderSize: renderSize, preferredTransform: clipTransform)
                             li.setTransform(tFrom, at: tStart)
                         }
                     }
                 } else {
-                    let t = cropTransform(centerX: videoSize.width / 2, videoSize: videoSize, renderSize: renderSize, preferredTransform: prefTransform)
+                    let t = cropTransform(centerX: clipVideoSize.width / 2, videoSize: clipVideoSize, renderSize: renderSize, preferredTransform: clipTransform)
                     li.setTransform(t, at: segStart)
                 }
 
@@ -882,12 +917,9 @@ class VideoExportService {
 
             vc.instructions = instructions
 
-            // Captions over full reel using remapped word timeline
             if options.burnCaptions && !remappedWords.isEmpty {
                 let parent = CALayer(); parent.frame = CGRect(origin: .zero, size: renderSize); parent.isGeometryFlipped = true
                 let vl = CALayer(); vl.frame = CGRect(origin: .zero, size: renderSize); parent.addSublayer(vl)
-
-                // Virtual clip: startTime=0, words already in reel time
                 var reelClip = clips[0]
                 reelClip.startTime = 0; reelClip.endTime = reelDuration; reelClip.words = remappedWords
                 let captionLayer = buildCaptionLayer(clip: reelClip, style: options.captionStyle, renderSize: renderSize,
@@ -907,7 +939,7 @@ class VideoExportService {
 
         // Pass the original source asset — compositions always report HighestQuality as compatible
         // so checking the composition alone never triggers the HEVC/iPhone fallback preset.
-        let preset = bestExportPreset(for: composition, sourceAsset: asset)
+        let preset = bestExportPreset(for: composition, sourceAsset: primaryAsset)
         guard let session = AVAssetExportSession(asset: composition, presetName: preset) else {
             throw ExportError.exportFailed("Could not create export session")
         }

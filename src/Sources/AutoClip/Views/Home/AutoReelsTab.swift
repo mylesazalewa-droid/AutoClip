@@ -149,7 +149,9 @@ class AutoReelsStore: ObservableObject {
     func clearJob() { activeJob = nil }
 
     func setPendingExport(clips: [Clip], jobID: UUID, jobTitle: String) async -> Bool {
-        if var job = activeJob, job.id == jobID {
+        // If this job is no longer active (user cancelled mid-pipeline), bail immediately
+        guard activeJob?.id == jobID else { return false }
+        if var job = activeJob {
             job.pendingClips = clips
             job.statusMsg = "\(clips.count) clips selected — ready to export"
             job.progress = 0.48
@@ -951,7 +953,7 @@ struct AutoReelsTab: View {
         }
         .padding(.horizontal, 20).padding(.vertical, 10)
         .contentShape(Rectangle())
-        .onTapGesture { showPreview(url: URL(fileURLWithPath: reel.path), id: reel.id) }
+        .onTapGesture { showPreview(url: URL(fileURLWithPath: reel.path), id: reel.id, cutPoints: reel.cutPoints, reelDuration: reel.duration) }
     }
 
     var emptyPanel: some View {
@@ -1266,6 +1268,8 @@ struct AutoReelsTab: View {
 
         func upd(_ progress: Double, _ msg: String, finished: Bool = false, error: String? = nil, out: URL? = nil) async {
             await MainActor.run {
+                // Don't overwrite a newer pipeline's job — prevents stale updates from cancelled runs
+                guard store.activeJob == nil || store.activeJob?.id == jobID else { return }
                 store.updateJob(AutoReelJob(id: jobID, title: title, progress: progress,
                                            statusMsg: msg, isFinished: finished, error: error, outputURL: out))
             }
@@ -1473,6 +1477,7 @@ struct AutoReelsTab: View {
     private func closePreview() {
         previewPlayer?.pause(); previewPlayer = nil
         previewURL = nil; showingPreviewFor = nil
+        previewCutPoints = []
     }
 
     private func ytDlpPath() -> String? {
