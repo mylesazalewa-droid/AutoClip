@@ -1,0 +1,35 @@
+# macOS
+.DS_Store
+*.DS_Store
+.AppleDouble
+.LSOverride
+
+# Xcode / Swift
+.build/
+*.xcodeproj/
+xcuserdata/
+*.xccheckout
+*.moved-aside
+DerivedData/
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# SPM
+.swiftpm/
+Package.resolved
+
+# Build outputs
+build/
+*.o
+*.d
+
+# DMGs (distributed via GitHub Releases, not committed to git)
+*.dmg
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*~
