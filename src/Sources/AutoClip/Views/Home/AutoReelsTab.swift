@@ -1307,7 +1307,9 @@ struct AutoReelsTab: View {
             // Always generate clean sentence-boundary segments first.
             // This guarantees cuts land on real word boundaries regardless of mode.
             await upd(0.45, "Finding best moments…")
-            let segments = svc.autoSegmentsFromWords(words)
+            let rawSegments = svc.autoSegmentsFromWords(words)
+            // Detect retakes (2–10s reset pause + same content) and keep only the best take
+            let segments = svc.deduplicateTakes(rawSegments)
             guard !segments.isEmpty else {
                 throw NSError(domain: "AutoClip", code: 4, userInfo: [NSLocalizedDescriptionKey: "Not enough speech segments to build a reel."])
             }

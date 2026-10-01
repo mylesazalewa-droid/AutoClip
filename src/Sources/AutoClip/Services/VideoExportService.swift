@@ -788,6 +788,79 @@ class VideoExportService {
         }
     }
 
+    // MARK: - Take deduplication
+
+    /// Detects retakes: consecutive clips separated by a 2–10 s reset pause that cover
+    /// substantially the same words (Jaccard ≥ 0.28). From each group keeps only the
+    /// best-quality take — fewest fillers, fewest short pauses, most complete delivery.
+    func deduplicateTakes(_ clips: [Clip]) -> [Clip] {
+        guard clips.count > 1 else { return clips }
+
+        var result: [Clip] = []
+        var i = 0
+
+        while i < clips.count {
+            var group = [clips[i]]
+
+            // Greedily extend the take group while the next clip looks like a retake
+            while i + 1 < clips.count {
+                let prev = group.last!
+                let next = clips[i + 1]
+                let gap  = next.startTime - prev.endTime
+
+                // Reset pauses are typically 2–10 s; longer gaps are topic changes
+                guard gap >= 2.0 && gap <= 12.0 else { break }
+
+                // Compare content by significant words (>3 chars) — ignore function words
+                let prevBag  = Set(prev.words.map { $0.word.lowercased().trimmingCharacters(in: .punctuationCharacters) }.filter { $0.count > 3 })
+                let nextBag  = Set(next.words.map { $0.word.lowercased().trimmingCharacters(in: .punctuationCharacters) }.filter { $0.count > 3 })
+                guard !prevBag.isEmpty, !nextBag.isEmpty else { break }
+
+                let shared     = Double(prevBag.intersection(nextBag).count)
+                let total      = Double(prevBag.union(nextBag).count)
+                let similarity = shared / total
+
+                guard similarity >= 0.28 else { break }
+
+                group.append(next)
+                i += 1
+            }
+
+            if group.count > 1 {
+                // Pick the take with the best delivery quality
+                let best = group.max { takeQuality($0) < takeQuality($1) } ?? group.last!
+                result.append(best)
+            } else {
+                result.append(group[0])
+            }
+            i += 1
+        }
+        return result
+    }
+
+    /// Quality score used only for take comparison (not the reel scoring system).
+    private func takeQuality(_ clip: Clip) -> Double {
+        let words = clip.words
+        guard !words.isEmpty else { return 0 }
+
+        let fillerCount = words.filter {
+            fillerWords.contains($0.word.lowercased().trimmingCharacters(in: .punctuationCharacters))
+        }.count
+
+        var shortPauses = 0
+        for j in 1..<words.count {
+            if words[j].startTime - words[j - 1].endTime > 0.25 { shortPauses += 1 }
+        }
+
+        let endsClean  = words.last?.word.last.map { ".!?".contains($0) } ?? false
+        let completion = endsClean ? 8.0 : 0.0
+
+        // More words = more complete; penalise hesitations heavily
+        return Double(words.count) + completion
+             - Double(fillerCount) * 3.0
+             - Double(shortPauses) * 2.0
+    }
+
     func createHighlightReel(
         clips: [Clip],
         sourceVideoURL: URL,
