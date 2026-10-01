@@ -711,16 +711,33 @@ class VideoExportService {
             }
         }
 
-        // Split each segment at internal pauses > 0.5s so exported clips have no dead air.
-        // The stitch loop inserts each clip's time range directly; if we remove gaps here
-        // the composition never includes them.
+        // ── Take deduplication (runs on full segments, before pause-split) ───────────
+        // If the same content appears twice with a reset pause between the segments
+        // (speaker stopped, restarted), keep only the better delivery and drop the rest.
+        // Running this BEFORE pause-split ensures all sub-clips of a bad take are removed,
+        // not just the last fragment.
+        let protoClips: [Clip] = longSplit.compactMap { words in
+            guard let first = words.first, let last = words.last else { return nil }
+            return Clip(id: UUID(), title: first.word,
+                        startTime: first.startTime, endTime: last.endTime + 0.15,
+                        score: 0, scoreReason: "", words: words,
+                        isLiked: false, starRating: 0,
+                        captionStyleName: "Karaoke", aspectRatio: "9:16", notes: "")
+        }
+        let deduped     = deduplicateTakes(protoClips)
+        let dedupedIDs  = Set(deduped.map { $0.id })
+        let survivingGroups = zip(longSplit, protoClips)
+            .filter { dedupedIDs.contains($1.id) }
+            .map    { $0.0 }
+
+        // ── Pause-split surviving segments at gaps > 0.4s → tight, gap-free clips ──
         var finalSegs: [[Word]] = []
-        for seg in longSplit {
+        for seg in survivingGroups {
             var currentRun: [Word] = []
             for (i, word) in seg.enumerated() {
                 if i > 0 {
                     let gap = word.startTime - seg[i - 1].endTime
-                    if gap > 0.5 {
+                    if gap > 0.4 {
                         if !currentRun.isEmpty { finalSegs.append(currentRun) }
                         currentRun = []
                     }
@@ -790,9 +807,13 @@ class VideoExportService {
 
     // MARK: - Take deduplication
 
-    /// Detects retakes: consecutive clips separated by a 2–10 s reset pause that cover
-    /// substantially the same words (Jaccard ≥ 0.28). From each group keeps only the
-    /// best-quality take — fewest fillers, fewest short pauses, most complete delivery.
+    /// Detects retakes: consecutive clips separated by a 1.5–15 s reset pause that cover
+    /// substantially the same words. From each group keeps only the best-quality take.
+    ///
+    /// Threshold logic:
+    ///  • Very tight gap (1.5–5 s)  → speaker clearly restarted; require ≥15 % word overlap
+    ///    OR treat as retake if the previous clip was very short (< 6 significant words).
+    ///  • Medium gap (5–15 s)       → require ≥28 % word overlap.
     func deduplicateTakes(_ clips: [Clip]) -> [Clip] {
         guard clips.count > 1 else { return clips }
 
@@ -802,32 +823,41 @@ class VideoExportService {
         while i < clips.count {
             var group = [clips[i]]
 
-            // Greedily extend the take group while the next clip looks like a retake
             while i + 1 < clips.count {
                 let prev = group.last!
                 let next = clips[i + 1]
                 let gap  = next.startTime - prev.endTime
 
-                // Reset pauses are typically 2–10 s; longer gaps are topic changes
-                guard gap >= 2.0 && gap <= 12.0 else { break }
+                guard gap >= 1.5 && gap <= 15.0 else { break }
 
-                // Compare content by significant words (>3 chars) — ignore function words
-                let prevBag  = Set(prev.words.map { $0.word.lowercased().trimmingCharacters(in: .punctuationCharacters) }.filter { $0.count > 3 })
-                let nextBag  = Set(next.words.map { $0.word.lowercased().trimmingCharacters(in: .punctuationCharacters) }.filter { $0.count > 3 })
-                guard !prevBag.isEmpty, !nextBag.isEmpty else { break }
+                let prevBag = Set(prev.words
+                    .map { $0.word.lowercased().trimmingCharacters(in: .punctuationCharacters) }
+                    .filter { $0.count > 3 })
+                let nextBag = Set(next.words
+                    .map { $0.word.lowercased().trimmingCharacters(in: .punctuationCharacters) }
+                    .filter { $0.count > 3 })
 
-                let shared     = Double(prevBag.intersection(nextBag).count)
-                let total      = Double(prevBag.union(nextBag).count)
-                let similarity = shared / total
+                // A very short previous clip (<6 significant words) is almost always
+                // a partial/failed attempt — count it as a retake regardless of overlap.
+                let prevIsPartial = prevBag.count < 6
 
-                guard similarity >= 0.28 else { break }
+                let threshold: Double = gap <= 5.0 ? 0.15 : 0.28
+                let similarity: Double
+                if prevBag.isEmpty || nextBag.isEmpty {
+                    similarity = prevIsPartial ? 1.0 : 0.0
+                } else {
+                    let shared = Double(prevBag.intersection(nextBag).count)
+                    let total  = Double(prevBag.union(nextBag).count)
+                    similarity = shared / total
+                }
+
+                guard prevIsPartial || similarity >= threshold else { break }
 
                 group.append(next)
                 i += 1
             }
 
             if group.count > 1 {
-                // Pick the take with the best delivery quality
                 let best = group.max { takeQuality($0) < takeQuality($1) } ?? group.last!
                 result.append(best)
             } else {
