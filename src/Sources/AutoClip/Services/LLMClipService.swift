@@ -25,7 +25,7 @@ actor LLMClipService {
             switch self {
             case .anthropic: return "claude-haiku-4-5"
             case .openai:    return "gpt-4o-mini"
-            case .google:    return "gemini-2.0-flash"
+            case .google:    return "gemini-3.8-flash"
             }
         }
 
@@ -193,7 +193,7 @@ Respond with ONLY valid JSON — no markdown fences, no explanation, nothing els
         let body: [String: Any] = [
             "contents": [["parts": [["text": prompt]]]]
         ]
-        let urlStr = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=\(apiKey)"
+        let urlStr = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=\(apiKey)"
         var req = URLRequest(url: URL(string: urlStr)!)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")

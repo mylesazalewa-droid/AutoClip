@@ -371,8 +371,10 @@ class VideoExportService {
         let e = safeEnd / total
         let post = min(1.0, (safeEnd + 0.001) / total)
 
-        anim.keyTimes = [0, NSNumber(value: pre), NSNumber(value: s), NSNumber(value: e), NSNumber(value: post), 1].map { $0 }
-        anim.values = [0, 0, 1, 1, 0, 0].map { Float($0) }
+        anim.keyTimes = [NSNumber(value: 0.0), NSNumber(value: pre), NSNumber(value: s),
+                         NSNumber(value: e), NSNumber(value: post), NSNumber(value: 1.0)]
+        anim.values   = [NSNumber(value: 0.0), NSNumber(value: 0.0), NSNumber(value: 1.0),
+                         NSNumber(value: 1.0), NSNumber(value: 0.0), NSNumber(value: 0.0)]
         anim.duration = total
         anim.beginTime = AVCoreAnimationBeginTimeAtZero
         anim.isRemovedOnCompletion = false

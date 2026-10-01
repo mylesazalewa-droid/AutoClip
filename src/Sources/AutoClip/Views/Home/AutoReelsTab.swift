@@ -109,7 +109,7 @@ struct AutoReelsTab: View {
 
     // Export mode
     @State private var exportMode: ExportMode = .reel
-    @State private var clipsPerReel: Double = 4
+    @State private var numberOfReels: Double = 2
 
     private let gold = Color(red: 1.0, green: 0.75, blue: 0.0)
     private let captionStyles = CaptionStyle.all
@@ -369,7 +369,7 @@ struct AutoReelsTab: View {
                 case .reel:
                     Text("All clips are stitched together into one highlight reel.")
                 case .multipleReels:
-                    Text("Clips are grouped and each group is stitched into its own reel file.")
+                    Text("Creates several distinct reels, each with a unique mix of the best moments.")
                 case .individualClips:
                     Text("Each clip is saved as its own separate video file.")
                 }
@@ -377,14 +377,14 @@ struct AutoReelsTab: View {
             .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.4))
             .fixedSize(horizontal: false, vertical: true)
 
-            // Clips-per-reel slider — only shown for multiple reels
+            // Number of reels slider — only shown for multiple reels
             if exportMode == .multipleReels {
                 HStack {
-                    Text("Clips per reel").font(.system(size: 12)).foregroundColor(Color.white.opacity(0.6))
+                    Text("Number of reels").font(.system(size: 12)).foregroundColor(Color.white.opacity(0.6))
                     Spacer()
-                    Text("\(Int(clipsPerReel))").font(.system(size: 12, design: .monospaced)).foregroundColor(gold)
+                    Text("\(Int(numberOfReels))").font(.system(size: 12, design: .monospaced)).foregroundColor(gold)
                 }
-                Slider(value: $clipsPerReel, in: 2...8, step: 1).tint(gold)
+                Slider(value: $numberOfReels, in: 2...4, step: 1).tint(gold)
             }
         }
         .padding(14).background(Color.white.opacity(0.04)).cornerRadius(10)
@@ -894,7 +894,7 @@ struct AutoReelsTab: View {
         let styleIdx = captionStyleIndex; let dur = targetDuration
         let ai = useAI; let prov = aiProvider
         let key = apiKeys[aiProvider] ?? ""; let mode = exportMode
-        let cpr = Int(clipsPerReel)
+        let numReels = Int(numberOfReels)
 
         Task.detached(priority: .userInitiated) {
             let videosDir = URL(fileURLWithPath: NSHomeDirectory())
@@ -971,7 +971,7 @@ struct AutoReelsTab: View {
                 await self.startPipelineAsync(videoURL: videoURL, format: fmt, captions: captions,
                                               styleIdx: styleIdx, targetDur: dur,
                                               useAI: ai, provider: prov, apiKey: key,
-                                              exportMode: mode, clipsPerReel: cpr, outputDir: outDir)
+                                              exportMode: mode, numberOfReels: numReels, outputDir: outDir)
             } catch {
                 await MainActor.run { self.isDownloading = false; self.downloadError = error.localizedDescription }
             }
@@ -1000,12 +1000,12 @@ struct AutoReelsTab: View {
         let styleIdx = captionStyleIndex; let dur = targetDuration
         let ai = useAI; let prov = aiProvider
         let key = apiKeys[aiProvider] ?? ""; let mode = exportMode
-        let cpr = Int(clipsPerReel)
+        let numReels = Int(numberOfReels)
         Task.detached(priority: .userInitiated) {
             await self.startPipelineAsync(videoURL: videoURL, format: fmt, captions: captions,
                                           styleIdx: styleIdx, targetDur: dur,
                                           useAI: ai, provider: prov, apiKey: key,
-                                          exportMode: mode, clipsPerReel: cpr, outputDir: outDir)
+                                          exportMode: mode, numberOfReels: numReels, outputDir: outDir)
         }
     }
 
@@ -1015,7 +1015,7 @@ struct AutoReelsTab: View {
                                     useAI: Bool = false,
                                     provider: LLMClipService.AIProvider = .anthropic,
                                     apiKey: String = "",
-                                    exportMode: ExportMode = .reel, clipsPerReel: Int = 4,
+                                    exportMode: ExportMode = .reel, numberOfReels: Int = 2,
                                     outputDir: URL = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first!) async {
         let jobID = UUID()
         let title = videoURL.deletingPathExtension().lastPathComponent
@@ -1072,29 +1072,31 @@ struct AutoReelsTab: View {
             if captions && styleIdx < CaptionStyle.all.count { opts.captionStyle = CaptionStyle.all[styleIdx] }
 
             if exportMode == .multipleReels {
-                // Split clips into groups, stitch each group into its own reel
-                let groupSize = max(2, clipsPerReel)
-                let groups = stride(from: 0, to: clips.count, by: groupSize).map {
-                    Array(clips[$0..<min($0 + groupSize, clips.count)])
-                }
+                // Distribute clips round-robin across N reels so each reel gets
+                // a unique variety of the best moments (not just the top chunk vs bottom chunk)
+                let n = max(2, min(numberOfReels, clips.count))
+                var groups: [[Clip]] = Array(repeating: [], count: n)
+                for (i, clip) in clips.enumerated() { groups[i % n].append(clip) }
+                // Drop any empty groups (when clips.count < n)
+                let validGroups = groups.filter { !$0.isEmpty }
                 var outURLs: [URL] = []
-                for (i, group) in groups.enumerated() {
-                    let pct = Double(i) / Double(groups.count)
-                    await upd(0.50 + pct * 0.48, "Stitching reel \(i + 1) of \(groups.count)…")
-                    let outURL = desktop.appendingPathComponent("\(title) – Reel \(i + 1) of \(groups.count).mp4")
+                for (i, group) in validGroups.enumerated() {
+                    let pct = Double(i) / Double(validGroups.count)
+                    await upd(0.50 + pct * 0.48, "Stitching reel \(i + 1) of \(validGroups.count)…")
+                    let outURL = desktop.appendingPathComponent("\(title) – Reel \(i + 1).mp4")
                     try await svc.createHighlightReel(clips: group, sourceVideoURL: videoURL,
                                                       outputURL: outURL, options: opts) { _, _ in }
                     outURLs.append(outURL)
                 }
                 let totalDur = clips.reduce(0) { $0 + $1.duration }
-                let record = AutoReelRecord(id: UUID(), title: "\(title) – \(groups.count) Reels",
+                let record = AutoReelRecord(id: UUID(), title: "\(title) – \(validGroups.count) Reels",
                                             path: outURLs.first?.path ?? "",
                                             format: fmtLabel(format), duration: totalDur,
                                             clipCount: clips.count, dateCreated: Date().timeIntervalSince1970)
                 await MainActor.run {
                     AutoReelsStore.shared.add(record)
                     store.updateJob(AutoReelJob(id: jobID, title: title, progress: 1.0,
-                                               statusMsg: "\(groups.count) reels saved to Desktop",
+                                               statusMsg: "\(validGroups.count) reels saved",
                                                isFinished: true, error: nil,
                                                outputURL: outURLs.first, outputURLs: outURLs))
                 }
