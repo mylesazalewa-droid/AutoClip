@@ -1461,37 +1461,8 @@ struct AutoReelsTab: View {
                 ? max(2, min(10, Int(totalSpeechDur / max(30, targetDur))))
                 : 1
 
-            // For multiple reels each reel gets its own full targetDur budget
-            let selectionBudget = exportMode == .multipleReels ? targetDur * Double(autoReels) : targetDur
-
-            var clips: [Clip]
-            if useAI && !apiKey.isEmpty {
-                // Smart AI mode: LLM picks WHICH segments are best — cuts stay clean
-                await upd(0.47, "AI choosing the best segments…")
-                let variation = await MainActor.run { store.rerollVariation }
-                let selected = try await LLMClipService.shared.selectSegments(
-                    from: segments, provider: provider, apiKey: apiKey,
-                    targetDuration: selectionBudget, topic: topic.isEmpty ? nil : topic,
-                    numberOfReels: exportMode == .multipleReels ? autoReels : 1,
-                    variation: variation)
-                clips = selected
-            } else {
-                // Local mode: score-based selection with hook boost
-                let (hook, rest) = svc.selectHookAndClips(from: segments, targetDuration: selectionBudget)
-                guard let hook else {
-                    throw NSError(domain: "AutoClip", code: 4, userInfo: [NSLocalizedDescriptionKey: "Not enough speech segments to build a reel."])
-                }
-                clips = [hook] + rest
-            }
-
-            // Apply storyline ordering only when the user has enabled it.
-            // Multiple reels apply ordering per-reel during distribution below.
-            if exportMode != .multipleReels, let smode = storylineMode {
-                clips = smode.order(clips)
-            }
-
-            // Derive reel title from the hook clip's opening words
-            let hookPreview = clips.first.map {
+            // Derive reel title from the first segment's opening words
+            let hookPreview = segments.first.map {
                 $0.words.prefix(7).map { $0.word }.joined(separator: " ")
             } ?? ""
             let finalReelTitle = hookPreview.count > 4 ? hookPreview : title
@@ -1514,25 +1485,31 @@ struct AutoReelsTab: View {
             opts.emojiOverlays = emojiOverlays
 
             if exportMode == .multipleReels {
-                // Bin-pack clips into N reels, each targeting targetDur seconds.
-                // Assign each clip (sorted best-first) to whichever reel has the least
-                // content so far, until every reel is full. This guarantees each reel
-                // reaches targetDur rather than getting a random slice of a shared pool.
-                let n = max(2, min(autoReels, clips.count))
-                var groups: [[Clip]] = Array(repeating: [], count: n)
-                var reelFill: [Double] = Array(repeating: 0, count: n)
-                let sortedByScore = clips.sorted { $0.score > $1.score }
-                for clip in sortedByScore {
-                    // Find the reel with the least content that still has room for this clip
-                    let eligible = (0..<n).filter { reelFill[$0] + clip.duration <= targetDur * 1.15 }
-                    let target = eligible.min(by: { reelFill[$0] < reelFill[$1] }) ?? (0..<n).min(by: { reelFill[$0] < reelFill[$1] })!
-                    groups[target].append(clip)
-                    reelFill[target] += clip.duration
+                // Each reel gets its OWN independent clip selection so every reel is
+                // the full targetDur length. We pass variation = baseVariation + reelIndex
+                // so AI picks a different set of moments for each reel.
+                let baseVariation = await MainActor.run { store.rerollVariation }
+                var reelGroups: [[Clip]] = []
+                for i in 0..<autoReels {
+                    await upd(0.47 + Double(i) / Double(autoReels) * 0.06,
+                              "Selecting clips for reel \(i + 1) of \(autoReels)…")
+                    var reelClips: [Clip]
+                    if useAI && !apiKey.isEmpty {
+                        reelClips = try await LLMClipService.shared.selectSegments(
+                            from: segments, provider: provider, apiKey: apiKey,
+                            targetDuration: targetDur, topic: topic.isEmpty ? nil : topic,
+                            numberOfReels: 1, variation: baseVariation + i)
+                    } else {
+                        let (hook, rest) = svc.selectHookAndClips(from: segments, targetDuration: targetDur)
+                        reelClips = hook.map { [$0] + rest } ?? rest
+                    }
+                    if let smode = storylineMode { reelClips = smode.order(reelClips) }
+                    if !reelClips.isEmpty { reelGroups.append(reelClips) }
                 }
-                // Apply storyline ordering within each reel for narrative flow
-                let validGroups = groups
-                    .filter { !$0.isEmpty }
-                    .map { group in storylineMode.map { $0.order(group) } ?? group }
+                guard !reelGroups.isEmpty else {
+                    throw NSError(domain: "AutoClip", code: 4, userInfo: [NSLocalizedDescriptionKey: "No clips could be selected for any reel."])
+                }
+                let validGroups = reelGroups
                 var outURLs: [URL] = []
                 for (i, group) in validGroups.enumerated() {
                     let pct = Double(i) / Double(validGroups.count)
@@ -1554,11 +1531,12 @@ struct AutoReelsTab: View {
                         cutPts.append(acc / firstReelDur)
                     }
                 }
+                let totalClipCount = validGroups.reduce(0) { $0 + $1.count }
                 let record = AutoReelRecord(id: UUID(), title: "\(finalReelTitle) – \(validGroups.count) Reels",
                                             path: outURLs.first?.path ?? "",
                                             paths: outURLs.map { $0.path },
                                             format: fmtLabel(format), duration: firstReelDur,
-                                            clipCount: clips.count, dateCreated: Date().timeIntervalSince1970,
+                                            clipCount: totalClipCount, dateCreated: Date().timeIntervalSince1970,
                                             cutPoints: cutPts)
                 await MainActor.run {
                     AutoReelsStore.shared.add(record)
@@ -1569,6 +1547,19 @@ struct AutoReelsTab: View {
                                                cutPoints: cutPts, reelDuration: firstReelDur))
                 }
             } else if exportMode == .individualClips {
+                // Select clips for individual export
+                var clips: [Clip]
+                if useAI && !apiKey.isEmpty {
+                    await upd(0.47, "AI choosing the best segments…")
+                    let variation = await MainActor.run { store.rerollVariation }
+                    clips = try await LLMClipService.shared.selectSegments(
+                        from: segments, provider: provider, apiKey: apiKey,
+                        targetDuration: targetDur, topic: topic.isEmpty ? nil : topic,
+                        numberOfReels: 1, variation: variation)
+                } else {
+                    let (hook, rest) = svc.selectHookAndClips(from: segments, targetDuration: targetDur)
+                    clips = hook.map { [$0] + rest } ?? rest
+                }
                 // Export each clip as its own file
                 var outURLs: [URL] = []
                 for (i, clip) in clips.enumerated() {
@@ -1592,6 +1583,20 @@ struct AutoReelsTab: View {
                                                outputURL: outURLs.first, outputURLs: outURLs))
                 }
             } else {
+                // Select clips for single reel
+                var clips: [Clip]
+                if useAI && !apiKey.isEmpty {
+                    await upd(0.47, "AI choosing the best segments…")
+                    let variation = await MainActor.run { store.rerollVariation }
+                    clips = try await LLMClipService.shared.selectSegments(
+                        from: segments, provider: provider, apiKey: apiKey,
+                        targetDuration: targetDur, topic: topic.isEmpty ? nil : topic,
+                        numberOfReels: 1, variation: variation)
+                } else {
+                    let (hook, rest) = svc.selectHookAndClips(from: segments, targetDuration: targetDur)
+                    clips = hook.map { [$0] + rest } ?? rest
+                }
+                if let smode = storylineMode { clips = smode.order(clips) }
                 // Stitch all clips into one highlight reel
                 await upd(0.50, "Exporting reel…")
                 let outURL = desktop.appendingPathComponent("\(finalReelTitle) – Auto Reel.mp4")
