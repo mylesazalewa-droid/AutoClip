@@ -811,10 +811,11 @@ class VideoExportService {
         return finalSegs.compactMap { words -> Clip? in
             guard let first = words.first, let last = words.last else { return nil }
             let dur = last.endTime - first.startTime
-            // Allow pause-split fragments down to 4s/5 words; full segments need 6s/8 words
+            // Require clean sentence-ending punctuation for short/sparse clips.
+            // Non-clean-ending fragments must be longer (>8s, 10+ words) to avoid mid-sentence cuts.
             let endsClean = last.word.last.map { ".!?".contains($0) } ?? false
-            let minDur: Double = endsClean ? 6.0 : 4.0
-            let minWords = endsClean ? 8 : 5
+            let minDur: Double = endsClean ? 5.0 : 8.0
+            let minWords = endsClean ? 7 : 10
             guard dur >= minDur, words.count >= minWords else { return nil }
 
             // Measure filler density — skip segments where >20% of words are fillers
@@ -839,8 +840,8 @@ class VideoExportService {
             let lenScore: Double = dur < 10 ? dur * 1.5 : (dur <= 30 ? 20.0 : max(0, 20 - (dur - 30) * 0.5))
             // Small bonus for content early in the video (stronger hook potential)
             let posScore = (first.startTime / max(1, totalDuration)) < 0.25 ? 10.0 : 0.0
-            // Bonus for segments that end on proper punctuation (complete thought)
-            let cleanEndBonus = endsClean ? 5.0 : 0.0
+            // Strong bonus for complete sentences — penalise mid-statement fragments
+            let cleanEndBonus = endsClean ? 18.0 : -8.0
             // Penalise filler-heavy and hesitant delivery
             let fillerPenalty = fillerRatio * 25.0
             let pausePenalty  = Double(internalPauses) * 4.0
@@ -981,6 +982,7 @@ class VideoExportService {
         var insertTime    = CMTime.zero
         var reelOffset    = 0.0
         var remappedWords = [Word]()
+        var insertedClips = [Clip]()  // only clips that actually made it into the composition
 
         for (i, clip) in clips.enumerated() {
             await MainActor.run { progress(Double(i) / Double(clips.count) * 0.25, "Stitching clip \(i + 1) of \(clips.count)...") }
@@ -989,11 +991,22 @@ class VideoExportService {
             guard let srcVideo = try? await clipAsset.loadTracks(withMediaType: .video).first else { continue }
             let srcAudio = try? await clipAsset.loadTracks(withMediaType: .audio).first
 
-            let dur   = clip.endTime - clip.startTime
-            let start = CMTime(seconds: clip.startTime, preferredTimescale: 600)
+            // Clamp clip to asset duration — prevents "Operation Stopped" when endTime
+            // overshoots the source file (common for the last clip or floating-point drift)
+            let assetDurSecs = CMTimeGetSeconds((try? await clipAsset.load(.duration)) ?? .positiveInfinity)
+            let clampedStart = min(max(0, clip.startTime), assetDurSecs - 0.1)
+            let clampedEnd   = min(clip.endTime, assetDurSecs)
+            let dur = clampedEnd - clampedStart
+            guard dur > 0.1 else { continue }
+
+            let start = CMTime(seconds: clampedStart, preferredTimescale: 600)
             let range = CMTimeRange(start: start, duration: CMTime(seconds: dur, preferredTimescale: 600))
 
-            try compVideo.insertTimeRange(range, of: srcVideo, at: insertTime)
+            do {
+                try compVideo.insertTimeRange(range, of: srcVideo, at: insertTime)
+            } catch {
+                continue  // skip clips whose range can't be inserted (malformed asset)
+            }
             if let compAudio, let srcAudio { try? compAudio.insertTimeRange(range, of: srcAudio, at: insertTime) }
 
             // Remap word times from source → reel timeline, filtering filler words from captions
@@ -1007,6 +1020,7 @@ class VideoExportService {
                 remappedWords.append(rw)
             }
 
+            insertedClips.append(clip)
             insertTime  = CMTime(seconds: CMTimeGetSeconds(insertTime) + dur, preferredTimescale: 600)
             reelOffset += dur
         }
@@ -1029,8 +1043,8 @@ class VideoExportService {
             var instructions = [AVMutableVideoCompositionInstruction]()
             var segStart     = CMTime.zero
 
-            for (i, clip) in clips.enumerated() {
-                await MainActor.run { progress(0.25 + Double(i) / Double(clips.count) * 0.35, "Analyzing clip \(i + 1)...") }
+            for (i, clip) in insertedClips.enumerated() {
+                await MainActor.run { progress(0.25 + Double(i) / Double(insertedClips.count) * 0.35, "Analyzing clip \(i + 1)...") }
 
                 let clipAsset = sourceAsset(for: clip)
                 // Get this clip's source dimensions for correct crop transform
@@ -1074,7 +1088,7 @@ class VideoExportService {
                         li.setOpacityRamp(fromStartOpacity: 0.0, toEndOpacity: 1.0,
                                           timeRange: CMTimeRange(start: segStart, duration: dissolveTime))
                     }
-                    if i < clips.count - 1, segSecs > dissolveTime.seconds * 2 {
+                    if i < insertedClips.count - 1, segSecs > dissolveTime.seconds * 2 {
                         let fadeStart = CMTime(seconds: CMTimeGetSeconds(segStart) + segSecs - dissolveDurSecs, preferredTimescale: 600)
                         li.setOpacityRamp(fromStartOpacity: 1.0, toEndOpacity: 0.0,
                                           timeRange: CMTimeRange(start: fadeStart, duration: dissolveTime))
