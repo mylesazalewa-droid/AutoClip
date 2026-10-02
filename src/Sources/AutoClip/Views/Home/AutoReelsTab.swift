@@ -8,22 +8,24 @@ import AppKit
 struct AutoReelRecord: Identifiable, Codable {
     var id: UUID
     var title: String
-    var path: String          // primary file (first reel / single reel)
-    var paths: [String]       // all files (for multiple reels)
+    var path: String              // primary file (first reel / single reel)
+    var paths: [String]           // all files (for multiple reels)
     var format: String
     var duration: Double
     var clipCount: Int
     var dateCreated: Double
-    var cutPoints: [Double]   // fractional [0,1] cut positions for scrubber
+    var cutPoints: [Double]       // fractional [0,1] cut positions for scrubber (primary reel)
+    var cutPointsPerReel: [[Double]] // per-reel cut points for multi-reel packs
 
     init(id: UUID, title: String, path: String, paths: [String] = [],
          format: String, duration: Double, clipCount: Int, dateCreated: Double,
-         cutPoints: [Double] = []) {
+         cutPoints: [Double] = [], cutPointsPerReel: [[Double]] = []) {
         self.id = id; self.title = title; self.path = path
         self.paths = paths.isEmpty ? [path] : paths
         self.format = format; self.duration = duration
         self.clipCount = clipCount; self.dateCreated = dateCreated
         self.cutPoints = cutPoints
+        self.cutPointsPerReel = cutPointsPerReel
     }
 }
 
@@ -1049,7 +1051,8 @@ struct AutoReelsTab: View {
                     ForEach(Array(reel.paths.enumerated()), id: \.offset) { i, path in
                         let url = URL(fileURLWithPath: path)
                         let exists = FileManager.default.fileExists(atPath: path)
-                        Button(action: { if exists { showPreview(url: url, id: reel.id) } }) {
+                        let pts = i < reel.cutPointsPerReel.count ? reel.cutPointsPerReel[i] : reel.cutPoints
+                        Button(action: { if exists { showPreview(url: url, id: reel.id, cutPoints: pts) } }) {
                             HStack(spacing: 10) {
                                 Text("Reel \(i + 1)")
                                     .font(.system(size: 12, weight: .medium))
@@ -1487,24 +1490,45 @@ struct AutoReelsTab: View {
             if exportMode == .multipleReels {
                 // Each reel gets its OWN independent clip selection so every reel is
                 // the full targetDur length. We pass variation = baseVariation + reelIndex
-                // so AI picks a different set of moments for each reel.
+                // so AI picks different moments for each reel.
+                // We also track which clips were already used and exclude them from later
+                // reels so local-mode reels are never identical to each other.
+                // If the AI call fails for a reel, we fall back to local scoring so the
+                // overall export never crashes just because one API call timed out.
                 let baseVariation = await MainActor.run { store.rerollVariation }
                 var reelGroups: [[Clip]] = []
+                var usedStartTimes = Set<Double>()   // track clips used in previous reels
                 for i in 0..<autoReels {
-                    await upd(0.47 + Double(i) / Double(autoReels) * 0.06,
+                    await upd(0.40 + Double(i) / Double(autoReels) * 0.10,
                               "Selecting clips for reel \(i + 1) of \(autoReels)…")
+                    // Exclude segments already used in a previous reel (wrap around only if pool is empty)
+                    let freshSegments = segments.filter { !usedStartTimes.contains($0.startTime) }
+                    let pool = freshSegments.isEmpty ? segments : freshSegments
                     var reelClips: [Clip]
                     if useAI && !apiKey.isEmpty {
-                        reelClips = try await LLMClipService.shared.selectSegments(
-                            from: segments, provider: provider, apiKey: apiKey,
-                            targetDuration: targetDur, topic: topic.isEmpty ? nil : topic,
-                            numberOfReels: 1, variation: baseVariation + i)
+                        do {
+                            reelClips = try await LLMClipService.shared.selectSegments(
+                                from: pool, provider: provider, apiKey: apiKey,
+                                targetDuration: targetDur, topic: topic.isEmpty ? nil : topic,
+                                numberOfReels: 1, variation: baseVariation + i)
+                        } catch {
+                            // API failed for this reel — fall back to local scoring on fresh pool
+                            let (hook, rest) = svc.selectHookAndClips(from: pool, targetDuration: targetDur)
+                            reelClips = hook.map { [$0] + rest } ?? rest
+                        }
                     } else {
-                        let (hook, rest) = svc.selectHookAndClips(from: segments, targetDuration: targetDur)
+                        let (hook, rest) = svc.selectHookAndClips(from: pool, targetDuration: targetDur)
                         reelClips = hook.map { [$0] + rest } ?? rest
                     }
                     if let smode = storylineMode { reelClips = smode.order(reelClips) }
-                    if !reelClips.isEmpty { reelGroups.append(reelClips) }
+                    if !reelClips.isEmpty {
+                        reelGroups.append(reelClips)
+                        reelClips.forEach { usedStartTimes.insert($0.startTime) }
+                    }
+                    // Brief pause between API calls to avoid rate-limit errors on free-tier providers
+                    if i < autoReels - 1 {
+                        try? await Task.sleep(nanoseconds: 1_000_000_000)
+                    }
                 }
                 guard !reelGroups.isEmpty else {
                     throw NSError(domain: "AutoClip", code: 4, userInfo: [NSLocalizedDescriptionKey: "No clips could be selected for any reel."])
@@ -1518,26 +1542,29 @@ struct AutoReelsTab: View {
                     try await svc.createHighlightReel(clips: group, sourceVideoURL: workingURL,
                                                       outputURL: outURL, options: opts) { _, _ in }
                     outURLs.append(outURL)
-                }
-                // Duration of the primary (first) reel
-                let firstGroup = validGroups.first ?? []
-                let firstReelDur = firstGroup.reduce(0) { $0 + $1.duration }
-                // Cut points as fractions of first reel duration (for scrubber ticks)
-                var cutPts: [Double] = []
-                if firstReelDur > 0 {
-                    var acc = 0.0
-                    for clip in firstGroup.dropLast() {
-                        acc += clip.duration
-                        cutPts.append(acc / firstReelDur)
+                    // Let AVFoundation fully release the export session before the next reel
+                    if i < validGroups.count - 1 {
+                        try? await Task.sleep(nanoseconds: 500_000_000)
                     }
                 }
+                // Compute cut points for EVERY reel so the scrubber shows tick marks on each
+                func reelCutPoints(_ group: [Clip]) -> [Double] {
+                    let dur = group.reduce(0.0) { $0 + $1.duration }
+                    guard dur > 0, group.count > 1 else { return [] }
+                    var acc = 0.0
+                    return group.dropLast().map { acc += $0.duration; return acc / dur }
+                }
+                let allCutPts = validGroups.map { reelCutPoints($0) }
+                let cutPts = allCutPts.first ?? []
+                let firstGroup = validGroups.first ?? []
+                let firstReelDur = firstGroup.reduce(0.0) { $0 + $1.duration }
                 let totalClipCount = validGroups.reduce(0) { $0 + $1.count }
                 let record = AutoReelRecord(id: UUID(), title: "\(finalReelTitle) – \(validGroups.count) Reels",
                                             path: outURLs.first?.path ?? "",
                                             paths: outURLs.map { $0.path },
                                             format: fmtLabel(format), duration: firstReelDur,
                                             clipCount: totalClipCount, dateCreated: Date().timeIntervalSince1970,
-                                            cutPoints: cutPts)
+                                            cutPoints: cutPts, cutPointsPerReel: allCutPts)
                 await MainActor.run {
                     AutoReelsStore.shared.add(record)
                     store.updateJob(AutoReelJob(id: jobID, title: finalReelTitle, progress: 1.0,
