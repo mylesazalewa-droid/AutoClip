@@ -1029,6 +1029,10 @@ class VideoExportService {
             reelOffset += dur
         }
 
+        guard !insertedClips.isEmpty else {
+            throw ExportError.exportFailed("No clips could be inserted — check that the video file is not corrupted and the clip timestamps are within the video duration.")
+        }
+
         let reelDuration = reelOffset
         let needsEncode  = options.format != .original || (options.burnCaptions && !remappedWords.isEmpty)
 

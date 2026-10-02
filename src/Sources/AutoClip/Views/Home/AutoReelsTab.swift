@@ -236,28 +236,42 @@ struct AutoReelsTab: View {
     @State private var isScrubbing = false
     @State private var previewCutPoints: [Double] = []
 
-    // Settings
-    @State private var selectedFormat: VideoExportService.ExportFormat = .vertical9x16
-    @State private var burnCaptions = true
-    @State private var captionStyleIndex = 0
-    @State private var targetDuration: Double = 90
+    // Settings — @AppStorage so they survive tab switches and relaunches
+    @AppStorage("ar_format")      private var formatRaw: String = VideoExportService.ExportFormat.vertical9x16.rawValue
+    @AppStorage("ar_captions")    private var burnCaptions: Bool = true
+    @AppStorage("ar_captionIdx")  private var captionStyleIndex: Int = 0
+    @AppStorage("ar_targetDur")   private var targetDuration: Double = 90
+    @AppStorage("ar_exportMode")  private var exportModeRaw: String = ExportMode.reel.rawValue
+    @AppStorage("ar_useAI")       private var useAI: Bool = false
+    @AppStorage("ar_provider")    private var providerRaw: String = LLMClipService.AIProvider.anthropic.rawValue
+    @AppStorage("ar_dissolve")    private var crossDissolve: Bool = false
+    @AppStorage("ar_emoji")       private var emojiOverlays: Bool = false
+    @AppStorage("ar_storyline")   private var useStoryline: Bool = false
+    @AppStorage("ar_storyMode")   private var storylineModeRaw: String = StorylineMode.linear.rawValue
 
-    // AI-powered selection
-    @State private var useAI = false
-    @State private var aiProvider: LLMClipService.AIProvider = .anthropic
+    // Derived from AppStorage (enums)
+    private var selectedFormat: VideoExportService.ExportFormat {
+        get { VideoExportService.ExportFormat(rawValue: formatRaw) ?? .vertical9x16 }
+        nonmutating set { formatRaw = newValue.rawValue }
+    }
+    private var exportMode: ExportMode {
+        get { ExportMode(rawValue: exportModeRaw) ?? .reel }
+        nonmutating set { exportModeRaw = newValue.rawValue }
+    }
+    private var aiProvider: LLMClipService.AIProvider {
+        get { LLMClipService.AIProvider(rawValue: providerRaw) ?? .anthropic }
+        nonmutating set { providerRaw = newValue.rawValue }
+    }
+    private var storylineMode: StorylineMode {
+        get { StorylineMode(rawValue: storylineModeRaw) ?? .linear }
+        nonmutating set { storylineModeRaw = newValue.rawValue }
+    }
+
     @State private var apiKeys: [LLMClipService.AIProvider: String] = [:]
     @State private var showKey = false
 
-    // Export mode
-    @State private var exportMode: ExportMode = .reel
-    @State private var numberOfReels: Double = 2
-    @State private var storylineMode: StorylineMode = .linear
-    @State private var useStoryline: Bool = false
-
-    // Chat / creative direction
+    // Chat / creative direction (per-session, not persisted)
     @State private var topicText: String = ""
-    @State private var crossDissolve: Bool = false
-    @State private var emojiOverlays: Bool = false
 
     private let gold = Color(red: 1.0, green: 0.75, blue: 0.0)
     private let captionStyles = CaptionStyle.all
@@ -574,14 +588,11 @@ struct AutoReelsTab: View {
             .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.4))
             .fixedSize(horizontal: false, vertical: true)
 
-            // Number of reels slider — only shown for multiple reels
+            // Auto reel count info — shown when multiple reels selected
             if exportMode == .multipleReels {
-                HStack {
-                    Text("Number of reels").font(.system(size: 12)).foregroundColor(Color.white.opacity(0.6))
-                    Spacer()
-                    Text("\(Int(numberOfReels))").font(.system(size: 12, design: .monospaced)).foregroundColor(gold)
-                }
-                Slider(value: $numberOfReels, in: 2...4, step: 1).tint(gold)
+                Label("Reel count is calculated automatically from your video length.", systemImage: "info.circle")
+                    .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.35))
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(14).background(Color.white.opacity(0.04)).cornerRadius(10)
@@ -883,89 +894,6 @@ struct AutoReelsTab: View {
                 .frame(height: 4)
             }
 
-            // Pending export confirmation
-            if let clips = job.pendingClips {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("Selected \(clips.count) clips · \(formatDur(clips.reduce(0) { $0 + $1.duration })) total")
-                            .font(.system(size: 11, weight: .semibold)).foregroundColor(gold)
-                        Spacer()
-                        Button(action: { store.cancelExport() }) {
-                            Label("Redo", systemImage: "arrow.counterclockwise")
-                                .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.5))
-                        }
-                        .buttonStyle(.plain)
-                        .help("Cancel and re-run clip selection")
-                    }
-
-                    ScrollView {
-                        VStack(spacing: 3) {
-                            ForEach(Array(clips.enumerated()), id: \.offset) { i, clip in
-                                HStack(spacing: 6) {
-                                    // Move up / down
-                                    VStack(spacing: 1) {
-                                        Button(action: { if i > 0 { store.movePendingClip(from: i, to: i - 1) } }) {
-                                            Image(systemName: "chevron.up").font(.system(size: 8))
-                                        }
-                                        .buttonStyle(.plain).foregroundColor(i > 0 ? Color.white.opacity(0.35) : Color.clear)
-                                        Button(action: { if i < clips.count - 1 { store.movePendingClip(from: i, to: i + 1) } }) {
-                                            Image(systemName: "chevron.down").font(.system(size: 8))
-                                        }
-                                        .buttonStyle(.plain).foregroundColor(i < clips.count - 1 ? Color.white.opacity(0.35) : Color.clear)
-                                    }
-
-                                    Text("\(i + 1)").font(.system(size: 10, design: .monospaced))
-                                        .foregroundColor(Color.white.opacity(0.4)).frame(width: 14, alignment: .trailing)
-                                    Text(clip.words.prefix(6).map { $0.word }.joined(separator: " "))
-                                        .font(.system(size: 11)).foregroundColor(.white).lineLimit(1)
-                                    Spacer()
-                                    if clip.score > 0 {
-                                        Text("\(Int(clip.score))")
-                                            .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                                            .foregroundColor(clip.score >= 70 ? gold : Color.white.opacity(0.3))
-                                            .frame(width: 24, alignment: .trailing)
-                                    }
-                                    Text(formatDur(clip.duration))
-                                        .font(.system(size: 10, design: .monospaced)).foregroundColor(Color.white.opacity(0.45))
-                                        .frame(width: 28, alignment: .trailing)
-                                    // Remove button
-                                    Button(action: { store.removePendingClip(at: i) }) {
-                                        Image(systemName: "xmark").font(.system(size: 9, weight: .semibold))
-                                            .foregroundColor(Color.white.opacity(0.3))
-                                    }
-                                    .buttonStyle(.plain)
-                                    .disabled(clips.count <= 1)
-                                }
-                                .padding(.horizontal, 8).padding(.vertical, 4)
-                                .background(Color.white.opacity(0.04)).cornerRadius(5)
-                            }
-                        }
-                    }
-                    .frame(maxHeight: 160)
-
-                    // Editable reel name
-                    HStack(spacing: 6) {
-                        Image(systemName: "pencil").font(.system(size: 10)).foregroundColor(Color.white.opacity(0.4))
-                        TextField("Reel name", text: $store.pendingReelName)
-                            .textFieldStyle(.plain).font(.system(size: 12)).foregroundColor(.white)
-                    }
-                    .padding(8).background(Color.white.opacity(0.07)).cornerRadius(7)
-
-                    HStack(spacing: 8) {
-                        Button(action: { store.cancelExport() }) {
-                            Text("Cancel").font(.system(size: 12)).foregroundColor(Color.white.opacity(0.6))
-                                .padding(.horizontal, 14).padding(.vertical, 6)
-                                .background(Color.white.opacity(0.08)).cornerRadius(7)
-                        }.buttonStyle(.plain)
-                        Spacer()
-                        Button(action: { store.confirmExport() }) {
-                            Text("Export Reel  →").font(.system(size: 12, weight: .semibold)).foregroundColor(.black)
-                                .padding(.horizontal, 16).padding(.vertical, 6)
-                                .background(gold).cornerRadius(7)
-                        }.buttonStyle(.plain)
-                    }
-                }
-            }
 
             if job.isFinished, job.error == nil {
                 if let urls = job.outputURLs, urls.count > 1 {
@@ -1341,7 +1269,7 @@ struct AutoReelsTab: View {
         let styleIdx = captionStyleIndex; let dur = targetDuration
         let ai = useAI; let prov = aiProvider
         let key = apiKeys[aiProvider] ?? ""; let mode = exportMode
-        let numReels = Int(numberOfReels); let sMode = useStoryline ? storylineMode : nil
+        let sMode = useStoryline ? storylineMode : nil
         let topic = topicText; let dissolve = crossDissolve; let emojis = emojiOverlays
 
         Task.detached(priority: .userInitiated) {
@@ -1419,7 +1347,7 @@ struct AutoReelsTab: View {
                 await self.startPipelineAsync(videoURL: videoURL, format: fmt, captions: captions,
                                               styleIdx: styleIdx, targetDur: dur,
                                               useAI: ai, provider: prov, apiKey: key,
-                                              exportMode: mode, numberOfReels: numReels,
+                                              exportMode: mode,
                                               storylineMode: sMode, topic: topic,
                                               crossDissolve: dissolve, emojiOverlays: emojis,
                                               outputDir: outDir)
@@ -1451,13 +1379,13 @@ struct AutoReelsTab: View {
         let styleIdx = captionStyleIndex; let dur = targetDuration
         let ai = useAI; let prov = aiProvider
         let key = apiKeys[aiProvider] ?? ""; let mode = exportMode
-        let numReels = Int(numberOfReels); let sMode = useStoryline ? storylineMode : nil
+        let sMode = useStoryline ? storylineMode : nil
         let topic = topicText; let dissolve = crossDissolve; let emojis = emojiOverlays
         Task.detached(priority: .userInitiated) {
             await self.startPipelineAsync(videoURL: videoURL, format: fmt, captions: captions,
                                           styleIdx: styleIdx, targetDur: dur,
                                           useAI: ai, provider: prov, apiKey: key,
-                                          exportMode: mode, numberOfReels: numReels,
+                                          exportMode: mode,
                                           storylineMode: sMode, topic: topic,
                                           crossDissolve: dissolve, emojiOverlays: emojis,
                                           outputDir: outDir)
@@ -1470,7 +1398,7 @@ struct AutoReelsTab: View {
                                     useAI: Bool = false,
                                     provider: LLMClipService.AIProvider = .anthropic,
                                     apiKey: String = "",
-                                    exportMode: ExportMode = .reel, numberOfReels: Int = 2,
+                                    exportMode: ExportMode = .reel,
                                     storylineMode: StorylineMode? = nil,
                                     topic: String = "",
                                     crossDissolve: Bool = true,
@@ -1526,8 +1454,15 @@ struct AutoReelsTab: View {
                 throw NSError(domain: "AutoClip", code: 4, userInfo: [NSLocalizedDescriptionKey: "Not enough speech segments to build a reel."])
             }
 
+            // Auto-calculate how many reels to create based on total video speech duration.
+            // Each reel targets targetDur seconds; cap at 10 and require at least 2.
+            let totalSpeechDur = words.last.map { $0.endTime } ?? 0
+            let autoReels = exportMode == .multipleReels
+                ? max(2, min(10, Int(totalSpeechDur / max(30, targetDur))))
+                : 1
+
             // For multiple reels each reel gets its own full targetDur budget
-            let selectionBudget = exportMode == .multipleReels ? targetDur * Double(numberOfReels) : targetDur
+            let selectionBudget = exportMode == .multipleReels ? targetDur * Double(autoReels) : targetDur
 
             var clips: [Clip]
             if useAI && !apiKey.isEmpty {
@@ -1537,7 +1472,7 @@ struct AutoReelsTab: View {
                 let selected = try await LLMClipService.shared.selectSegments(
                     from: segments, provider: provider, apiKey: apiKey,
                     targetDuration: selectionBudget, topic: topic.isEmpty ? nil : topic,
-                    numberOfReels: exportMode == .multipleReels ? numberOfReels : 1,
+                    numberOfReels: exportMode == .multipleReels ? autoReels : 1,
                     variation: variation)
                 clips = selected
             } else {
@@ -1559,26 +1494,15 @@ struct AutoReelsTab: View {
             let hookPreview = clips.first.map {
                 $0.words.prefix(7).map { $0.word }.joined(separator: " ")
             } ?? ""
-            let reelTitle = hookPreview.count > 4 ? hookPreview : title
+            let finalReelTitle = hookPreview.count > 4 ? hookPreview : title
 
-            // Show clip preview and wait for user confirmation before encoding
-            let shouldExport = await store.setPendingExport(clips: clips, jobID: jobID, jobTitle: reelTitle)
-            guard shouldExport else { return }
-
-            // Read the user's (possibly edited) clip list AND reel name before clearing pending state
-            let savedTitle = reelTitle
-            let (finalReelTitle, userEditedClips) = await MainActor.run { () -> (String, [Clip]?) in
-                let name = store.pendingReelName.trimmingCharacters(in: .whitespacesAndNewlines)
-                let edited = (store.activeJob?.id == jobID) ? store.activeJob?.pendingClips : nil
+            // Update job status and proceed directly to export (no approval step)
+            await MainActor.run {
                 if var job = store.activeJob, job.id == jobID {
-                    job.pendingClips = nil
                     job.statusMsg = "Preparing export…"
                     store.activeJob = job
                 }
-                return (name.isEmpty ? savedTitle : name, edited)
             }
-            // Apply any reorders or removals the user made in the pending clips card
-            if let ec = userEditedClips, !ec.isEmpty { clips = ec }
 
             let desktop = outputDir
 
@@ -1594,7 +1518,7 @@ struct AutoReelsTab: View {
                 // Assign each clip (sorted best-first) to whichever reel has the least
                 // content so far, until every reel is full. This guarantees each reel
                 // reaches targetDur rather than getting a random slice of a shared pool.
-                let n = max(2, min(numberOfReels, clips.count))
+                let n = max(2, min(autoReels, clips.count))
                 var groups: [[Clip]] = Array(repeating: [], count: n)
                 var reelFill: [Double] = Array(repeating: 0, count: n)
                 let sortedByScore = clips.sorted { $0.score > $1.score }
