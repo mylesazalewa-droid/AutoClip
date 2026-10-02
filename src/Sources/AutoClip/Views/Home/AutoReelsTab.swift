@@ -230,6 +230,7 @@ struct AutoReelsTab: View {
     @State private var exportMode: ExportMode = .reel
     @State private var numberOfReels: Double = 2
     @State private var storylineMode: StorylineMode = .linear
+    @State private var useStoryline: Bool = false
 
     private let gold = Color(red: 1.0, green: 0.75, blue: 0.0)
     private let captionStyles = CaptionStyle.all
@@ -532,35 +533,39 @@ struct AutoReelsTab: View {
             HStack(spacing: 6) {
                 Image(systemName: "film.stack").foregroundColor(gold).font(.system(size: 12))
                 Text("Storyline").font(.system(size: 12, weight: .semibold)).foregroundColor(.white)
+                Spacer()
+                Toggle("", isOn: $useStoryline).toggleStyle(.switch).tint(gold)
             }
-            VStack(spacing: 4) {
-                ForEach(StorylineMode.allCases) { mode in
-                    Button(action: { storylineMode = mode }) {
-                        HStack(spacing: 8) {
-                            Image(systemName: mode.icon)
-                                .font(.system(size: 11))
-                                .foregroundColor(storylineMode == mode ? .black : gold.opacity(0.7))
-                                .frame(width: 16)
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(mode.rawValue)
-                                    .font(.system(size: 11, weight: storylineMode == mode ? .semibold : .regular))
-                                    .foregroundColor(storylineMode == mode ? .black : .white)
-                                Text(mode.description)
-                                    .font(.system(size: 10))
-                                    .foregroundColor(storylineMode == mode ? .black.opacity(0.6) : Color.white.opacity(0.4))
-                                    .lineLimit(1)
+            if useStoryline {
+                VStack(spacing: 4) {
+                    ForEach(StorylineMode.allCases) { mode in
+                        Button(action: { storylineMode = mode }) {
+                            HStack(spacing: 8) {
+                                Image(systemName: mode.icon)
+                                    .font(.system(size: 11))
+                                    .foregroundColor(storylineMode == mode ? .black : gold.opacity(0.7))
+                                    .frame(width: 16)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(mode.rawValue)
+                                        .font(.system(size: 11, weight: storylineMode == mode ? .semibold : .regular))
+                                        .foregroundColor(storylineMode == mode ? .black : .white)
+                                    Text(mode.description)
+                                        .font(.system(size: 10))
+                                        .foregroundColor(storylineMode == mode ? .black.opacity(0.6) : Color.white.opacity(0.4))
+                                        .lineLimit(1)
+                                }
+                                Spacer()
+                                if storylineMode == mode {
+                                    Image(systemName: "checkmark").font(.system(size: 10, weight: .bold))
+                                        .foregroundColor(.black)
+                                }
                             }
-                            Spacer()
-                            if storylineMode == mode {
-                                Image(systemName: "checkmark").font(.system(size: 10, weight: .bold))
-                                    .foregroundColor(.black)
-                            }
+                            .padding(.horizontal, 10).padding(.vertical, 7)
+                            .background(storylineMode == mode ? gold : Color.white.opacity(0.04))
+                            .cornerRadius(7)
                         }
-                        .padding(.horizontal, 10).padding(.vertical, 7)
-                        .background(storylineMode == mode ? gold : Color.white.opacity(0.04))
-                        .cornerRadius(7)
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
             }
         }
@@ -1137,7 +1142,7 @@ struct AutoReelsTab: View {
         let styleIdx = captionStyleIndex; let dur = targetDuration
         let ai = useAI; let prov = aiProvider
         let key = apiKeys[aiProvider] ?? ""; let mode = exportMode
-        let numReels = Int(numberOfReels); let sMode = storylineMode
+        let numReels = Int(numberOfReels); let sMode = useStoryline ? storylineMode : nil
 
         Task.detached(priority: .userInitiated) {
             let videosDir = URL(fileURLWithPath: NSHomeDirectory())
@@ -1244,7 +1249,7 @@ struct AutoReelsTab: View {
         let styleIdx = captionStyleIndex; let dur = targetDuration
         let ai = useAI; let prov = aiProvider
         let key = apiKeys[aiProvider] ?? ""; let mode = exportMode
-        let numReels = Int(numberOfReels); let sMode = storylineMode
+        let numReels = Int(numberOfReels); let sMode = useStoryline ? storylineMode : nil
         Task.detached(priority: .userInitiated) {
             await self.startPipelineAsync(videoURL: videoURL, format: fmt, captions: captions,
                                           styleIdx: styleIdx, targetDur: dur,
@@ -1261,7 +1266,7 @@ struct AutoReelsTab: View {
                                     provider: LLMClipService.AIProvider = .anthropic,
                                     apiKey: String = "",
                                     exportMode: ExportMode = .reel, numberOfReels: Int = 2,
-                                    storylineMode: StorylineMode = .linear,
+                                    storylineMode: StorylineMode? = nil,
                                     outputDir: URL = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first!) async {
         let jobID = UUID()
         let title = videoURL.deletingPathExtension().lastPathComponent
@@ -1332,10 +1337,10 @@ struct AutoReelsTab: View {
                 clips = [hook] + rest
             }
 
-            // Apply storyline ordering for single-reel / individual-clips modes.
+            // Apply storyline ordering only when the user has enabled it.
             // Multiple reels apply ordering per-reel during distribution below.
-            if exportMode != .multipleReels {
-                clips = storylineMode.order(clips)
+            if exportMode != .multipleReels, let smode = storylineMode {
+                clips = smode.order(clips)
             }
 
             // Derive reel title from the hook clip's opening words
@@ -1382,7 +1387,7 @@ struct AutoReelsTab: View {
                 // Apply storyline ordering within each reel for narrative flow
                 let validGroups = groups
                     .filter { !$0.isEmpty }
-                    .map { storylineMode.order($0) }
+                    .map { group in storylineMode.map { $0.order(group) } ?? group }
                 var outURLs: [URL] = []
                 for (i, group) in validGroups.enumerated() {
                     let pct = Double(i) / Double(validGroups.count)
