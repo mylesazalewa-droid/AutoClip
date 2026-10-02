@@ -77,40 +77,51 @@ actor LLMClipService {
         }.joined(separator: "\n")
     }
 
-    private func buildSegmentPrompt(segmentList: String, targetCount: Int, targetDuration: Double) -> String {
-        """
-You are a viral short-form content editor specialising in sermons, podcasts, and long-form video.
+    private func buildSegmentPrompt(segmentList: String, targetCount: Int, targetDuration: Double, topic: String?) -> String {
+        let topicLine: String
+        if let t = topic, !t.trimmingCharacters(in: .whitespaces).isEmpty {
+            topicLine = "\nTOPIC / THEME: \"\(t)\" — strongly prefer segments that speak to this theme.\n"
+        } else {
+            topicLine = ""
+        }
 
-Below is a numbered list of pre-cut segments (already trimmed at sentence boundaries). \
-Choose the \(targetCount) best segments for social media clips.
+        return """
+You are a world-class viral short-form content editor specializing in social media clips.
+\(topicLine)
+STEP 1 — Understand the content: Read all segments to identify the speaker's main argument, emotional arc, and key chapters before selecting anything.
+
+STEP 2 — Score each candidate on the Virality Framework (100 points total):
+• HOOK (25 pts): First 3–5 words immediately grab attention, pose a question, or make a bold claim
+• FLOW (25 pts): Idea is self-contained — starts with a hook, ends with a payoff, no missing context
+• VALUE (25 pts): Offers actionable advice, surprising insight, or emotional peak (inspiration, humor, contrast)
+• RELEVANCE (25 pts): Topic aligns with what drives engagement on TikTok, Instagram Reels, YouTube Shorts
+
+STEP 3 — Select the \(targetCount) highest-scoring segments.
 
 RULES:
-• Each segment is self-contained and already cut cleanly — do NOT suggest custom timestamps
-• Total combined duration should not exceed \(Int(targetDuration)) seconds
-• Rank by virality: emotional resonance, quotable insight, surprising revelation, strong hook, clear call-to-action
-• Skip repetitive content or anything that references visual aids the viewer cannot see
-• Prefer segments with a strong opening hook (first 3 words grab attention)
+• Segments are already cut cleanly — do NOT suggest custom timestamps
+• Target combined duration: ~\(Int(targetDuration)) seconds
+• Maximize DIVERSITY — different ideas, different emotional tones, no repeated message
+• Skip any segment referencing visual aids the viewer cannot see
+• Prefer segments where the first 3 words could stand alone as a caption hook
 
 Segments (format: #index: [duration] first-words…):
 \(segmentList)
 
-Respond with ONLY valid JSON — no markdown fences, no explanation, nothing else:
-[{"index":3,"hook":"Opening words of this segment","reason":"Why this moment works"}]
+Respond with ONLY valid JSON — no markdown fences, no explanation:
+[{"index":3,"hook":"First compelling words","reason":"Why this moment is viral","viralityScore":84}]
 """
     }
 
     // MARK: - API call — segments in, selected Clips out
 
     func selectSegments(from segments: [Clip], provider: AIProvider, apiKey: String,
-                        targetDuration: Double) async throws -> [Clip] {
-        // Estimate how many clips are needed to fill the budget.
-        // Use average clip duration from the actual segments so the count scales correctly
-        // for both single reels and multi-reel pools.
+                        targetDuration: Double, topic: String? = nil) async throws -> [Clip] {
         let avgDur = segments.isEmpty ? 15.0
             : segments.reduce(0.0) { $0 + ($1.endTime - $1.startTime) } / Double(segments.count)
         let targetCount = max(3, min(40, Int((targetDuration / max(5.0, avgDur)).rounded(.up)) + 2))
         let list = formatSegments(segments)
-        let prompt = buildSegmentPrompt(segmentList: list, targetCount: targetCount, targetDuration: targetDuration)
+        let prompt = buildSegmentPrompt(segmentList: list, targetCount: targetCount, targetDuration: targetDuration, topic: topic)
 
         let text: String
         switch provider {
@@ -244,8 +255,9 @@ Respond with ONLY valid JSON — no markdown fences, no explanation, nothing els
                   !seen.contains(idx) else { continue }
             seen.insert(idx)
             var clip = segments[idx]
-            // Preserve the segment's clean boundaries; just update score and notes from LLM
-            clip.score       = max(10, 100 - Double(rank) * 6)
+            // Prefer the AI's explicit virality score if provided, otherwise rank-based
+            let llmScore: Double? = (d["viralityScore"] as? Double) ?? (d["viralityScore"] as? Int).map { Double($0) }
+            clip.score       = llmScore ?? max(10, 100 - Double(rank) * 6)
             clip.scoreReason = d["reason"] as? String ?? clip.scoreReason
             clip.notes       = d["hook"]   as? String ?? clip.notes
             result.append(clip)

@@ -232,6 +232,11 @@ struct AutoReelsTab: View {
     @State private var storylineMode: StorylineMode = .linear
     @State private var useStoryline: Bool = false
 
+    // Chat / creative direction
+    @State private var topicText: String = ""
+    @State private var crossDissolve: Bool = true
+    @State private var emojiOverlays: Bool = false
+
     private let gold = Color(red: 1.0, green: 0.75, blue: 0.0)
     private let captionStyles = CaptionStyle.all
 
@@ -459,6 +464,9 @@ struct AutoReelsTab: View {
             }
             .padding(14).background(Color.white.opacity(0.04)).cornerRadius(10)
 
+            // Chat / creative direction
+            chatSection
+
             // Export mode
             exportModeSection
 
@@ -468,6 +476,44 @@ struct AutoReelsTab: View {
             // AI-powered clip selection
             aiSettingsSection
         }
+    }
+
+    private var chatSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: "bubble.left.and.bubble.right.fill")
+                    .foregroundColor(gold).font(.system(size: 11))
+                Text("What's this reel about?")
+                    .font(.system(size: 12, weight: .semibold)).foregroundColor(.white)
+            }
+            TextField("faith, business, motivation...", text: $topicText)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13))
+                .foregroundColor(.white)
+                .padding(10)
+                .background(Color.white.opacity(0.09))
+                .cornerRadius(8)
+                .overlay(RoundedRectangle(cornerRadius: 8)
+                    .stroke(topicText.isEmpty ? Color.clear : gold.opacity(0.45), lineWidth: 1))
+            if !topicText.isEmpty {
+                Text("AI will prioritize segments and highlight keywords matching this theme.")
+                    .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.4))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            HStack(spacing: 16) {
+                HStack(spacing: 6) {
+                    Toggle("", isOn: $crossDissolve).toggleStyle(.switch).tint(gold)
+                        .labelsHidden()
+                    Text("Dissolve cuts").font(.system(size: 11)).foregroundColor(Color.white.opacity(0.7))
+                }
+                HStack(spacing: 6) {
+                    Toggle("", isOn: $emojiOverlays).toggleStyle(.switch).tint(gold)
+                        .labelsHidden()
+                    Text("Emoji overlays").font(.system(size: 11)).foregroundColor(Color.white.opacity(0.7))
+                }
+            }
+        }
+        .padding(14).background(Color.white.opacity(0.04)).cornerRadius(10)
     }
 
     private var exportModeSection: some View {
@@ -1143,6 +1189,7 @@ struct AutoReelsTab: View {
         let ai = useAI; let prov = aiProvider
         let key = apiKeys[aiProvider] ?? ""; let mode = exportMode
         let numReels = Int(numberOfReels); let sMode = useStoryline ? storylineMode : nil
+        let topic = topicText; let dissolve = crossDissolve; let emojis = emojiOverlays
 
         Task.detached(priority: .userInitiated) {
             let videosDir = URL(fileURLWithPath: NSHomeDirectory())
@@ -1220,7 +1267,9 @@ struct AutoReelsTab: View {
                                               styleIdx: styleIdx, targetDur: dur,
                                               useAI: ai, provider: prov, apiKey: key,
                                               exportMode: mode, numberOfReels: numReels,
-                                              storylineMode: sMode, outputDir: outDir)
+                                              storylineMode: sMode, topic: topic,
+                                              crossDissolve: dissolve, emojiOverlays: emojis,
+                                              outputDir: outDir)
             } catch {
                 await MainActor.run { self.isDownloading = false; self.downloadError = error.localizedDescription }
             }
@@ -1250,12 +1299,15 @@ struct AutoReelsTab: View {
         let ai = useAI; let prov = aiProvider
         let key = apiKeys[aiProvider] ?? ""; let mode = exportMode
         let numReels = Int(numberOfReels); let sMode = useStoryline ? storylineMode : nil
+        let topic = topicText; let dissolve = crossDissolve; let emojis = emojiOverlays
         Task.detached(priority: .userInitiated) {
             await self.startPipelineAsync(videoURL: videoURL, format: fmt, captions: captions,
                                           styleIdx: styleIdx, targetDur: dur,
                                           useAI: ai, provider: prov, apiKey: key,
                                           exportMode: mode, numberOfReels: numReels,
-                                          storylineMode: sMode, outputDir: outDir)
+                                          storylineMode: sMode, topic: topic,
+                                          crossDissolve: dissolve, emojiOverlays: emojis,
+                                          outputDir: outDir)
         }
     }
 
@@ -1267,6 +1319,9 @@ struct AutoReelsTab: View {
                                     apiKey: String = "",
                                     exportMode: ExportMode = .reel, numberOfReels: Int = 2,
                                     storylineMode: StorylineMode? = nil,
+                                    topic: String = "",
+                                    crossDissolve: Bool = true,
+                                    emojiOverlays: Bool = false,
                                     outputDir: URL = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first!) async {
         let jobID = UUID()
         let title = videoURL.deletingPathExtension().lastPathComponent
@@ -1326,7 +1381,8 @@ struct AutoReelsTab: View {
                 // Smart AI mode: LLM picks WHICH segments are best — cuts stay clean
                 await upd(0.47, "AI choosing the best segments…")
                 let selected = try await LLMClipService.shared.selectSegments(
-                    from: segments, provider: provider, apiKey: apiKey, targetDuration: selectionBudget)
+                    from: segments, provider: provider, apiKey: apiKey,
+                    targetDuration: selectionBudget, topic: topic.isEmpty ? nil : topic)
                 clips = selected
             } else {
                 // Local mode: score-based selection with hook boost
@@ -1367,6 +1423,9 @@ struct AutoReelsTab: View {
             var opts = VideoExportService.ExportOptions()
             opts.format = format; opts.burnCaptions = captions
             if captions && styleIdx < CaptionStyle.all.count { opts.captionStyle = CaptionStyle.all[styleIdx] }
+            opts.topicKeywords = topic.split(whereSeparator: { $0 == " " || $0 == "," }).map { String($0).lowercased() }
+            opts.crossDissolve = crossDissolve
+            opts.emojiOverlays = emojiOverlays
 
             if exportMode == .multipleReels {
                 // Bin-pack clips into N reels, each targeting targetDur seconds.

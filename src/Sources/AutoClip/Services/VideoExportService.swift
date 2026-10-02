@@ -39,6 +39,9 @@ class VideoExportService {
         var captionBgEnabled: Bool = true
         var captionBgOpacity: Double = 0.55
         var captionBgColor: NSColor = .black
+        var topicKeywords: [String] = []
+        var crossDissolve: Bool = false
+        var emojiOverlays: Bool = false
     }
 
     enum ExportError: LocalizedError {
@@ -324,28 +327,56 @@ class VideoExportService {
 
     // MARK: - Caption Layer
 
-    private func buildCaptionLayer(clip: Clip, style: CaptionStyle, renderSize: CGSize, bgEnabled: Bool, bgOpacity: Double, bgColor: NSColor) -> CALayer {
+    // Emoji overlays: hook words trigger a contextual emoji floating above the caption
+    private static let emojiMap: [(words: [String], emoji: String)] = [
+        (["god","jesus","christ","lord","pray","prayer","faith","spirit","holy","blessed","blessing","church","bible","gospel","worship","savior","salvation"], "🙏"),
+        (["fire","power","strength","bold","force","energy","fuel","burn","ignite","passion"], "🔥"),
+        (["love","heart","care","compassion","kindness","mercy","grace","forgive"], "❤️"),
+        (["money","success","rich","wealth","million","business","profit","income","earn"], "💰"),
+        (["truth","light","wisdom","knowledge","secret","answer","key","understand","revelation"], "💡"),
+        (["win","victory","champion","greatest","amazing","incredible","powerful","unstoppable"], "🏆"),
+        (["change","transform","new","different","shift","revolution","breakthrough","move"], "⚡️"),
+        (["celebrate","happy","joy","grateful","thankful","excited","accomplish"], "🎉"),
+    ]
+
+    private func buildCaptionLayer(clip: Clip, style: CaptionStyle, renderSize: CGSize,
+                                   bgEnabled: Bool, bgOpacity: Double, bgColor: NSColor,
+                                   keywords: Set<String> = [], emojiOverlays: Bool = false) -> CALayer {
         let container = CALayer()
         container.frame = CGRect(origin: .zero, size: renderSize)
 
         let fontScale: CGFloat = renderSize.width < 700 ? 0.08 : 0.055
         let fontSize = max(28, renderSize.width * fontScale)
+        let keyFontSize = fontSize * 1.08  // keywords pop slightly larger
         let areaW = renderSize.width * 0.88
         let areaX = (renderSize.width - areaW) / 2
         let rowH = fontSize * 1.7
-        let centerY = renderSize.height * 0.82 // bottom area
+        let centerY = renderSize.height * 0.82
 
         let font = NSFont(name: style.fontName, size: fontSize) ?? NSFont.boldSystemFont(ofSize: fontSize)
         let textColor = nsColor(for: style)
-        let strokeColor = nsColor(for: style, stroke: true)
+        let karaokeBase = NSColor(red: 1, green: 0.92, blue: 0, alpha: 1)     // standard gold
+        let karaokeKey  = NSColor(red: 1, green: 1,    blue: 0.55, alpha: 1)  // brighter gold for keywords
 
         let words = clip.words.filter { !$0.word.hasPrefix("<|") && !$0.word.hasSuffix("|>") }
         let clipDur = clip.duration
+
+        // Build per-word emoji lookup once
+        var wordEmoji: [String: String] = [:]
+        if emojiOverlays {
+            for entry in Self.emojiMap {
+                for w in entry.words { wordEmoji[w] = entry.emoji }
+            }
+        }
 
         for word in words {
             let ws = word.startTime - clip.startTime
             let we = word.endTime - clip.startTime
             guard ws >= 0, ws < clipDur else { continue }
+
+            let clean = word.word.trimmingCharacters(in: .whitespaces)
+            let lower = clean.lowercased().trimmingCharacters(in: .punctuationCharacters)
+            let isKeyword = keywords.contains(lower) || keywords.contains(clean.lowercased())
 
             // Background pill
             if bgEnabled {
@@ -361,25 +392,46 @@ class VideoExportService {
 
             // Word text layer
             let tl = CATextLayer()
-            tl.string = word.word.trimmingCharacters(in: .whitespaces)
-            // Use font name string — safest for AVVideoCompositionCoreAnimationTool
+            tl.string = clean
             tl.font = font.fontName as CFString
-            tl.fontSize = fontSize
-            tl.foregroundColor = style.isKaraoke
-                ? NSColor(red: 1, green: 0.92, blue: 0, alpha: 1).cgColor
-                : textColor.cgColor
+            tl.fontSize = isKeyword ? keyFontSize : fontSize
+            if style.isKaraoke {
+                tl.foregroundColor = isKeyword ? karaokeKey.cgColor : karaokeBase.cgColor
+            } else {
+                tl.foregroundColor = textColor.cgColor
+            }
             tl.alignmentMode = .center
             tl.truncationMode = .none
-            tl.contentsScale = 1.0   // video rendering is 1x — 2x shifts text out of frame
+            tl.contentsScale = 1.0
             tl.isWrapped = false
             tl.shadowColor = NSColor.black.cgColor
-            tl.shadowOpacity = 0.9
-            tl.shadowRadius = 4
+            tl.shadowOpacity = isKeyword ? 1.0 : 0.9
+            tl.shadowRadius = isKeyword ? 6 : 4
             tl.shadowOffset = CGSize(width: 0, height: -1)
-            tl.frame = CGRect(x: areaX, y: centerY - rowH / 2, width: areaW, height: rowH)
+            // Shift keyword text up slightly to center in the slightly-larger layout
+            let yOff: CGFloat = isKeyword ? (rowH - keyFontSize * 1.7) / 2 : 0
+            tl.frame = CGRect(x: areaX, y: centerY - rowH / 2 + yOff, width: areaW, height: rowH)
             tl.opacity = 0
             tl.add(wordAnim(start: ws, end: we, total: clipDur), forKey: "opacity")
             container.addSublayer(tl)
+
+            // Emoji overlay — pop up above the text at the keyword's spoken moment
+            if emojiOverlays, let emoji = wordEmoji[lower] {
+                let emojiSize = fontSize * 1.6
+                let el = CATextLayer()
+                el.string = emoji
+                el.font = NSFont.systemFont(ofSize: emojiSize).fontName as CFString
+                el.fontSize = emojiSize
+                el.alignmentMode = .center
+                el.contentsScale = 1.0
+                el.isWrapped = false
+                el.frame = CGRect(x: renderSize.width / 2 - areaW / 4,
+                                  y: centerY + rowH * 0.6,
+                                  width: areaW / 2, height: emojiSize * 1.5)
+                el.opacity = 0
+                el.add(wordAnim(start: ws, end: min(we + 0.3, clipDur), total: clipDur), forKey: "opacity")
+                container.addSublayer(el)
+            }
         }
 
         return container
@@ -1013,6 +1065,22 @@ class VideoExportService {
                     li.setTransform(t, at: segStart)
                 }
 
+                // Cross-dissolve: fade out at end of each clip, fade in at start
+                if options.crossDissolve {
+                    let dissolveDurSecs = 0.18
+                    let dissolveTime = CMTime(seconds: dissolveDurSecs, preferredTimescale: 600)
+                    let segSecs = CMTimeGetSeconds(segDur)
+                    if i > 0, segSecs > dissolveTime.seconds * 2 {
+                        li.setOpacityRamp(fromStartOpacity: 0.0, toEndOpacity: 1.0,
+                                          timeRange: CMTimeRange(start: segStart, duration: dissolveTime))
+                    }
+                    if i < clips.count - 1, segSecs > dissolveTime.seconds * 2 {
+                        let fadeStart = CMTime(seconds: CMTimeGetSeconds(segStart) + segSecs - dissolveDurSecs, preferredTimescale: 600)
+                        li.setOpacityRamp(fromStartOpacity: 1.0, toEndOpacity: 0.0,
+                                          timeRange: CMTimeRange(start: fadeStart, duration: dissolveTime))
+                    }
+                }
+
                 instr.layerInstructions = [li]
                 instructions.append(instr)
                 segStart = CMTime(seconds: CMTimeGetSeconds(segStart) + CMTimeGetSeconds(segDur), preferredTimescale: 600)
@@ -1025,8 +1093,11 @@ class VideoExportService {
                 let vl = CALayer(); vl.frame = CGRect(origin: .zero, size: renderSize); parent.addSublayer(vl)
                 var reelClip = clips[0]
                 reelClip.startTime = 0; reelClip.endTime = reelDuration; reelClip.words = remappedWords
+                let keywordSet = Set(options.topicKeywords.map { $0.lowercased() })
                 let captionLayer = buildCaptionLayer(clip: reelClip, style: options.captionStyle, renderSize: renderSize,
-                                                     bgEnabled: options.captionBgEnabled, bgOpacity: options.captionBgOpacity, bgColor: options.captionBgColor)
+                                                     bgEnabled: options.captionBgEnabled, bgOpacity: options.captionBgOpacity,
+                                                     bgColor: options.captionBgColor,
+                                                     keywords: keywordSet, emojiOverlays: options.emojiOverlays)
                 parent.addSublayer(captionLayer)
                 vc.animationTool = AVVideoCompositionCoreAnimationTool(postProcessingAsVideoLayer: vl, in: parent)
             }
