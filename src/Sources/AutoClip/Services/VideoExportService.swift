@@ -1020,7 +1020,11 @@ class VideoExportService {
                 remappedWords.append(rw)
             }
 
-            insertedClips.append(clip)
+            // Store the CLAMPED clip so Pass 2 uses the same duration that was actually inserted
+            var insertedClip = clip
+            insertedClip.startTime = clampedStart
+            insertedClip.endTime   = clampedEnd
+            insertedClips.append(insertedClip)
             insertTime  = CMTime(seconds: CMTimeGetSeconds(insertTime) + dur, preferredTimescale: 600)
             reelOffset += dur
         }

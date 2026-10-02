@@ -175,6 +175,24 @@ class AutoReelsStore: ObservableObject {
         activeJob = nil
     }
 
+    func removePendingClip(at index: Int) {
+        guard var job = activeJob, var clips = job.pendingClips,
+              clips.indices.contains(index) else { return }
+        clips.remove(at: index)
+        job.pendingClips = clips
+        job.statusMsg = "\(clips.count) clips selected — ready to export"
+        activeJob = job
+    }
+
+    func movePendingClip(from: Int, to: Int) {
+        guard var job = activeJob, var clips = job.pendingClips,
+              clips.indices.contains(from), clips.indices.contains(to) else { return }
+        let clip = clips.remove(at: from)
+        clips.insert(clip, at: to)
+        job.pendingClips = clips
+        activeJob = job
+    }
+
     func remove(id: UUID) {
         reels.removeAll { $0.id == id }
         save()
@@ -654,6 +672,24 @@ struct AutoReelsTab: View {
                     Text("Model: \(aiProvider.modelLabel)")
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundColor(Color.white.opacity(0.3))
+
+                    // Cost estimate based on typical segment count for the target duration
+                    let estTokens = max(400, Int(targetDuration * 2.5))  // ~2.5 tokens/sec of content
+                    let estCost: String = {
+                        switch aiProvider {
+                        case .anthropic: return String(format: "~$%.4f", Double(estTokens) / 1_000_000 * 0.80)
+                        case .openai:    return String(format: "~$%.4f", Double(estTokens) / 1_000_000 * 0.30)
+                        case .google:    return "~$0.00 (free tier)"
+                        }
+                    }()
+                    HStack(spacing: 5) {
+                        Image(systemName: "dollarsign.circle").font(.system(size: 10))
+                        Text("Estimated cost per reel: \(estCost)")
+                            .font(.system(size: 10))
+                    }
+                    .foregroundColor(Color.white.opacity(0.4))
+                    .padding(.horizontal, 8).padding(.vertical, 5)
+                    .background(Color.white.opacity(0.05)).cornerRadius(6)
                 }
 
                 // API key for selected provider
@@ -836,45 +872,70 @@ struct AutoReelsTab: View {
             // Pending export confirmation
             if let clips = job.pendingClips {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Selected \(clips.count) clips · \(formatDur(clips.reduce(0) { $0 + $1.duration })) total")
-                        .font(.system(size: 11, weight: .semibold)).foregroundColor(gold)
+                    HStack {
+                        Text("Selected \(clips.count) clips · \(formatDur(clips.reduce(0) { $0 + $1.duration })) total")
+                            .font(.system(size: 11, weight: .semibold)).foregroundColor(gold)
+                        Spacer()
+                        Button(action: { store.cancelExport() }) {
+                            Label("Redo", systemImage: "arrow.counterclockwise")
+                                .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.5))
+                        }
+                        .buttonStyle(.plain)
+                        .help("Cancel and re-run clip selection")
+                    }
 
                     ScrollView {
                         VStack(spacing: 3) {
                             ForEach(Array(clips.enumerated()), id: \.offset) { i, clip in
-                                HStack(spacing: 8) {
+                                HStack(spacing: 6) {
+                                    // Move up / down
+                                    VStack(spacing: 1) {
+                                        Button(action: { if i > 0 { store.movePendingClip(from: i, to: i - 1) } }) {
+                                            Image(systemName: "chevron.up").font(.system(size: 8))
+                                        }
+                                        .buttonStyle(.plain).foregroundColor(i > 0 ? Color.white.opacity(0.35) : Color.clear)
+                                        Button(action: { if i < clips.count - 1 { store.movePendingClip(from: i, to: i + 1) } }) {
+                                            Image(systemName: "chevron.down").font(.system(size: 8))
+                                        }
+                                        .buttonStyle(.plain).foregroundColor(i < clips.count - 1 ? Color.white.opacity(0.35) : Color.clear)
+                                    }
+
                                     Text("\(i + 1)").font(.system(size: 10, design: .monospaced))
-                                        .foregroundColor(Color.white.opacity(0.4)).frame(width: 16, alignment: .trailing)
+                                        .foregroundColor(Color.white.opacity(0.4)).frame(width: 14, alignment: .trailing)
                                     Text(clip.words.prefix(6).map { $0.word }.joined(separator: " "))
                                         .font(.system(size: 11)).foregroundColor(.white).lineLimit(1)
                                     Spacer()
                                     if clip.score > 0 {
                                         Text("\(Int(clip.score))")
                                             .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                                            .foregroundColor(clip.score >= 70 ? gold : Color.white.opacity(0.35))
-                                            .frame(width: 26, alignment: .trailing)
+                                            .foregroundColor(clip.score >= 70 ? gold : Color.white.opacity(0.3))
+                                            .frame(width: 24, alignment: .trailing)
                                     }
                                     Text(formatDur(clip.duration))
                                         .font(.system(size: 10, design: .monospaced)).foregroundColor(Color.white.opacity(0.45))
+                                        .frame(width: 28, alignment: .trailing)
+                                    // Remove button
+                                    Button(action: { store.removePendingClip(at: i) }) {
+                                        Image(systemName: "xmark").font(.system(size: 9, weight: .semibold))
+                                            .foregroundColor(Color.white.opacity(0.3))
+                                    }
+                                    .buttonStyle(.plain)
+                                    .disabled(clips.count <= 1)
                                 }
                                 .padding(.horizontal, 8).padding(.vertical, 4)
                                 .background(Color.white.opacity(0.04)).cornerRadius(5)
                             }
                         }
                     }
-                    .frame(maxHeight: 140)
+                    .frame(maxHeight: 160)
 
-                    // Editable reel name before saving
+                    // Editable reel name
                     HStack(spacing: 6) {
                         Image(systemName: "pencil").font(.system(size: 10)).foregroundColor(Color.white.opacity(0.4))
                         TextField("Reel name", text: $store.pendingReelName)
-                            .textFieldStyle(.plain)
-                            .font(.system(size: 12))
-                            .foregroundColor(.white)
+                            .textFieldStyle(.plain).font(.system(size: 12)).foregroundColor(.white)
                     }
-                    .padding(8)
-                    .background(Color.white.opacity(0.07))
-                    .cornerRadius(7)
+                    .padding(8).background(Color.white.opacity(0.07)).cornerRadius(7)
 
                     HStack(spacing: 8) {
                         Button(action: { store.cancelExport() }) {
@@ -882,9 +943,10 @@ struct AutoReelsTab: View {
                                 .padding(.horizontal, 14).padding(.vertical, 6)
                                 .background(Color.white.opacity(0.08)).cornerRadius(7)
                         }.buttonStyle(.plain)
+                        Spacer()
                         Button(action: { store.confirmExport() }) {
-                            Text("Export Reel").font(.system(size: 12, weight: .semibold)).foregroundColor(.black)
-                                .padding(.horizontal, 14).padding(.vertical, 6)
+                            Text("Export Reel  →").font(.system(size: 12, weight: .semibold)).foregroundColor(.black)
+                                .padding(.horizontal, 16).padding(.vertical, 6)
                                 .background(gold).cornerRadius(7)
                         }.buttonStyle(.plain)
                     }
