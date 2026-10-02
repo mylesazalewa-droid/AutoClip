@@ -1104,6 +1104,19 @@ class VideoExportService {
                 segStart = CMTime(seconds: CMTimeGetSeconds(segStart) + CMTimeGetSeconds(segDur), preferredTimescale: 600)
             }
 
+            // Extend the last instruction to cover exactly the composition end.
+            // Floating-point accumulation across many clips can leave a tiny gap between
+            // the final instruction's end and the composition's true duration, which
+            // causes AVFoundation to return "Operation Stopped" (-11803).
+            if !instructions.isEmpty {
+                let compEnd  = CMTime(seconds: reelOffset, preferredTimescale: 600)
+                let lastStart = instructions[instructions.count - 1].timeRange.start
+                if compEnd > lastStart {
+                    instructions[instructions.count - 1].timeRange =
+                        CMTimeRange(start: lastStart, duration: compEnd - lastStart)
+                }
+            }
+
             vc.instructions = instructions
 
             if options.burnCaptions && !remappedWords.isEmpty {

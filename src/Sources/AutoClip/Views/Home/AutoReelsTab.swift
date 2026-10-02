@@ -135,6 +135,7 @@ class AutoReelsStore: ObservableObject {
     @Published var reels: [AutoReelRecord] = []
     @Published var activeJob: AutoReelJob?
     @Published var pendingReelName: String = ""
+    @Published var rerollVariation: Int = 0   // increments each Redo so AI picks different clips
 
     private let key = "autoReelsHistory"
     private var exportContinuation: CheckedContinuation<Bool, Never>?
@@ -170,6 +171,7 @@ class AutoReelsStore: ObservableObject {
     }
 
     func cancelExport() {
+        rerollVariation += 1            // next AI call will get a variation hint
         exportContinuation?.resume(returning: false)
         exportContinuation = nil
         activeJob = nil
@@ -385,6 +387,11 @@ struct AutoReelsTab: View {
                 TextField("https://youtube.com/watch?v=...", text: $youtubeURL)
                     .textFieldStyle(.plain).font(.system(size: 13)).foregroundColor(.white)
                     .disabled(isDownloading)
+                    .onChange(of: youtubeURL) { _ in
+                        // New URL typed → clear old downloaded file so we download the new one
+                        pickedVideoURL = nil
+                        downloadError = nil
+                    }
             }
             .padding(10)
             .background(Color.white.opacity(0.07))
@@ -801,7 +808,6 @@ struct AutoReelsTab: View {
 
     var historyPanel: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Active job card
             if let job = store.activeJob {
                 activeJobCard(job)
                 Divider().background(Color.white.opacity(0.08))
@@ -810,14 +816,22 @@ struct AutoReelsTab: View {
             if store.reels.isEmpty && store.activeJob == nil {
                 emptyPanel
             } else if !store.reels.isEmpty {
-                Text("PREVIOUS REELS")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(Color.white.opacity(0.35))
-                    .padding(.horizontal, 20).padding(.top, 18).padding(.bottom, 10)
+                HStack {
+                    Text("PREVIOUS REELS")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(Color.white.opacity(0.35))
+                    Spacer()
+                    Text("\(store.reels.count) reels")
+                        .font(.system(size: 10))
+                        .foregroundColor(Color.white.opacity(0.2))
+                }
+                .padding(.horizontal, 20).padding(.top, 18).padding(.bottom, 12)
+
                 ScrollView {
-                    LazyVStack(spacing: 1) {
-                        ForEach(store.reels) { reel in reelRow(reel) }
+                    LazyVStack(spacing: 12) {
+                        ForEach(store.reels) { reel in reelCard(reel) }
                     }
+                    .padding(.horizontal, 16).padding(.bottom, 20)
                 }
             }
         }
@@ -1020,73 +1034,130 @@ struct AutoReelsTab: View {
         .padding(.horizontal, 16).padding(.top, 16)
     }
 
-    func reelRow(_ reel: AutoReelRecord) -> some View {
+    func reelCard(_ reel: AutoReelRecord) -> some View {
         let isMulti = reel.paths.count > 1
+        let date = Date(timeIntervalSince1970: reel.dateCreated)
+        let df = DateFormatter(); df.dateStyle = .short; df.timeStyle = .short
+
         return VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 12) {
+            // ── Card header ──────────────────────────────────────────────────
+            HStack(spacing: 14) {
+                // Thumbnail / icon
                 ZStack {
-                    RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.07)).frame(width: 50, height: 50)
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color.white.opacity(0.08))
+                        .frame(width: 64, height: 64)
                     Image(systemName: isMulti ? "rectangle.stack.fill" : "play.rectangle.fill")
-                        .font(.system(size: 18)).foregroundColor(gold.opacity(0.7))
+                        .font(.system(size: 24)).foregroundColor(gold.opacity(0.75))
                 }
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(reel.title).font(.system(size: 13, weight: .medium)).foregroundColor(.white).lineLimit(1)
-                    HStack(spacing: 6) {
-                        Text(reel.format).font(.system(size: 11)).foregroundColor(Color.white.opacity(0.4))
+
+                // Title + meta
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(reel.title)
+                        .font(.system(size: 14, weight: .semibold)).foregroundColor(.white)
+                        .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                    HStack(spacing: 8) {
+                        Label(reel.format, systemImage: "aspectratio")
+                            .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.45))
                         Text("·").foregroundColor(Color.white.opacity(0.2))
-                        Text(formatDur(reel.duration)).font(.system(size: 11)).foregroundColor(Color.white.opacity(0.4))
+                        Label(formatDur(reel.duration), systemImage: "clock")
+                            .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.45))
+                        if isMulti {
+                            Text("·").foregroundColor(Color.white.opacity(0.2))
+                            Text("\(reel.paths.count) reels")
+                                .font(.system(size: 11)).foregroundColor(gold.opacity(0.7))
+                        }
                     }
+                    Text(df.string(from: date))
+                        .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.25))
                 }
                 Spacer()
-                HStack(spacing: 10) {
-                    Button(action: {
-                        let urls = reel.paths.map { URL(fileURLWithPath: $0) }.filter { FileManager.default.fileExists(atPath: $0.path) }
-                        if !urls.isEmpty { NSWorkspace.shared.activateFileViewerSelecting(urls) }
-                    }) {
-                        Image(systemName: "folder").font(.system(size: 13)).foregroundColor(Color.white.opacity(0.3))
-                    }
-                    .buttonStyle(.plain)
-                    .help(isMulti ? "Show all reels in Finder" : "Show in Finder")
-
-                    Button(action: { showPreview(url: URL(fileURLWithPath: reel.path), id: reel.id, cutPoints: reel.cutPoints, reelDuration: reel.duration) }) {
-                        Image(systemName: "play.circle.fill").font(.system(size: 18)).foregroundColor(gold.opacity(0.7))
-                    }
-                    .buttonStyle(.plain)
-                    Button(action: { store.remove(id: reel.id) }) {
-                        Image(systemName: "trash").font(.system(size: 12)).foregroundColor(Color.white.opacity(0.2))
-                    }
-                    .buttonStyle(.plain)
-                    .help("Remove from history")
-                }
             }
-            // Sub-list for multiple reels
+            .padding(14)
+
+            // ── Action buttons ───────────────────────────────────────────────
+            HStack(spacing: 8) {
+                // Play / Preview
+                Button(action: {
+                    showPreview(url: URL(fileURLWithPath: reel.path), id: reel.id,
+                                cutPoints: reel.cutPoints, reelDuration: reel.duration)
+                }) {
+                    Label(isMulti ? "Play Reel 1" : "Preview", systemImage: "play.circle.fill")
+                        .font(.system(size: 12, weight: .semibold)).foregroundColor(.black)
+                        .padding(.horizontal, 14).padding(.vertical, 7)
+                        .background(gold).cornerRadius(8)
+                }
+                .buttonStyle(.plain)
+
+                // Show in Finder
+                Button(action: {
+                    let urls = reel.paths.map { URL(fileURLWithPath: $0) }
+                                        .filter { FileManager.default.fileExists(atPath: $0.path) }
+                    if !urls.isEmpty { NSWorkspace.shared.activateFileViewerSelecting(urls) }
+                }) {
+                    Label("Finder", systemImage: "folder")
+                        .font(.system(size: 12)).foregroundColor(Color.white.opacity(0.7))
+                        .padding(.horizontal, 12).padding(.vertical, 7)
+                        .background(Color.white.opacity(0.08)).cornerRadius(8)
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
+
+                // Delete
+                Button(action: { store.remove(id: reel.id) }) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 12)).foregroundColor(Color.white.opacity(0.3))
+                        .padding(7).background(Color.white.opacity(0.06)).cornerRadius(7)
+                }
+                .buttonStyle(.plain).help("Remove from history")
+            }
+            .padding(.horizontal, 14).padding(.bottom, 14)
+
+            // ── Per-reel rows for multi-reel packs ──────────────────────────
             if isMulti {
-                VStack(spacing: 3) {
+                Divider().background(Color.white.opacity(0.07))
+                VStack(spacing: 2) {
                     ForEach(Array(reel.paths.enumerated()), id: \.offset) { i, path in
                         let url = URL(fileURLWithPath: path)
-                        HStack(spacing: 8) {
-                            Text("Reel \(i + 1)")
-                                .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.5))
-                            Spacer()
-                            Button(action: { NSWorkspace.shared.activateFileViewerSelecting([url]) }) {
-                                Image(systemName: "folder").font(.system(size: 11))
-                                    .foregroundColor(Color.white.opacity(0.25))
-                            }.buttonStyle(.plain)
-                            Button(action: { showPreview(url: url, id: reel.id) }) {
-                                Image(systemName: "play.circle.fill").font(.system(size: 14))
-                                    .foregroundColor(gold.opacity(0.6))
-                            }.buttonStyle(.plain)
+                        let exists = FileManager.default.fileExists(atPath: path)
+                        Button(action: { if exists { showPreview(url: url, id: reel.id) } }) {
+                            HStack(spacing: 10) {
+                                Text("Reel \(i + 1)")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(exists ? .white : Color.white.opacity(0.35))
+                                Spacer()
+                                if !exists {
+                                    Text("missing").font(.system(size: 10)).foregroundColor(Color.white.opacity(0.3))
+                                }
+                                Button(action: {
+                                    if exists { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+                                }) {
+                                    Image(systemName: "folder").font(.system(size: 12))
+                                        .foregroundColor(Color.white.opacity(0.3))
+                                        .padding(6).background(Color.white.opacity(0.07)).cornerRadius(6)
+                                }
+                                .buttonStyle(.plain)
+                                Image(systemName: "play.circle.fill")
+                                    .font(.system(size: 20)).foregroundColor(exists ? gold.opacity(0.8) : Color.white.opacity(0.2))
+                            }
+                            .padding(.horizontal, 14).padding(.vertical, 9)
+                            .background(Color.white.opacity(0.03))
+                            .contentShape(Rectangle())
                         }
-                        .padding(.horizontal, 8).padding(.vertical, 4)
-                        .background(Color.white.opacity(0.03)).cornerRadius(5)
+                        .buttonStyle(.plain)
                     }
                 }
-                .padding(.top, 6).padding(.leading, 62)
+                .padding(.bottom, 6)
             }
         }
-        .padding(.horizontal, 20).padding(.vertical, 10)
-        .contentShape(Rectangle())
-        .onTapGesture { showPreview(url: URL(fileURLWithPath: reel.path), id: reel.id, cutPoints: reel.cutPoints, reelDuration: reel.duration) }
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(Color.white.opacity(0.05))
+                .overlay(RoundedRectangle(cornerRadius: 14)
+                    .stroke(Color.white.opacity(0.08), lineWidth: 1))
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
     var emptyPanel: some View {
@@ -1462,9 +1533,12 @@ struct AutoReelsTab: View {
             if useAI && !apiKey.isEmpty {
                 // Smart AI mode: LLM picks WHICH segments are best — cuts stay clean
                 await upd(0.47, "AI choosing the best segments…")
+                let variation = await MainActor.run { store.rerollVariation }
                 let selected = try await LLMClipService.shared.selectSegments(
                     from: segments, provider: provider, apiKey: apiKey,
-                    targetDuration: selectionBudget, topic: topic.isEmpty ? nil : topic)
+                    targetDuration: selectionBudget, topic: topic.isEmpty ? nil : topic,
+                    numberOfReels: exportMode == .multipleReels ? numberOfReels : 1,
+                    variation: variation)
                 clips = selected
             } else {
                 // Local mode: score-based selection with hook boost
@@ -1491,18 +1565,20 @@ struct AutoReelsTab: View {
             let shouldExport = await store.setPendingExport(clips: clips, jobID: jobID, jobTitle: reelTitle)
             guard shouldExport else { return }
 
-            // Clear the pending clips from the job now that export is confirmed
-            // Read the user's (possibly edited) reel name before clearing pending state
+            // Read the user's (possibly edited) clip list AND reel name before clearing pending state
             let savedTitle = reelTitle
-            let finalReelTitle = await MainActor.run { () -> String in
+            let (finalReelTitle, userEditedClips) = await MainActor.run { () -> (String, [Clip]?) in
                 let name = store.pendingReelName.trimmingCharacters(in: .whitespacesAndNewlines)
+                let edited = (store.activeJob?.id == jobID) ? store.activeJob?.pendingClips : nil
                 if var job = store.activeJob, job.id == jobID {
                     job.pendingClips = nil
                     job.statusMsg = "Preparing export…"
                     store.activeJob = job
                 }
-                return name.isEmpty ? savedTitle : name
+                return (name.isEmpty ? savedTitle : name, edited)
             }
+            // Apply any reorders or removals the user made in the pending clips card
+            if let ec = userEditedClips, !ec.isEmpty { clips = ec }
 
             let desktop = outputDir
 

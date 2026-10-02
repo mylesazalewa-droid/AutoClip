@@ -77,7 +77,8 @@ actor LLMClipService {
         }.joined(separator: "\n")
     }
 
-    private func buildSegmentPrompt(segmentList: String, targetCount: Int, targetDuration: Double, topic: String?) -> String {
+    private func buildSegmentPrompt(segmentList: String, targetCount: Int, targetDuration: Double,
+                                     topic: String?, numberOfReels: Int = 1, variation: Int = 0) -> String {
         let topicLine: String
         if let t = topic, !t.trimmingCharacters(in: .whitespaces).isEmpty {
             topicLine = "\nTOPIC / THEME: \"\(t)\" — strongly prefer segments that speak to this theme.\n"
@@ -85,9 +86,25 @@ actor LLMClipService {
             topicLine = ""
         }
 
+        let multiReelLine = numberOfReels > 1 ? """
+
+MULTI-REEL MODE (\(numberOfReels) reels): Select at least \(targetCount) segments spread across the ENTIRE video.
+• Cover different CHAPTERS of the content — beginning, middle, end
+• No two selected segments should make the same main point
+• Prioritise BREADTH over picking the same top 2–3 moments
+""" : ""
+
+        let variationLine = variation > 0 ? """
+
+VARIATION #\(variation): You have already made a selection. This time choose a DIFFERENT mix.
+• Skip the obvious top clips you'd normally pick first
+• Find compelling moments you may have overlooked
+• Try segments from parts of the video not covered before
+""" : ""
+
         return """
 You are a world-class viral short-form content editor specializing in social media clips.
-\(topicLine)
+\(topicLine)\(multiReelLine)\(variationLine)
 STEP 1 — Understand the content: Read all segments to identify the speaker's main argument, emotional arc, and key chapters before selecting anything.
 
 STEP 2 — Score each candidate on the Virality Framework (100 points total):
@@ -116,12 +133,17 @@ Respond with ONLY valid JSON — no markdown fences, no explanation:
     // MARK: - API call — segments in, selected Clips out
 
     func selectSegments(from segments: [Clip], provider: AIProvider, apiKey: String,
-                        targetDuration: Double, topic: String? = nil) async throws -> [Clip] {
+                        targetDuration: Double, topic: String? = nil,
+                        numberOfReels: Int = 1, variation: Int = 0) async throws -> [Clip] {
         let avgDur = segments.isEmpty ? 15.0
             : segments.reduce(0.0) { $0 + ($1.endTime - $1.startTime) } / Double(segments.count)
-        let targetCount = max(3, min(40, Int((targetDuration / max(5.0, avgDur)).rounded(.up)) + 2))
+        // For multi-reel, request more clips so each reel gets a diverse set
+        let baseCount = Int((targetDuration / max(5.0, avgDur)).rounded(.up)) + 2
+        let targetCount = max(3, min(40, numberOfReels > 1 ? baseCount + numberOfReels * 2 : baseCount))
         let list = formatSegments(segments)
-        let prompt = buildSegmentPrompt(segmentList: list, targetCount: targetCount, targetDuration: targetDuration, topic: topic)
+        let prompt = buildSegmentPrompt(segmentList: list, targetCount: targetCount,
+                                        targetDuration: targetDuration, topic: topic,
+                                        numberOfReels: numberOfReels, variation: variation)
 
         let text: String
         switch provider {
