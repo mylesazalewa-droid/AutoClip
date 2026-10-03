@@ -2148,16 +2148,20 @@ private extension AutoReelsTab {
                 let localVariation = baseVariation + i + 1
                 var reelClips: [Clip]
                 if useAI && !apiKey.isEmpty {
+                    await upd(0.40 + Double(i) / Double(autoReels) * 0.10,
+                              "Asking AI to select clips for reel \(i + 1)…")
                     do {
                         reelClips = try await LLMClipService.shared.selectSegments(
                             from: segments, provider: provider, apiKey: apiKey,
                             targetDuration: targetDur, topic: topic.isEmpty ? nil : topic,
                             numberOfReels: 1, variation: baseVariation + i)
+                        await upd(0.40 + Double(i) / Double(autoReels) * 0.10,
+                                  "AI selected clips for reel \(i + 1) ✓")
                     } catch {
-                        let (hook, rest) = svc.selectHookAndClips(from: segments, targetDuration: targetDur,
-                                                                   variation: localVariation,
-                                                                   previouslyUsedIDs: usedClipIDs)
-                        reelClips = hook.map { [$0] + rest } ?? rest
+                        // Surface the real error — don't silently fall back
+                        throw NSError(domain: "AutoClip", code: 99, userInfo: [
+                            NSLocalizedDescriptionKey: "AI clip selection failed for reel \(i + 1): \(error.localizedDescription)"
+                        ])
                     }
                 } else {
                     let (hook, rest) = svc.selectHookAndClips(from: segments, targetDuration: targetDur,
