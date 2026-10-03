@@ -97,7 +97,6 @@ enum StorylineMode: String, CaseIterable, Identifiable {
         case .linear:
             return clips.sorted { $0.startTime < $1.startTime }
         case .contrast:
-            // Interleave high-score and low-score clips
             let sorted = clips.sorted { $0.score > $1.score }
             var result: [Clip] = []
             var lo = 0, hi = sorted.count - 1
@@ -109,14 +108,12 @@ enum StorylineMode: String, CaseIterable, Identifiable {
             }
             return result
         case .flashback:
-            // Best clip first, rest in chronological order
             var s = clips.sorted { $0.score > $1.score }
             let top = s.removeFirst()
             return [top] + s.sorted { $0.startTime < $1.startTime }
         case .random:
             return clips.shuffled()
         case .hero:
-            // Chronological but with the highest-score clip placed in the middle
             var s = clips.sorted { $0.startTime < $1.startTime }
             if let peakIdx = s.indices.max(by: { s[$0].score < s[$1].score }), s.count >= 3 {
                 let peak = s.remove(at: peakIdx)
@@ -135,7 +132,7 @@ class AutoReelsStore: ObservableObject {
     static let shared = AutoReelsStore()
 
     @Published var reels: [AutoReelRecord] = []
-    @Published var activeJobs: [AutoReelJob] = []   // supports multiple concurrent jobs
+    @Published var activeJobs: [AutoReelJob] = []
     @Published var pendingReelName: String = ""
     @Published var rerollVariation: Int = 0
 
@@ -187,8 +184,9 @@ class AutoReelsStore: ObservableObject {
 struct AutoReelsTab: View {
     @ObservedObject private var store = AutoReelsStore.shared
     @State private var isDropTargeted = false
+    @State private var showingCreateSheet = false
     @State private var pickedVideoURL: URL?
-    @State private var inputMode: InputMode = .file   // file | youtube
+    @State private var inputMode: InputMode = .file
     @State private var youtubeURL = ""
     @State private var isDownloading = false
     @State private var downloadProgress: Double = 0
@@ -206,7 +204,6 @@ struct AutoReelsTab: View {
     @State private var previewCutPoints: [Double] = []
     @State private var selectedReel: AutoReelRecord?
 
-    // Settings — @AppStorage so they survive tab switches and relaunches
     @AppStorage("ar_format")      private var formatRaw: String = VideoExportService.ExportFormat.vertical9x16.rawValue
     @AppStorage("ar_captions")    private var burnCaptions: Bool = true
     @AppStorage("ar_captionIdx")  private var captionStyleIndex: Int = 0
@@ -219,7 +216,6 @@ struct AutoReelsTab: View {
     @AppStorage("ar_storyline")   private var useStoryline: Bool = false
     @AppStorage("ar_storyMode")   private var storylineModeRaw: String = StorylineMode.linear.rawValue
 
-    // Derived from AppStorage (enums)
     private var selectedFormat: VideoExportService.ExportFormat {
         get { VideoExportService.ExportFormat(rawValue: formatRaw) ?? .vertical9x16 }
         nonmutating set { formatRaw = newValue.rawValue }
@@ -239,8 +235,6 @@ struct AutoReelsTab: View {
 
     @State private var apiKeys: [LLMClipService.AIProvider: String] = [:]
     @State private var showKey = false
-
-    // Chat / creative direction (per-session, not persisted)
     @State private var topicText: String = ""
 
     private let gold = Color(red: 1.0, green: 0.75, blue: 0.0)
@@ -249,12 +243,18 @@ struct AutoReelsTab: View {
     enum InputMode { case file, youtube }
 
     var body: some View {
-        HStack(spacing: 0) {
-            leftPanel.frame(width: 320)
-            Divider().background(Color.white.opacity(0.08))
-            rightPanel
+        ZStack {
+            Color(red: 0.07, green: 0.08, blue: 0.12).ignoresSafeArea()
+
+            if store.reels.isEmpty && store.activeJobs.isEmpty && !isDownloading {
+                landingPage
+            } else {
+                gridView
+            }
         }
-        .background(Color(red: 0.07, green: 0.08, blue: 0.12))
+        .sheet(isPresented: $showingCreateSheet) {
+            createReelSheet
+        }
         .task {
             var loaded: [LLMClipService.AIProvider: String] = [:]
             for p in LLMClipService.AIProvider.allCases {
@@ -267,167 +267,407 @@ struct AutoReelsTab: View {
         }
     }
 
-    // MARK: - Left panel
+    // MARK: - Landing Page
 
-    var leftPanel: some View {
+    var landingPage: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                inputSection
-                if pickedVideoURL != nil || (inputMode == .youtube && !youtubeURL.isEmpty) {
-                    settingsSection
-                    createButton
-                }
-            }
-            .padding(20)
-        }
-    }
+            VStack(spacing: 40) {
+                Spacer(minLength: 40)
 
-    // MARK: - Input section (file drop OR youtube)
+                ZStack {
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(
+                            isDropTargeted ? gold : Color.white.opacity(0.15),
+                            style: StrokeStyle(lineWidth: 2, dash: [8, 6])
+                        )
+                        .background(
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(isDropTargeted ? gold.opacity(0.06) : Color.white.opacity(0.03))
+                        )
 
-    var inputSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            // Mode toggle
-            HStack(spacing: 0) {
-                modeToggleButton("Video File", mode: .file)
-                modeToggleButton("YouTube", mode: .youtube)
-            }
-            .background(Color.white.opacity(0.06))
-            .cornerRadius(8)
+                    VStack(spacing: 16) {
+                        Image(systemName: "film.stack")
+                            .font(.system(size: 44))
+                            .foregroundColor(Color.white.opacity(isDropTargeted ? 0.7 : 0.3))
 
-            if inputMode == .file {
-                fileDropZone
-            } else {
-                youtubeInputField
-            }
-        }
-    }
+                        VStack(spacing: 6) {
+                            Text("Drop your reel video here")
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundColor(.white)
+                            Text("MP4, MOV, MKV — any format works")
+                                .font(.system(size: 14))
+                                .foregroundColor(Color.white.opacity(0.4))
+                        }
 
-    func modeToggleButton(_ label: String, mode: InputMode) -> some View {
-        Button(action: { inputMode = mode; downloadError = nil }) {
-            Text(label)
-                .font(.system(size: 12, weight: inputMode == mode ? .semibold : .regular))
-                .foregroundColor(inputMode == mode ? .black : Color.white.opacity(0.5))
-                .padding(.horizontal, 14)
-                .padding(.vertical, 6)
-                .background(inputMode == mode ? gold : Color.clear)
-                .cornerRadius(7)
-        }
-        .buttonStyle(.plain)
-    }
+                        HStack(spacing: 12) {
+                            Button(action: {
+                                let panel = NSOpenPanel()
+                                panel.allowedContentTypes = [.movie, .mpeg4Movie, .quickTimeMovie]
+                                panel.canChooseDirectories = false
+                                panel.begin { response in
+                                    if response == .OK, let url = panel.url {
+                                        pickedVideoURL = url
+                                        inputMode = .file
+                                        showingCreateSheet = true
+                                    }
+                                }
+                            }) {
+                                HStack(spacing: 7) {
+                                    Image(systemName: "square.and.arrow.down").font(.system(size: 13))
+                                    Text("Browse Files").font(.system(size: 14, weight: .semibold))
+                                }
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 20).padding(.vertical, 10)
+                                .background(Color.white.opacity(0.12))
+                                .cornerRadius(9)
+                            }
+                            .buttonStyle(.plain)
 
-    var fileDropZone: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 12)
-                .fill(isDropTargeted
-                    ? gold.opacity(0.08)
-                    : Color.white.opacity(0.04))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(isDropTargeted ? gold : Color.white.opacity(0.12),
-                                style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
-                )
-
-            VStack(spacing: 10) {
-                if let url = pickedVideoURL {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 24)).foregroundColor(gold)
-                    Text(url.lastPathComponent)
-                        .font(.system(size: 12, weight: .medium)).foregroundColor(.white)
-                        .lineLimit(2).multilineTextAlignment(.center)
-                    Button("Change") { pickedVideoURL = nil }
-                        .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.4))
-                        .buttonStyle(.plain)
-                } else {
-                    Image(systemName: "film").font(.system(size: 28)).foregroundColor(gold.opacity(0.6))
-                    Text("Drop a video").font(.system(size: 13, weight: .semibold)).foregroundColor(.white)
-                    Button(action: pickVideo) {
-                        Text("Browse files")
-                            .font(.system(size: 12, weight: .medium)).foregroundColor(gold)
-                            .padding(.horizontal, 12).padding(.vertical, 5)
-                            .background(gold.opacity(0.12)).cornerRadius(6)
+                            Button(action: {
+                                inputMode = .youtube
+                                showingCreateSheet = true
+                            }) {
+                                HStack(spacing: 7) {
+                                    Image(systemName: "link").font(.system(size: 13))
+                                    Text("YouTube URL").font(.system(size: 14, weight: .semibold))
+                                }
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 20).padding(.vertical, 10)
+                                .background(Color(red: 0.85, green: 0.18, blue: 0.18))
+                                .cornerRadius(9)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.top, 4)
                     }
-                    .buttonStyle(.plain)
+                    .padding(.vertical, 50)
+                    .padding(.horizontal, 40)
                 }
-            }
-            .padding(20)
-        }
-        .frame(height: 140)
-        .onDrop(of: [.movie, .fileURL], isTargeted: $isDropTargeted) { providers in
-            for p in providers {
-                p.loadItem(forTypeIdentifier: UTType.fileURL.identifier) { item, _ in
-                    guard let data = item as? Data,
-                          let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
-                    DispatchQueue.main.async { pickedVideoURL = url }
+                .frame(maxWidth: 580)
+                .animation(.easeInOut(duration: 0.2), value: isDropTargeted)
+                .onDrop(of: [.movie, .fileURL], isTargeted: $isDropTargeted) { providers in
+                    for p in providers {
+                        p.loadItem(forTypeIdentifier: UTType.fileURL.identifier) { item, _ in
+                            guard let data = item as? Data,
+                                  let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
+                            DispatchQueue.main.async {
+                                pickedVideoURL = url
+                                inputMode = .file
+                                showingCreateSheet = true
+                            }
+                        }
+                    }
+                    return true
                 }
+
+                HStack(spacing: 14) {
+                    reelFeatureCard(icon: "rectangle.stack.fill", emoji: nil,
+                                   title: "Multi-Reel Mode", subtitle: "Up to 10 unique reels")
+                    reelFeatureCard(icon: nil, emoji: "😊",
+                                   title: "Face Tracking", subtitle: "Smart vertical crop")
+                    reelFeatureCard(icon: "text.bubble", emoji: nil,
+                                   title: "Auto Captions", subtitle: "Viral-style text")
+                    reelFeatureCard(icon: "brain.head.profile", emoji: nil,
+                                   title: "On-Device AI", subtitle: "No API key needed")
+                }
+                .frame(maxWidth: 580)
+
+                Spacer(minLength: 40)
             }
-            return true
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 40)
         }
     }
 
-    var youtubeInputField: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Image(systemName: "link").font(.system(size: 12)).foregroundColor(Color.white.opacity(0.4))
-                TextField("https://youtube.com/watch?v=...", text: $youtubeURL)
-                    .textFieldStyle(.plain).font(.system(size: 13)).foregroundColor(.white)
-                    .disabled(isDownloading)
-                    .onChange(of: youtubeURL) { _ in
-                        // New URL typed → clear old downloaded file so we download the new one
+    func reelFeatureCard(icon: String?, emoji: String?, title: String, subtitle: String) -> some View {
+        VStack(spacing: 10) {
+            if let emoji = emoji {
+                Text(emoji).font(.system(size: 28))
+            } else if let icon = icon {
+                Image(systemName: icon)
+                    .font(.system(size: 26))
+                    .foregroundColor(Color.white.opacity(0.5))
+            }
+            VStack(spacing: 3) {
+                Text(title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.white)
+                Text(subtitle)
+                    .font(.system(size: 11))
+                    .foregroundColor(Color.white.opacity(0.4))
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 20)
+        .padding(.horizontal, 8)
+        .background(Color.white.opacity(0.05))
+        .cornerRadius(12)
+    }
+
+    // MARK: - Grid View
+
+    var gridView: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("My Reels")
+                    .font(.system(size: 15, weight: .semibold)).foregroundColor(.white)
+                Text("(\(store.reels.count))")
+                    .font(.system(size: 15)).foregroundColor(Color.white.opacity(0.4))
+                Spacer()
+                Button(action: {
+                    pickedVideoURL = nil
+                    inputMode = .file
+                    showingCreateSheet = true
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "plus")
+                        Text("New Reel")
+                    }
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.black)
+                    .padding(.horizontal, 16).padding(.vertical, 8)
+                    .background(gold)
+                    .cornerRadius(9)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 20).padding(.vertical, 12)
+
+            Divider().background(Color.white.opacity(0.08))
+
+            HStack(spacing: 0) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        // YouTube download progress
+                        if isDownloading {
+                            VStack(alignment: .leading, spacing: 10) {
+                                HStack {
+                                    ProgressView().scaleEffect(0.65).tint(gold)
+                                    Text("Downloading from YouTube…")
+                                        .font(.system(size: 13, weight: .semibold)).foregroundColor(.white)
+                                    Spacer()
+                                }
+                                Text(downloadStatus)
+                                    .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.5)).lineLimit(1)
+                                GeometryReader { geo in
+                                    ZStack(alignment: .leading) {
+                                        RoundedRectangle(cornerRadius: 3).fill(Color.white.opacity(0.1)).frame(height: 4)
+                                        RoundedRectangle(cornerRadius: 3).fill(gold)
+                                            .frame(width: geo.size.width * max(0.03, downloadProgress), height: 4)
+                                            .animation(.easeOut(duration: 0.3), value: downloadProgress)
+                                    }
+                                }
+                                .frame(height: 4)
+                                if let err = downloadError {
+                                    Text(err)
+                                        .font(.system(size: 11))
+                                        .foregroundColor(Color(red: 1, green: 0.45, blue: 0.45))
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                            .padding(16)
+                            .background(Color.white.opacity(0.04))
+                            .cornerRadius(10)
+                            .padding(.horizontal, 16).padding(.top, 16)
+                            Divider().background(Color.white.opacity(0.06)).padding(.top, 8)
+                        }
+
+                        // Active job queue
+                        if !store.activeJobs.isEmpty {
+                            VStack(spacing: 0) {
+                                ForEach(store.activeJobs) { job in activeJobCard(job) }
+                            }
+                            Divider().background(Color.white.opacity(0.06))
+                        }
+
+                        // Reel grid
+                        if !store.reels.isEmpty {
+                            LazyVGrid(
+                                columns: [GridItem(.adaptive(minimum: 220, maximum: 320), spacing: 12)],
+                                spacing: 12
+                            ) {
+                                ForEach(store.reels) { reel in reelCard(reel) }
+                            }
+                            .padding(.horizontal, 20).padding(.vertical, 16)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                if let reel = selectedReel {
+                    Divider().background(Color.white.opacity(0.08))
+                    ReelDetailSidebar(
+                        reel: reel,
+                        gold: gold,
+                        onPlay: { url, pts, dur in showPreview(url: url, id: reel.id, cutPoints: pts, reelDuration: dur) },
+                        onFinder: { urls in NSWorkspace.shared.activateFileViewerSelecting(urls) },
+                        onDelete: { store.remove(id: reel.id); selectedReel = nil }
+                    )
+                    .frame(width: 300)
+                }
+            }
+        }
+    }
+
+    // MARK: - Create Reel Sheet
+
+    var createReelSheet: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    // Source
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("SOURCE")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(Color.white.opacity(0.35))
+
+                        if let url = pickedVideoURL, inputMode == .file {
+                            HStack {
+                                Image(systemName: "checkmark.circle.fill").foregroundColor(gold)
+                                Text(url.lastPathComponent)
+                                    .font(.system(size: 13)).foregroundColor(.white).lineLimit(1)
+                                Spacer()
+                                Button("Change") {
+                                    let panel = NSOpenPanel()
+                                    panel.allowedContentTypes = [.movie, .mpeg4Movie, .quickTimeMovie]
+                                    panel.canChooseDirectories = false
+                                    panel.begin { response in
+                                        if response == .OK, let u = panel.url { pickedVideoURL = u }
+                                    }
+                                }
+                                .font(.system(size: 12))
+                                .foregroundColor(Color.white.opacity(0.4))
+                                .buttonStyle(.plain)
+                            }
+                            .padding(12)
+                            .background(Color.white.opacity(0.06))
+                            .cornerRadius(8)
+                        } else {
+                            // Mode toggle
+                            HStack(spacing: 0) {
+                                Button(action: { inputMode = .file; youtubeURL = "" }) {
+                                    Text("Video File")
+                                        .font(.system(size: 12, weight: inputMode == .file ? .semibold : .regular))
+                                        .foregroundColor(inputMode == .file ? .black : Color.white.opacity(0.5))
+                                        .padding(.horizontal, 14).padding(.vertical, 6)
+                                        .background(inputMode == .file ? gold : Color.clear)
+                                        .cornerRadius(7)
+                                }
+                                .buttonStyle(.plain)
+                                Button(action: { inputMode = .youtube; pickedVideoURL = nil }) {
+                                    Text("YouTube")
+                                        .font(.system(size: 12, weight: inputMode == .youtube ? .semibold : .regular))
+                                        .foregroundColor(inputMode == .youtube ? .black : Color.white.opacity(0.5))
+                                        .padding(.horizontal, 14).padding(.vertical, 6)
+                                        .background(inputMode == .youtube ? gold : Color.clear)
+                                        .cornerRadius(7)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            .background(Color.white.opacity(0.06))
+                            .cornerRadius(8)
+
+                            if inputMode == .file {
+                                Button(action: {
+                                    let panel = NSOpenPanel()
+                                    panel.allowedContentTypes = [.movie, .mpeg4Movie, .quickTimeMovie]
+                                    panel.canChooseDirectories = false
+                                    panel.begin { response in
+                                        if response == .OK, let url = panel.url { pickedVideoURL = url }
+                                    }
+                                }) {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "square.and.arrow.down").font(.system(size: 12))
+                                        Text("Browse Files").font(.system(size: 13, weight: .medium))
+                                    }
+                                    .foregroundColor(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 10)
+                                    .background(Color.white.opacity(0.08))
+                                    .cornerRadius(8)
+                                }
+                                .buttonStyle(.plain)
+                            } else {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "link")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(Color.white.opacity(0.4))
+                                    TextField("https://youtube.com/watch?v=...", text: $youtubeURL)
+                                        .textFieldStyle(.plain)
+                                        .font(.system(size: 13))
+                                        .foregroundColor(.white)
+                                        .onChange(of: youtubeURL) { _ in downloadError = nil }
+                                }
+                                .padding(10)
+                                .background(Color.white.opacity(0.07))
+                                .cornerRadius(8)
+
+                                if let err = downloadError {
+                                    Text(err)
+                                        .font(.system(size: 11))
+                                        .foregroundColor(Color(red: 1, green: 0.45, blue: 0.45))
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                        }
+                    }
+
+                    Divider().background(Color.white.opacity(0.08))
+
+                    sheetSettingsSection
+                }
+                .padding(20)
+            }
+            .background(Color(red: 0.07, green: 0.08, blue: 0.12))
+            .navigationTitle("Create Auto Reel")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        showingCreateSheet = false
                         pickedVideoURL = nil
                         downloadError = nil
                     }
-            }
-            .padding(10)
-            .background(Color.white.opacity(0.07))
-            .cornerRadius(8)
-
-            if isDownloading {
-                VStack(spacing: 6) {
-                    HStack {
-                        Text(downloadStatus)
-                            .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.5))
-                            .lineLimit(1)
-                        Spacer()
-                        Text("\(Int(downloadProgress * 100))%")
-                            .font(.system(size: 11, design: .monospaced)).foregroundColor(gold)
-                    }
-                    GeometryReader { geo in
-                        ZStack(alignment: .leading) {
-                            RoundedRectangle(cornerRadius: 2).fill(Color.white.opacity(0.1)).frame(height: 3)
-                            RoundedRectangle(cornerRadius: 2).fill(gold)
-                                .frame(width: geo.size.width * max(0.03, downloadProgress), height: 3)
-                                .animation(.easeOut(duration: 0.3), value: downloadProgress)
-                        }
-                    }
-                    .frame(height: 3)
+                    .foregroundColor(Color.white.opacity(0.6))
                 }
             }
-
-            if let err = downloadError {
-                Text(err)
-                    .font(.system(size: 11)).foregroundColor(Color(red: 1, green: 0.45, blue: 0.45))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            if let url = pickedVideoURL, inputMode == .youtube {
-                HStack(spacing: 6) {
-                    Image(systemName: "checkmark.circle.fill").foregroundColor(gold).font(.system(size: 11))
-                    Text(url.lastPathComponent).font(.system(size: 11)).foregroundColor(Color.white.opacity(0.6))
-                        .lineLimit(1)
+            .safeAreaInset(edge: .bottom) {
+                let canCreate = (inputMode == .file && pickedVideoURL != nil) ||
+                                (inputMode == .youtube && !youtubeURL.isEmpty)
+                Button(action: {
+                    showingCreateSheet = false
+                    if inputMode == .youtube && !youtubeURL.isEmpty {
+                        startYouTubeDownload()
+                    } else if let url = pickedVideoURL {
+                        startPipeline(videoURL: url)
+                        pickedVideoURL = nil
+                    }
+                }) {
+                    Text("Create Auto Reel")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(canCreate ? .black : Color.white.opacity(0.3))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(canCreate ? gold : Color.white.opacity(0.08))
+                        .cornerRadius(12)
                 }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 20).padding(.bottom, 20)
+                .disabled(!canCreate)
             }
         }
+        .frame(minWidth: 420, minHeight: 500)
+        .preferredColorScheme(.dark)
     }
 
-    // MARK: - Settings
+    // MARK: - Sheet Settings
 
-    var settingsSection: some View {
+    var sheetSettingsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("SETTINGS")
                 .font(.system(size: 10, weight: .semibold)).foregroundColor(Color.white.opacity(0.35))
 
             VStack(spacing: 10) {
-                // Format
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Format").font(.system(size: 12)).foregroundColor(Color.white.opacity(0.6))
                     HStack(spacing: 6) {
@@ -475,19 +715,14 @@ struct AutoReelsTab: View {
             }
             .padding(14).background(Color.white.opacity(0.04)).cornerRadius(10)
 
-            // Chat / creative direction
             chatSection
-
-            // Export mode
             exportModeSection
-
-            // Storyline structure
             storylineSection
-
-            // AI-powered clip selection
             aiSettingsSection
         }
     }
+
+    // MARK: - Settings sub-sections (reused in sheet)
 
     private var chatSection: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -513,13 +748,11 @@ struct AutoReelsTab: View {
             }
             HStack(spacing: 16) {
                 HStack(spacing: 6) {
-                    Toggle("", isOn: $crossDissolve).toggleStyle(.switch).tint(gold)
-                        .labelsHidden()
+                    Toggle("", isOn: $crossDissolve).toggleStyle(.switch).tint(gold).labelsHidden()
                     Text("Dissolve cuts").font(.system(size: 11)).foregroundColor(Color.white.opacity(0.7))
                 }
                 HStack(spacing: 6) {
-                    Toggle("", isOn: $emojiOverlays).toggleStyle(.switch).tint(gold)
-                        .labelsHidden()
+                    Toggle("", isOn: $emojiOverlays).toggleStyle(.switch).tint(gold).labelsHidden()
                     Text("Emoji overlays").font(.system(size: 11)).foregroundColor(Color.white.opacity(0.7))
                 }
             }
@@ -532,10 +765,9 @@ struct AutoReelsTab: View {
             Text("Export as")
                 .font(.system(size: 12, weight: .semibold)).foregroundColor(.white)
 
-            // Three-button row — wrap to avoid clipping
             VStack(spacing: 6) {
                 HStack(spacing: 6) {
-                    modeButton(.reel,          icon: "film.stack")
+                    modeButton(.reel, icon: "film.stack")
                     modeButton(.multipleReels, icon: "rectangle.stack.fill")
                 }
                 HStack(spacing: 6) {
@@ -544,7 +776,6 @@ struct AutoReelsTab: View {
                 }
             }
 
-            // Description
             Group {
                 switch exportMode {
                 case .reel:
@@ -558,7 +789,6 @@ struct AutoReelsTab: View {
             .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.4))
             .fixedSize(horizontal: false, vertical: true)
 
-            // Auto reel count info — shown when multiple reels selected
             if exportMode == .multipleReels {
                 Label("Reel count is calculated automatically. Longer videos produce more reels (up to 10).", systemImage: "info.circle")
                     .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.35))
@@ -641,7 +871,6 @@ struct AutoReelsTab: View {
                     .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.45))
                     .fixedSize(horizontal: false, vertical: true)
 
-                // Provider picker
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Provider").font(.system(size: 11)).foregroundColor(Color.white.opacity(0.5))
                     HStack(spacing: 6) {
@@ -661,8 +890,7 @@ struct AutoReelsTab: View {
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundColor(Color.white.opacity(0.3))
 
-                    // Cost estimate based on typical segment count for the target duration
-                    let estTokens = max(400, Int(targetDuration * 2.5))  // ~2.5 tokens/sec of content
+                    let estTokens = max(400, Int(targetDuration * 2.5))
                     let estCost: String = {
                         switch aiProvider {
                         case .anthropic: return String(format: "~$%.4f", Double(estTokens) / 1_000_000 * 0.80)
@@ -672,15 +900,13 @@ struct AutoReelsTab: View {
                     }()
                     HStack(spacing: 5) {
                         Image(systemName: "dollarsign.circle").font(.system(size: 10))
-                        Text("Estimated cost per reel: \(estCost)")
-                            .font(.system(size: 10))
+                        Text("Estimated cost per reel: \(estCost)").font(.system(size: 10))
                     }
                     .foregroundColor(Color.white.opacity(0.4))
                     .padding(.horizontal, 8).padding(.vertical, 5)
                     .background(Color.white.opacity(0.05)).cornerRadius(6)
                 }
 
-                // API key for selected provider
                 VStack(alignment: .leading, spacing: 6) {
                     Text("API Key").font(.system(size: 11)).foregroundColor(Color.white.opacity(0.5))
                     HStack(spacing: 6) {
@@ -736,104 +962,7 @@ struct AutoReelsTab: View {
         }
     }
 
-    // MARK: - Create button
-
-    var createButton: some View {
-        Group {
-            if inputMode == .youtube && pickedVideoURL == nil {
-                // YouTube: download first, then pipeline starts automatically
-                Button(action: startYouTubeDownload) {
-                    HStack(spacing: 8) {
-                        if isDownloading {
-                            ProgressView().scaleEffect(0.75).tint(.black)
-                        } else {
-                            Image(systemName: "arrow.down.circle.fill").font(.system(size: 14, weight: .semibold))
-                        }
-                        Text(isDownloading ? "Downloading…" : "Download & Create Reel")
-                            .font(.system(size: 14, weight: .semibold))
-                    }
-                    .foregroundColor(.black)
-                    .frame(maxWidth: .infinity).padding(.vertical, 12)
-                    .background(youtubeURL.isEmpty || isDownloading ? gold.opacity(0.4) : gold)
-                    .cornerRadius(10)
-                }
-                .buttonStyle(.plain)
-                .disabled(youtubeURL.isEmpty || isDownloading)
-            } else {
-                Button(action: { startPipeline(videoURL: pickedVideoURL!) }) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "wand.and.stars").font(.system(size: 14, weight: .semibold))
-                        Text("Create Auto Reel").font(.system(size: 14, weight: .semibold))
-                    }
-                    .foregroundColor(.black)
-                    .frame(maxWidth: .infinity).padding(.vertical, 12)
-                    .background(gold).cornerRadius(10)
-                }
-                .buttonStyle(.plain)
-                .disabled(false)
-            }
-        }
-    }
-
-    // MARK: - Right panel
-
-    var rightPanel: some View {
-        historyPanel
-    }
-
-    var historyPanel: some View {
-        HStack(spacing: 0) {
-            // ── Left: job cards + reel grid ──────────────────────────────────
-            VStack(alignment: .leading, spacing: 0) {
-                // Active job queue — stacked cards, one per running/finished job
-                if !store.activeJobs.isEmpty {
-                    VStack(spacing: 0) {
-                        ForEach(store.activeJobs) { job in
-                            activeJobCard(job)
-                        }
-                    }
-                    Divider().background(Color.white.opacity(0.08))
-                }
-
-                if store.reels.isEmpty && store.activeJobs.isEmpty {
-                    emptyPanel
-                } else if !store.reels.isEmpty {
-                    HStack {
-                        Text("My Reels")
-                            .font(.system(size: 15, weight: .semibold)).foregroundColor(.white)
-                        Text("(\(store.reels.count))")
-                            .font(.system(size: 15)).foregroundColor(Color.white.opacity(0.4))
-                        Spacer()
-                    }
-                    .padding(.horizontal, 20).padding(.top, 16).padding(.bottom, 4)
-
-                    ScrollView {
-                        LazyVGrid(
-                            columns: [GridItem(.adaptive(minimum: 220, maximum: 320), spacing: 12)],
-                            spacing: 12
-                        ) {
-                            ForEach(store.reels) { reel in reelCard(reel) }
-                        }
-                        .padding(.horizontal, 20).padding(.bottom, 30)
-                    }
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-
-            // ── Right: detail sidebar ─────────────────────────────────────────
-            if let reel = selectedReel {
-                Divider().background(Color.white.opacity(0.08))
-                ReelDetailSidebar(
-                    reel: reel,
-                    gold: gold,
-                    onPlay: { url, pts, dur in showPreview(url: url, id: reel.id, cutPoints: pts, reelDuration: dur) },
-                    onFinder: { urls in NSWorkspace.shared.activateFileViewerSelecting(urls) },
-                    onDelete: { store.remove(id: reel.id); selectedReel = nil }
-                )
-                .frame(width: 300)
-            }
-        }
-    }
+    // MARK: - Active job card
 
     func activeJobCard(_ job: AutoReelJob) -> some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -880,10 +1009,8 @@ struct AutoReelsTab: View {
                 .frame(height: 4)
             }
 
-
             if job.isFinished, job.error == nil {
                 if let urls = job.outputURLs, urls.count > 1 {
-                    // Individual clips — show a scrollable list
                     VStack(alignment: .leading, spacing: 6) {
                         Button(action: {
                             if let first = urls.first {
@@ -906,8 +1033,7 @@ struct AutoReelsTab: View {
                                             .foregroundColor(Color.white.opacity(0.4))
                                             .frame(width: 18, alignment: .trailing)
                                         Text(url.deletingPathExtension().lastPathComponent)
-                                            .font(.system(size: 11)).foregroundColor(.white)
-                                            .lineLimit(1)
+                                            .font(.system(size: 11)).foregroundColor(.white).lineLimit(1)
                                         Spacer()
                                         Button(action: { showPreview(url: url, id: job.id) }) {
                                             Image(systemName: "play.circle.fill")
@@ -956,16 +1082,6 @@ struct AutoReelsTab: View {
                  onFinder: { urls in NSWorkspace.shared.activateFileViewerSelecting(urls) },
                  onDelete: { store.remove(id: reel.id); if selectedReel?.id == reel.id { selectedReel = nil } })
     }
-
-    var emptyPanel: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "play.rectangle.on.rectangle")
-                .font(.system(size: 48)).foregroundColor(Color.white.opacity(0.1))
-            Text("Your reels will appear here")
-                .font(.system(size: 14)).foregroundColor(Color.white.opacity(0.25))
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
 }
 
 // MARK: - Reel card (matches ProjectCard design)
@@ -984,7 +1100,6 @@ private struct ReelCard: View {
     private var isMulti: Bool { reel.paths.count > 1 }
     private var primaryURL: URL { URL(fileURLWithPath: reel.path) }
 
-    /// Stable waveform bar heights seeded by reel.id
     private var waveformBars: [CGFloat] {
         var seed = reel.id.hashValue
         return (0..<24).map { _ in
@@ -994,15 +1109,12 @@ private struct ReelCard: View {
         }
     }
 
-    /// First 6 words of the title
     private var captionSnippet: String {
         let words = reel.title.split(separator: " ").prefix(6)
         return words.joined(separator: " ")
     }
 
-    /// Duration-based score badge (0–100)
     private var scoreBadge: Int {
-        // Simple heuristic: normalise duration in range 30–180s → 60–95
         let clamped = min(max(reel.duration, 30), 180)
         return Int(60 + (clamped - 30) / 150 * 35)
     }
@@ -1015,13 +1127,11 @@ private struct ReelCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // ── Thumbnail ────────────────────────────────────────────────────
             ZStack(alignment: .bottomLeading) {
                 ReelThumbnailView(path: reel.path)
                     .frame(height: 200)
                     .clipped()
 
-                // Top bar: date (left) + duration badge (right)
                 VStack {
                     HStack {
                         Text(shortDate(reel.dateCreated))
@@ -1044,7 +1154,6 @@ private struct ReelCard: View {
                     Spacer()
                 }
 
-                // Multi-reel badge (bottom-left)
                 if isMulti {
                     Text("\(reel.paths.count) Reels")
                         .font(.system(size: 10, weight: .semibold))
@@ -1055,7 +1164,6 @@ private struct ReelCard: View {
                         .padding(8)
                 }
 
-                // Caption overlay on thumbnail (bottom)
                 VStack {
                     Spacer()
                     HStack {
@@ -1065,7 +1173,6 @@ private struct ReelCard: View {
                             .lineLimit(1)
                             .shadow(color: .black.opacity(0.8), radius: 2, x: 0, y: 1)
                         Spacer()
-                        // Score badge
                         ZStack {
                             Circle().fill(gold).frame(width: 26, height: 26)
                             Text("\(scoreBadge)")
@@ -1076,7 +1183,6 @@ private struct ReelCard: View {
                     .padding(.horizontal, 8).padding(.bottom, 6)
                 }
 
-                // Hover action overlay
                 if isHovered {
                     ZStack {
                         Color.black.opacity(0.45)
@@ -1106,7 +1212,6 @@ private struct ReelCard: View {
                         }
                     }
 
-                    // Delete button — top right
                     VStack {
                         HStack {
                             Spacer()
@@ -1129,7 +1234,6 @@ private struct ReelCard: View {
             .cornerRadius(8, corners: [.topLeft, .topRight])
             .onTapGesture { onSelect() }
 
-            // ── Waveform ──────────────────────────────────────────────────────
             HStack(alignment: .bottom, spacing: 2) {
                 ForEach(Array(waveformBars.enumerated()), id: \.offset) { _, h in
                     RoundedRectangle(cornerRadius: 1)
@@ -1141,7 +1245,6 @@ private struct ReelCard: View {
             .padding(.horizontal, 12).padding(.top, 8)
             .background(Color(red: 0.13, green: 0.15, blue: 0.20))
 
-            // ── Info ─────────────────────────────────────────────────────────
             VStack(alignment: .leading, spacing: 4) {
                 Text(reel.title)
                     .font(.system(size: 12, weight: .medium))
@@ -1171,7 +1274,6 @@ private struct ReelCard: View {
             .padding(.horizontal, 12).padding(.vertical, 8)
             .background(Color(red: 0.13, green: 0.15, blue: 0.20))
 
-            // ── Per-reel rows for multi-reel packs ──────────────────────────
             if isMulti {
                 Divider().background(Color.white.opacity(0.07))
                 VStack(spacing: 0) {
@@ -1260,7 +1362,6 @@ private struct ReelDetailSidebar: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // ── Video preview ─────────────────────────────────────────────────
             ZStack {
                 Color.black
                 if let player = player {
@@ -1293,7 +1394,6 @@ private struct ReelDetailSidebar: View {
 
             Divider().background(Color.white.opacity(0.08))
 
-            // ── Reel list (multi-reel packs) ──────────────────────────────────
             if isMulti {
                 VStack(spacing: 0) {
                     ForEach(Array(reel.paths.enumerated()), id: \.offset) { i, path in
@@ -1323,7 +1423,6 @@ private struct ReelDetailSidebar: View {
                 Divider().background(Color.white.opacity(0.08))
             }
 
-            // ── Tab bar ───────────────────────────────────────────────────────
             HStack(spacing: 0) {
                 ForEach(ReelDetailTab.allCases, id: \.self) { tab in
                     Button(action: { selectedTab = tab }) {
@@ -1339,7 +1438,6 @@ private struct ReelDetailSidebar: View {
             .background(Color.white.opacity(0.05))
             Divider().background(Color.white.opacity(0.08))
 
-            // ── Tab content ───────────────────────────────────────────────────
             ScrollView {
                 if selectedTab == .actions {
                     VStack(spacing: 10) {
@@ -1471,7 +1569,6 @@ private extension AutoReelsTab {
             Divider().background(Color.white.opacity(0.08))
 
             VStack(spacing: 0) {
-                // Video — centred 9:16
                 Spacer()
                 HStack {
                     Spacer()
@@ -1499,7 +1596,6 @@ private extension AutoReelsTab {
                 }
                 Spacer()
 
-                // Scrubber bar
                 VStack(spacing: 6) {
                     GeometryReader { geo in
                         let w = geo.size.width
@@ -1511,7 +1607,6 @@ private extension AutoReelsTab {
                                 .fill(gold)
                                 .frame(width: max(0, CGFloat(previewProgress) * w), height: 4)
                                 .animation(isScrubbing ? nil : .linear(duration: 0.1), value: previewProgress)
-                            // Cut-point tick marks
                             ForEach(previewCutPoints, id: \.self) { cut in
                                 Rectangle()
                                     .fill(gold.opacity(0.85))
@@ -1563,14 +1658,12 @@ private extension AutoReelsTab {
             .onAppear {
                 let player = AVPlayer(url: url)
                 previewPlayer = player; player.play(); previewPlaying = true
-                // Load duration
                 Task {
                     if let item = player.currentItem,
                        let dur = try? await item.asset.load(.duration) {
                         previewDuration = max(1, CMTimeGetSeconds(dur))
                     }
                 }
-                // Periodic time observer
                 let interval = CMTime(seconds: 0.1, preferredTimescale: 600)
                 previewTimeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { t in
                     guard !isScrubbing else { return }
@@ -1604,7 +1697,7 @@ private extension AutoReelsTab {
         downloadProgress = 0
         downloadStatus = "Starting download…"
 
-        guard let outDir = pickOutputDirectory() else { return }
+        guard let outDir = pickOutputDirectory() else { isDownloading = false; return }
 
         let fmt = selectedFormat; let captions = burnCaptions
         let styleIdx = captionStyleIndex; let dur = targetDuration
@@ -1684,7 +1777,6 @@ private extension AutoReelsTab {
                     self.isDownloading = false
                     self.pickedVideoURL = videoURL
                 }
-                // Auto-start pipeline
                 await self.startPipelineAsync(videoURL: videoURL, format: fmt, captions: captions,
                                               styleIdx: styleIdx, targetDur: dur,
                                               useAI: ai, provider: prov, apiKey: key,
@@ -1733,7 +1825,6 @@ private extension AutoReelsTab {
         }
     }
 
-    // Runs fully in background — safe to switch tabs while this executes
     private func startPipelineAsync(videoURL: URL, format: VideoExportService.ExportFormat,
                                     captions: Bool, styleIdx: Int, targetDur: Double,
                                     useAI: Bool = false,
@@ -1771,7 +1862,6 @@ private extension AutoReelsTab {
 
             let svc = VideoExportService.shared
 
-            // Auto-convert HEVC (iPhone) videos to H.264 before transcription
             let workingURL = await svc.convertHEVCIfNeeded(videoURL) { msg in
                 Task { await upd(0.10, msg) }
             }
@@ -1784,23 +1874,17 @@ private extension AutoReelsTab {
                 throw NSError(domain: "AutoClip", code: 3, userInfo: [NSLocalizedDescriptionKey: "No speech detected in video."])
             }
 
-            // Always generate clean sentence-boundary segments first.
-            // This guarantees cuts land on real word boundaries regardless of mode.
             await upd(0.45, "Finding best moments…")
-            // autoSegmentsFromWords now includes take deduplication and pause-splitting internally
             let segments = svc.autoSegmentsFromWords(words)
             guard !segments.isEmpty else {
                 throw NSError(domain: "AutoClip", code: 4, userInfo: [NSLocalizedDescriptionKey: "Not enough speech segments to build a reel."])
             }
 
-            // Auto-calculate how many reels to create based on total video speech duration.
-            // Each reel targets targetDur seconds; cap at 10 and require at least 2.
             let totalSpeechDur = words.last.map { $0.endTime } ?? 0
             let autoReels = exportMode == .multipleReels
                 ? max(2, min(10, Int((totalSpeechDur / max(15.0, targetDur * 0.8)).rounded())))
                 : 1
 
-            // Derive reel title from the first segment's opening words
             let hookPreview = segments.first.map {
                 $0.words.prefix(7).map { $0.word }.joined(separator: " ")
             } ?? ""
@@ -1818,10 +1902,6 @@ private extension AutoReelsTab {
             opts.emojiOverlays = emojiOverlays
 
             if exportMode == .multipleReels {
-                // Each reel gets its OWN independent clip selection from the FULL segment pool.
-                // Diversity comes from the variation seed (score-tier shuffle), not by starving
-                // later reels of high-quality clips. A different variation index ensures each
-                // reel picks a genuinely different mix of the best moments.
                 let baseVariation = await MainActor.run { store.rerollVariation }
                 var reelGroups: [[Clip]] = []
                 for i in 0..<autoReels {
@@ -1846,9 +1926,7 @@ private extension AutoReelsTab {
                         reelClips = hook.map { [$0] + rest } ?? rest
                     }
                     if let smode = storylineMode { reelClips = smode.order(reelClips) }
-                    if !reelClips.isEmpty {
-                        reelGroups.append(reelClips)
-                    }
+                    if !reelClips.isEmpty { reelGroups.append(reelClips) }
                 }
                 guard !reelGroups.isEmpty else {
                     throw NSError(domain: "AutoClip", code: 4, userInfo: [NSLocalizedDescriptionKey: "No clips could be selected for any reel."])
@@ -1862,12 +1940,10 @@ private extension AutoReelsTab {
                     try await svc.createHighlightReel(clips: group, sourceVideoURL: workingURL,
                                                       outputURL: outURL, options: opts) { _, _ in }
                     outURLs.append(outURL)
-                    // Let AVFoundation fully release the export session before the next reel
                     if i < validGroups.count - 1 {
                         try? await Task.sleep(nanoseconds: 500_000_000)
                     }
                 }
-                // Compute cut points for EVERY reel so the scrubber shows tick marks on each
                 func reelCutPoints(_ group: [Clip]) -> [Double] {
                     let dur = group.reduce(0.0) { $0 + $1.duration }
                     guard dur > 0, group.count > 1 else { return [] }
@@ -1894,7 +1970,6 @@ private extension AutoReelsTab {
                                                cutPoints: cutPts, reelDuration: firstReelDur))
                 }
             } else if exportMode == .individualClips {
-                // Select clips for individual export
                 var clips: [Clip]
                 if useAI && !apiKey.isEmpty {
                     await upd(0.47, "AI choosing the best segments…")
@@ -1907,7 +1982,6 @@ private extension AutoReelsTab {
                     let (hook, rest) = svc.selectHookAndClips(from: segments, targetDuration: targetDur)
                     clips = hook.map { [$0] + rest } ?? rest
                 }
-                // Export each clip as its own file
                 var outURLs: [URL] = []
                 for (i, clip) in clips.enumerated() {
                     let pct = Double(i) / Double(clips.count)
@@ -1930,7 +2004,6 @@ private extension AutoReelsTab {
                                                outputURL: outURLs.first, outputURLs: outURLs))
                 }
             } else {
-                // Select clips for single reel
                 var clips: [Clip]
                 if useAI && !apiKey.isEmpty {
                     await upd(0.47, "AI choosing the best segments…")
@@ -1944,7 +2017,6 @@ private extension AutoReelsTab {
                     clips = hook.map { [$0] + rest } ?? rest
                 }
                 if let smode = storylineMode { clips = smode.order(clips) }
-                // Stitch all clips into one highlight reel
                 await upd(0.50, "Exporting reel…")
                 let outURL = desktop.appendingPathComponent("\(finalReelTitle) – Auto Reel.mp4")
                 try await svc.createHighlightReel(clips: clips, sourceVideoURL: workingURL, outputURL: outURL, options: opts) { p, msg in
@@ -1952,7 +2024,6 @@ private extension AutoReelsTab {
                 }
                 let asset = AVURLAsset(url: outURL)
                 let dur = (try? await asset.load(.duration)).map { CMTimeGetSeconds($0) } ?? 0
-                // Compute cut points as fractions of total duration
                 var cutPts: [Double] = []
                 if dur > 0 {
                     var acc = 0.0
