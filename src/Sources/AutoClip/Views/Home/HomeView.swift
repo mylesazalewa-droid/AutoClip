@@ -432,8 +432,8 @@ struct CombinedProjectsView: View {
     func reelMiniCard(_ reel: AutoReelRecord) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             ZStack(alignment: .bottomLeading) {
-                Rectangle().fill(Color.white.opacity(0.05)).frame(height: 140)
-                    .overlay(Image(systemName: "film.stack").font(.system(size: 28)).foregroundColor(Color.white.opacity(0.08)))
+                ReelThumbnailView(path: reel.path)
+                    .frame(height: 140).clipped()
                 Text(formatDuration(reel.duration))
                     .font(.system(size: 10, design: .monospaced)).foregroundColor(.white)
                     .padding(.horizontal, 6).padding(.vertical, 3)

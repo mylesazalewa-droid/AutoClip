@@ -3,6 +3,23 @@ import AVFoundation
 import UniformTypeIdentifiers
 import AppKit
 
+// MARK: - Thumbnail helper
+
+func generateThumbnail(from path: String) async -> NSImage? {
+    let url = URL(fileURLWithPath: path)
+    let asset = AVURLAsset(url: url)
+    let gen = AVAssetImageGenerator(asset: asset)
+    gen.appliesPreferredTrackTransform = true
+    gen.maximumSize = CGSize(width: 640, height: 640)
+    let time = CMTime(seconds: 1.0, preferredTimescale: 600)
+    return try? await withCheckedThrowingContinuation { cont in
+        gen.generateCGImagesAsynchronously(forTimes: [NSValue(time: time)]) { _, img, _, result, err in
+            if result == .succeeded, let img { cont.resume(returning: NSImage(cgImage: img, size: .zero)) }
+            else { cont.resume(throwing: err ?? NSError(domain: "", code: 0)) }
+        }
+    }
+}
+
 // MARK: - Persistent record
 
 struct AutoReelRecord: Identifiable, Codable {
@@ -46,16 +63,17 @@ struct AutoReelJob: Identifiable {
     var cutPoints: [Double]      // fractional positions [0,1] for scrubber tick marks
     var reelDuration: Double     // total duration of the primary reel (for cut point math)
     var pendingClips: [Clip]?    // non-nil = waiting for user to confirm export
+    var sourceVideoPath: String? // for thumbnail generation during processing
 
     init(id: UUID, title: String, progress: Double, statusMsg: String,
          isFinished: Bool, error: String? = nil, outputURL: URL? = nil,
          outputURLs: [URL]? = nil, cutPoints: [Double] = [], reelDuration: Double = 0,
-         pendingClips: [Clip]? = nil) {
+         pendingClips: [Clip]? = nil, sourceVideoPath: String? = nil) {
         self.id = id; self.title = title; self.progress = progress
         self.statusMsg = statusMsg; self.isFinished = isFinished
         self.error = error; self.outputURL = outputURL; self.outputURLs = outputURLs
         self.cutPoints = cutPoints; self.reelDuration = reelDuration
-        self.pendingClips = pendingClips
+        self.pendingClips = pendingClips; self.sourceVideoPath = sourceVideoPath
     }
 }
 
@@ -953,15 +971,21 @@ struct AutoReelsTab: View {
         VStack(alignment: .leading, spacing: 0) {
             // Thumbnail area — matches ReelCard height
             ZStack(alignment: .bottom) {
-                // Placeholder background
-                Rectangle()
-                    .fill(Color.white.opacity(0.05))
-                    .frame(height: 200)
-                    .overlay(
-                        Image(systemName: job.error != nil ? "exclamationmark.triangle" : "film.stack")
-                            .font(.system(size: 36))
-                            .foregroundColor(Color.white.opacity(0.10))
-                    )
+                // Thumbnail from source video (or placeholder while unavailable)
+                if let srcPath = job.sourceVideoPath {
+                    ReelThumbnailView(path: srcPath)
+                        .frame(height: 200).clipped()
+                        .overlay(Color.black.opacity(0.35))  // dim so overlay text is readable
+                } else {
+                    Rectangle()
+                        .fill(Color.white.opacity(0.05))
+                        .frame(height: 200)
+                        .overlay(
+                            Image(systemName: job.error != nil ? "exclamationmark.triangle" : "film.stack")
+                                .font(.system(size: 36))
+                                .foregroundColor(Color.white.opacity(0.10))
+                        )
+                }
 
                 if job.isFinished && job.error == nil {
                     // Done state: green check + file count
@@ -1751,7 +1775,7 @@ private struct ReelFullPreviewSheet: View {
 
 // MARK: - Video thumbnail from file
 
-private struct ReelThumbnailView: View {
+struct ReelThumbnailView: View {
     let path: String
     @State private var image: NSImage?
 
@@ -2094,10 +2118,12 @@ private extension AutoReelsTab {
         let jobID = UUID()
         let title = videoURL.deletingPathExtension().lastPathComponent
 
+        let srcPath = videoURL.path
         func upd(_ progress: Double, _ msg: String, finished: Bool = false, error: String? = nil, out: URL? = nil) async {
             await MainActor.run {
                 store.updateJob(AutoReelJob(id: jobID, title: title, progress: progress,
-                                           statusMsg: msg, isFinished: finished, error: error, outputURL: out))
+                                           statusMsg: msg, isFinished: finished, error: error, outputURL: out,
+                                           sourceVideoPath: srcPath))
             }
         }
 
