@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
-enum HomeTab { case projects, autoReels }
+enum HomeTab { case projects, autoClips, autoReels }
 
 struct HomeView: View {
     @ObservedObject private var library = LibraryService.shared
@@ -41,19 +41,22 @@ struct HomeView: View {
                 tabBar
 
                 // Tab content
-                if activeTab == .autoReels {
+                switch activeTab {
+                case .autoReels:
                     AutoReelsTab()
-                } else {
+                case .autoClips:
                     if filteredProjects.isEmpty && searchText.isEmpty {
                         landingPage
                     } else {
                         projectsContent
                     }
+                case .projects:
+                    CombinedProjectsView()
                 }
             }
         }
         .onDrop(of: [.movie, .fileURL], isTargeted: $isDropTargeted) { providers in
-            guard activeTab == .projects else { return false }
+            guard activeTab == .autoClips else { return false }
             for provider in providers {
                 provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
                     guard let data = item as? Data,
@@ -70,7 +73,8 @@ struct HomeView: View {
 
     var tabBar: some View {
         HStack(spacing: 0) {
-            tabButton(title: "Projects", icon: "folder.fill", tab: .projects)
+            tabButton(title: "Projects", icon: "square.grid.2x2.fill", tab: .projects)
+            tabButton(title: "Auto Clips", icon: "folder.fill", tab: .autoClips)
             tabButton(title: "Auto Reels", icon: "play.rectangle.on.rectangle.fill", tab: .autoReels)
             Spacer()
         }
@@ -150,32 +154,34 @@ struct HomeView: View {
             }
             .buttonStyle(.plain)
 
-            Button(action: { appState.triggerImport() }) {
-                HStack(spacing: 6) {
-                    Image(systemName: "plus").font(.system(size: 13, weight: .semibold))
-                    Text("New Project").font(.system(size: 13, weight: .semibold))
+            if activeTab == .autoClips {
+                Button(action: { appState.triggerImport() }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "plus").font(.system(size: 13, weight: .semibold))
+                        Text("New Clip").font(.system(size: 13, weight: .semibold))
+                    }
+                    .foregroundColor(.black)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 7)
+                    .background(gold)
+                    .cornerRadius(8)
                 }
-                .foregroundColor(.black)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 7)
-                .background(gold)
-                .cornerRadius(8)
-            }
-            .buttonStyle(.plain)
+                .buttonStyle(.plain)
 
-            Button(action: { appState.showYouTubeSheet = true }) {
-                HStack(spacing: 6) {
-                    Image(systemName: "link").font(.system(size: 12))
-                    Text("YouTube URL").font(.system(size: 13))
+                Button(action: { appState.showYouTubeSheet = true }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "link").font(.system(size: 12))
+                        Text("YouTube URL").font(.system(size: 13))
+                    }
+                    .foregroundColor(Color.white.opacity(0.8))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .background(Color.white.opacity(0.08))
+                    .cornerRadius(8)
                 }
-                .foregroundColor(Color.white.opacity(0.8))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 7)
-                .background(Color.white.opacity(0.08))
-                .cornerRadius(8)
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
-            .padding(.trailing, 16)
+            Color.clear.frame(width: 16, height: 1)
         }
         .padding(.vertical, 10)
         .background(Color(red: 0.09, green: 0.10, blue: 0.15))
@@ -362,6 +368,94 @@ struct HomeView: View {
                 .cornerRadius(6)
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Combined Projects View
+
+struct CombinedProjectsView: View {
+    @ObservedObject private var library = LibraryService.shared
+    @ObservedObject private var reelsStore = AutoReelsStore.shared
+    private let gold = Color(red: 1.0, green: 0.75, blue: 0.0)
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                // Auto Reels section
+                if !reelsStore.reels.isEmpty || !reelsStore.activeJobs.isEmpty {
+                    sectionHeader(title: "Auto Reels", count: reelsStore.reels.count,
+                                  icon: "play.rectangle.on.rectangle.fill")
+                    LazyVGrid(
+                        columns: [GridItem(.adaptive(minimum: 200, maximum: 280), spacing: 12)],
+                        spacing: 12
+                    ) {
+                        ForEach(reelsStore.reels) { reel in
+                            reelMiniCard(reel)
+                        }
+                    }
+                    .padding(.horizontal, 20).padding(.bottom, 24)
+                }
+
+                // Auto Clips section
+                sectionHeader(title: "Auto Clips", count: library.projects.count,
+                              icon: "folder.fill")
+                if library.projects.isEmpty {
+                    Text("No clips yet. Create one in the Auto Clips tab.")
+                        .font(.system(size: 13)).foregroundColor(Color.white.opacity(0.35))
+                        .padding(.horizontal, 20).padding(.bottom, 24)
+                } else {
+                    LazyVGrid(
+                        columns: [GridItem(.adaptive(minimum: 200, maximum: 280), spacing: 12)],
+                        spacing: 12
+                    ) {
+                        ForEach(library.projects) { project in
+                            ProjectCard(project: project)
+                        }
+                    }
+                    .padding(.horizontal, 20).padding(.bottom, 24)
+                }
+            }
+            .padding(.top, 16)
+        }
+        .background(Color(red: 0.07, green: 0.08, blue: 0.12))
+    }
+
+    func sectionHeader(title: String, count: Int, icon: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon).font(.system(size: 11)).foregroundColor(gold)
+            Text(title).font(.system(size: 13, weight: .semibold)).foregroundColor(.white)
+            Text("(\(count))").font(.system(size: 12)).foregroundColor(Color.white.opacity(0.35))
+        }
+        .padding(.horizontal, 20).padding(.bottom, 10)
+    }
+
+    func reelMiniCard(_ reel: AutoReelRecord) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ZStack(alignment: .bottomLeading) {
+                Rectangle().fill(Color.white.opacity(0.05)).frame(height: 140)
+                    .overlay(Image(systemName: "film.stack").font(.system(size: 28)).foregroundColor(Color.white.opacity(0.08)))
+                Text(formatDuration(reel.duration))
+                    .font(.system(size: 10, design: .monospaced)).foregroundColor(.white)
+                    .padding(.horizontal, 6).padding(.vertical, 3)
+                    .background(Color.black.opacity(0.6)).cornerRadius(4)
+                    .padding(6)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(reel.title).font(.system(size: 12, weight: .semibold)).foregroundColor(.white).lineLimit(1)
+                Text("\(reel.paths.count) reel\(reel.paths.count == 1 ? "" : "s") · \(reel.format)")
+                    .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.4))
+            }
+            .padding(.horizontal, 8).padding(.top, 6).padding(.bottom, 8)
+        }
+        .background(Color(red: 0.11, green: 0.12, blue: 0.17))
+        .cornerRadius(10)
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white.opacity(0.07), lineWidth: 1))
+    }
+
+    func formatDuration(_ s: Double) -> String {
+        let t = Int(s); return String(format: "%d:%02d", t / 60, t % 60)
     }
 }
 
