@@ -25,7 +25,7 @@ actor LLMClipService {
             switch self {
             case .anthropic: return "claude-haiku-4-5"
             case .openai:    return "gpt-4o-mini"
-            case .google:    return "gemini-2.0-flash"
+            case .google:    return "gemini-1.5-flash"
             }
         }
 
@@ -209,9 +209,10 @@ Respond with ONLY valid JSON — no markdown fences, no explanation:
 
     private func callGoogle(prompt: String, apiKey: String) async throws -> String {
         let body: [String: Any] = [
-            "contents": [["parts": [["text": prompt]]]]
+            "contents": [["parts": [["text": prompt]]]],
+            "generationConfig": ["temperature": 0.2, "maxOutputTokens": 2048]
         ]
-        let urlStr = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=\(apiKey)"
+        let urlStr = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=\(apiKey)"
         var req = URLRequest(url: URL(string: urlStr)!)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -219,12 +220,26 @@ Respond with ONLY valid JSON — no markdown fences, no explanation:
         req.timeoutInterval = 120
         let (data, resp) = try await URLSession.shared.data(for: req)
         try checkHTTP(resp, data: data)
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let candidates = json["candidates"] as? [[String: Any]],
-              let content = candidates.first?["content"] as? [String: Any],
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw llmError("Gemini returned non-JSON response")
+        }
+        // Surface prompt-block reason clearly
+        if let blocked = (json["promptFeedback"] as? [String: Any])?["blockReason"] as? String {
+            throw llmError("Gemini blocked the request: \(blocked). Try a different topic or disable AI mode.")
+        }
+        guard let candidates = json["candidates"] as? [[String: Any]],
+              let first = candidates.first else {
+            let raw = String(data: data, encoding: .utf8) ?? ""
+            throw llmError("Gemini returned no candidates.\n\(raw.prefix(200))")
+        }
+        // Surface finish reason when content is missing
+        if let finishReason = first["finishReason"] as? String, finishReason != "STOP" {
+            throw llmError("Gemini stopped early (\(finishReason)). Try shortening the video or disabling AI mode.")
+        }
+        guard let content = first["content"] as? [String: Any],
               let parts = content["parts"] as? [[String: Any]],
               let text = parts.first?["text"] as? String else {
-            throw llmError("Unexpected Gemini response")
+            throw llmError("Gemini response missing text content")
         }
         return text
     }

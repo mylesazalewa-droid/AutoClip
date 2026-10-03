@@ -27,7 +27,8 @@ class AppState: ObservableObject {
 
     func triggerImport() {
         let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.movie, .mpeg4Movie, .quickTimeMovie, .video]
+        panel.allowedContentTypes = [.audiovisualContent]
+        panel.allowsOtherFileTypes = true
         panel.allowsMultipleSelection = false
         panel.message = "Select a video to analyze"
         panel.prompt = "Import"

@@ -301,7 +301,8 @@ struct AutoReelsTab: View {
                         HStack(spacing: 12) {
                             Button(action: {
                                 let panel = NSOpenPanel()
-                                panel.allowedContentTypes = [.movie, .mpeg4Movie, .quickTimeMovie]
+                                panel.allowedContentTypes = [.audiovisualContent]
+                                panel.allowsOtherFileTypes = true
                                 panel.canChooseDirectories = false
                                 panel.begin { response in
                                     if response == .OK, let url = panel.url {
@@ -529,7 +530,8 @@ struct AutoReelsTab: View {
                                 Spacer()
                                 Button("Change") {
                                     let panel = NSOpenPanel()
-                                    panel.allowedContentTypes = [.movie, .mpeg4Movie, .quickTimeMovie]
+                                    panel.allowedContentTypes = [.audiovisualContent]
+                                    panel.allowsOtherFileTypes = true
                                     panel.canChooseDirectories = false
                                     panel.begin { response in
                                         if response == .OK, let u = panel.url { pickedVideoURL = u }
@@ -570,7 +572,8 @@ struct AutoReelsTab: View {
                             if inputMode == .file {
                                 Button(action: {
                                     let panel = NSOpenPanel()
-                                    panel.allowedContentTypes = [.movie, .mpeg4Movie, .quickTimeMovie]
+                                    panel.allowedContentTypes = [.audiovisualContent]
+                                    panel.allowsOtherFileTypes = true
                                     panel.canChooseDirectories = false
                                     panel.begin { response in
                                         if response == .OK, let url = panel.url { pickedVideoURL = url }
@@ -2222,7 +2225,8 @@ private extension AutoReelsTab {
 
     private func pickVideo() {
         let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.movie, .mpeg4Movie, .quickTimeMovie]
+        panel.allowedContentTypes = [.audiovisualContent]
+        panel.allowsOtherFileTypes = true
         panel.canChooseDirectories = false
         panel.begin { if $0 == .OK, let url = panel.url { pickedVideoURL = url } }
     }
