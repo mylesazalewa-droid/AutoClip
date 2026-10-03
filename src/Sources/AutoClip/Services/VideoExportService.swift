@@ -668,17 +668,20 @@ class VideoExportService {
         var usedDuration = hook.duration
         var usedIDs: Set<UUID> = [hookCandidate.id]
 
-        let autoCeiling = clips.count
+        // Quality floor: only add clips that score at least 50% of the hook's score.
+        // This stops the reel from padding with weak/unrelated moments just to hit the target.
+        // The reel will be shorter than requested if not enough quality clips exist — that's correct.
+        let qualityFloor = hookCandidate.score * 0.50
 
         var selected: [Clip] = []
         for clip in ordered {
             guard !usedIDs.contains(clip.id) else { continue }
+            guard clip.score >= qualityFloor else { continue }          // skip weak clips
             let trimmed = trimToWordBoundary(clip)
-            if usedDuration + trimmed.duration > targetDuration * 1.15 { continue }
+            if usedDuration + trimmed.duration > targetDuration * 1.15 { continue }  // don't exceed target
             selected.append(trimmed)
             usedDuration += trimmed.duration
             usedIDs.insert(clip.id)
-            if usedIDs.count >= autoCeiling { break }
         }
 
         let chronological = selected.sorted { $0.startTime < $1.startTime }
