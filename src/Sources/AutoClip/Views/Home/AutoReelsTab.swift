@@ -1601,13 +1601,15 @@ private extension AutoReelsTab {
                 // overall export never crashes just because one API call timed out.
                 let baseVariation = await MainActor.run { store.rerollVariation }
                 var reelGroups: [[Clip]] = []
-                var usedStartTimes = Set<Double>()   // track clips used in previous reels
+                var usedStartTimes = Set<Double>()
                 for i in 0..<autoReels {
                     await upd(0.40 + Double(i) / Double(autoReels) * 0.10,
                               "Selecting clips for reel \(i + 1) of \(autoReels)…")
-                    // Exclude segments already used in a previous reel (wrap around only if pool is empty)
+                    // Prefer segments not already used; fall back to full pool when exhausted
                     let freshSegments = segments.filter { !usedStartTimes.contains($0.startTime) }
                     let pool = freshSegments.isEmpty ? segments : freshSegments
+                    // Each reel index = distinct variation so local selection shuffles within score tiers
+                    let localVariation = baseVariation + i + 1
                     var reelClips: [Clip]
                     if useAI && !apiKey.isEmpty {
                         do {
@@ -1616,12 +1618,13 @@ private extension AutoReelsTab {
                                 targetDuration: targetDur, topic: topic.isEmpty ? nil : topic,
                                 numberOfReels: 1, variation: baseVariation + i)
                         } catch {
-                            // API failed for this reel — fall back to local scoring on fresh pool
-                            let (hook, rest) = svc.selectHookAndClips(from: pool, targetDuration: targetDur)
+                            let (hook, rest) = svc.selectHookAndClips(from: pool, targetDuration: targetDur,
+                                                                       variation: localVariation)
                             reelClips = hook.map { [$0] + rest } ?? rest
                         }
                     } else {
-                        let (hook, rest) = svc.selectHookAndClips(from: pool, targetDuration: targetDur)
+                        let (hook, rest) = svc.selectHookAndClips(from: pool, targetDuration: targetDur,
+                                                                   variation: localVariation)
                         reelClips = hook.map { [$0] + rest } ?? rest
                     }
                     if let smode = storylineMode { reelClips = smode.order(reelClips) }
@@ -1629,7 +1632,6 @@ private extension AutoReelsTab {
                         reelGroups.append(reelClips)
                         reelClips.forEach { usedStartTimes.insert($0.startTime) }
                     }
-                    // Brief pause between API calls to avoid rate-limit errors on free-tier providers
                     if i < autoReels - 1 {
                         try? await Task.sleep(nanoseconds: 1_000_000_000)
                     }

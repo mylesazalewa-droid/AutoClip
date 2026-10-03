@@ -4,6 +4,16 @@ import AppKit
 import Vision
 import SwiftUI
 
+// Deterministic RNG for reproducible per-reel variation shuffles
+private struct SeededRNG: RandomNumberGenerator {
+    private var state: UInt64
+    init(seed: UInt64) { state = seed &+ 6364136223846793005 }
+    mutating func next() -> UInt64 {
+        state = state &* 6364136223846793005 &+ 1442695040888963407
+        return state
+    }
+}
+
 class VideoExportService {
     static let shared = VideoExportService()
     private init() {}
@@ -617,11 +627,33 @@ class VideoExportService {
     func selectHookAndClips(
         from clips: [Clip],
         targetDuration: Double,
-        hookMaxDuration: Double = 20
+        hookMaxDuration: Double = 20,
+        variation: Int = 0
     ) -> (hook: Clip?, rest: [Clip]) {
         guard !clips.isEmpty else { return (nil, []) }
 
-        let byScore = clips.sorted { $0.score > $1.score }
+        // For variation > 0, shuffle clips within score tiers so each reel picks different moments.
+        // Clips within 15 points of each other are considered equally strong and get shuffled.
+        var rng = SeededRNG(seed: UInt64(variation))
+        let tierSize: Double = 15.0
+        let byScore: [Clip]
+        if variation > 0 {
+            let maxScore = clips.map { $0.score }.max() ?? 100
+            var tiers: [[Clip]] = []
+            var tier: [Clip] = []
+            var tierCeiling = maxScore
+            for clip in clips.sorted(by: { $0.score > $1.score }) {
+                if clip.score < tierCeiling - tierSize {
+                    if !tier.isEmpty { tiers.append(tier.shuffled(using: &rng)); tier = [] }
+                    tierCeiling = clip.score
+                }
+                tier.append(clip)
+            }
+            if !tier.isEmpty { tiers.append(tier.shuffled(using: &rng)) }
+            byScore = tiers.flatMap { $0 }
+        } else {
+            byScore = clips.sorted { $0.score > $1.score }
+        }
 
         // Best hook: highest score clip under hookMaxDuration; fall back to overall best
         let hookCandidate = byScore.first { $0.duration <= hookMaxDuration } ?? byScore.first!
@@ -629,7 +661,6 @@ class VideoExportService {
         var usedDuration = hook.duration
         var usedIDs: Set<UUID> = [hookCandidate.id]
 
-        // Auto-ceiling: allow up to all available clips (duration budget is the real limiter)
         let autoCeiling = clips.count
 
         var selected: [Clip] = []
@@ -647,8 +678,8 @@ class VideoExportService {
         return (hook, chronological)
     }
 
-    func selectTopClips(from clips: [Clip], targetDuration: Double) -> [Clip] {
-        let (hook, rest) = selectHookAndClips(from: clips, targetDuration: targetDuration)
+    func selectTopClips(from clips: [Clip], targetDuration: Double, variation: Int = 0) -> [Clip] {
+        let (hook, rest) = selectHookAndClips(from: clips, targetDuration: targetDuration, variation: variation)
         guard let hook else { return [] }
         return [hook] + rest
     }
