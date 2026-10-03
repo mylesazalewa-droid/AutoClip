@@ -1265,47 +1265,6 @@ private struct ReelCard: View {
             .padding(.horizontal, 12).padding(.vertical, 8)
             .background(Color(red: 0.13, green: 0.15, blue: 0.20))
 
-            if isMulti {
-                Divider().background(Color.white.opacity(0.07))
-                VStack(spacing: 0) {
-                    ForEach(Array(reel.paths.enumerated()), id: \.offset) { i, path in
-                        let url = URL(fileURLWithPath: path)
-                        let exists = FileManager.default.fileExists(atPath: path)
-                        let pts = i < reel.cutPointsPerReel.count ? reel.cutPointsPerReel[i] : reel.cutPoints
-                        Button(action: { if exists { onPlay(url, pts, reel.duration) } }) {
-                            HStack(spacing: 8) {
-                                Image(systemName: "film")
-                                    .font(.system(size: 10)).foregroundColor(gold.opacity(0.6))
-                                Text("Reel \(i + 1)")
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(exists ? .white : Color.white.opacity(0.3))
-                                Spacer()
-                                if !exists {
-                                    Text("missing").font(.system(size: 10)).foregroundColor(Color.white.opacity(0.3))
-                                }
-                                Button(action: { if exists { onFinder([url]) } }) {
-                                    Image(systemName: "folder")
-                                        .font(.system(size: 11))
-                                        .foregroundColor(Color.white.opacity(0.35))
-                                }
-                                .buttonStyle(.plain)
-                                Image(systemName: "play.circle.fill")
-                                    .font(.system(size: 18))
-                                    .foregroundColor(exists ? gold.opacity(0.8) : Color.white.opacity(0.2))
-                            }
-                            .padding(.horizontal, 12).padding(.vertical, 8)
-                            .background(Color(red: 0.11, green: 0.13, blue: 0.18))
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        if i < reel.paths.count - 1 {
-                            Divider().background(Color.white.opacity(0.05))
-                        }
-                    }
-                }
-                .background(Color(red: 0.11, green: 0.13, blue: 0.18))
-                .cornerRadius(8, corners: [.bottomLeft, .bottomRight])
-            }
         }
         .background(Color(red: 0.13, green: 0.15, blue: 0.20))
         .cornerRadius(8)
@@ -1350,6 +1309,9 @@ private struct ReelDetailSidebar: View {
     @State private var currentTime: Double = 0
     @State private var duration: Double = 1
     @State private var timeObserverToken: Any?
+    @State private var activeURL: URL? = nil
+    @State private var activeCutPoints: [Double] = []
+    @State private var showFullPreview = false
 
     private var primaryURL: URL { URL(fileURLWithPath: reel.path) }
     private var isMulti: Bool { reel.paths.count > 1 }
@@ -1359,46 +1321,77 @@ private struct ReelDetailSidebar: View {
         return String(format: "%d:%02d", i / 60, i % 60)
     }
 
+    private func loadPlayer(url: URL, cutPoints: [Double] = []) {
+        if let token = timeObserverToken { player?.removeTimeObserver(token); timeObserverToken = nil }
+        player?.pause()
+        let p = AVPlayer(url: url)
+        player = p; isPlaying = false; currentTime = 0; activeURL = url; activeCutPoints = cutPoints
+        NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime,
+            object: p.currentItem, queue: .main) { _ in
+            p.seek(to: .zero); isPlaying = false; currentTime = 0
+        }
+        let interval = CMTime(seconds: 0.1, preferredTimescale: 600)
+        timeObserverToken = p.addPeriodicTimeObserver(forInterval: interval, queue: .main) { t in
+            currentTime = CMTimeGetSeconds(t)
+            if let dur = p.currentItem?.duration, dur.isValid && !dur.isIndefinite {
+                duration = max(1, CMTimeGetSeconds(dur))
+            }
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
+            // Video preview — uses fit (not fill) so portrait video shows without cropping
             ZStack {
                 Color.black
                 if let player = player {
-                    VideoPlayerView(player: player, captionStyle: CaptionStyle.all[0],
-                                    currentWord: nil, showCaptionBg: false,
-                                    captionBgOpacity: 0, captionBgColor: .black)
+                    FitVideoPlayerView(player: player)
+                }
+                // Play/pause overlay
+                Color.clear.contentShape(Rectangle()).onTapGesture {
+                    guard let p = player else { return }
+                    if isPlaying { p.pause(); isPlaying = false }
+                    else { p.play(); isPlaying = true }
                 }
                 if !isPlaying {
                     Image(systemName: "play.circle.fill")
                         .font(.system(size: 40))
                         .foregroundColor(.white.opacity(0.85))
                         .shadow(color: .black.opacity(0.5), radius: 6)
+                        .allowsHitTesting(false)
                 }
-                Color.clear.contentShape(Rectangle()).onTapGesture {
-                    guard let p = player else { return }
-                    if isPlaying { p.pause(); isPlaying = false }
-                    else { p.play(); isPlaying = true }
+                // Full-screen preview button
+                VStack {
+                    HStack {
+                        Spacer()
+                        Button(action: { showFullPreview = true }) {
+                            Image(systemName: "arrow.up.left.and.arrow.down.right")
+                                .font(.system(size: 11))
+                                .foregroundColor(.white.opacity(0.7))
+                                .padding(6)
+                                .background(Color.black.opacity(0.5))
+                                .cornerRadius(6)
+                        }
+                        .buttonStyle(.plain)
+                        .padding(6)
+                    }
+                    Spacer()
                 }
             }
-            .frame(height: 200)
+            .frame(height: 220)
             .onAppear {
-                let p = AVPlayer(url: primaryURL)
-                player = p
-                NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime,
-                    object: p.currentItem, queue: .main) { _ in
-                    p.seek(to: .zero); isPlaying = false; currentTime = 0
-                }
-                let interval = CMTime(seconds: 0.1, preferredTimescale: 600)
-                timeObserverToken = p.addPeriodicTimeObserver(forInterval: interval, queue: .main) { t in
-                    currentTime = CMTimeGetSeconds(t)
-                    if let dur = p.currentItem?.duration, dur.isValid && !dur.isIndefinite {
-                        duration = max(1, CMTimeGetSeconds(dur))
-                    }
-                }
+                loadPlayer(url: primaryURL, cutPoints: reel.cutPoints)
             }
             .onDisappear {
                 if let token = timeObserverToken { player?.removeTimeObserver(token); timeObserverToken = nil }
                 player?.pause(); player = nil; isPlaying = false
+            }
+            .sheet(isPresented: $showFullPreview) {
+                ReelFullPreviewSheet(
+                    url: activeURL ?? primaryURL,
+                    cutPoints: activeCutPoints,
+                    gold: gold
+                )
             }
 
             // Scrubber + cut markers
@@ -1446,20 +1439,33 @@ private struct ReelDetailSidebar: View {
                         let url = URL(fileURLWithPath: path)
                         let exists = FileManager.default.fileExists(atPath: path)
                         let pts = i < reel.cutPointsPerReel.count ? reel.cutPointsPerReel[i] : reel.cutPoints
-                        HStack(spacing: 8) {
-                            Image(systemName: "film").font(.system(size: 10)).foregroundColor(gold.opacity(0.6))
-                            Text("Reel \(i + 1)")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(exists ? .white : Color.white.opacity(0.3))
-                            Spacer()
-                            Button(action: { if exists { onPlay(url, pts, reel.duration) } }) {
-                                Image(systemName: "play.circle.fill")
+                        let isActive = activeURL?.path == path
+                        Button(action: {
+                            if exists { loadPlayer(url: url, cutPoints: pts) }
+                        }) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "film")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(isActive ? gold : gold.opacity(0.4))
+                                Text("Reel \(i + 1)")
+                                    .font(.system(size: 12, weight: isActive ? .semibold : .medium))
+                                    .foregroundColor(exists ? (isActive ? gold : .white) : Color.white.opacity(0.3))
+                                Spacer()
+                                Button(action: { if exists { NSWorkspace.shared.activateFileViewerSelecting([url]) } }) {
+                                    Image(systemName: "folder")
+                                        .font(.system(size: 11))
+                                        .foregroundColor(Color.white.opacity(0.3))
+                                }
+                                .buttonStyle(.plain)
+                                Image(systemName: isActive && isPlaying ? "pause.circle.fill" : "play.circle.fill")
                                     .font(.system(size: 18))
                                     .foregroundColor(exists ? gold.opacity(0.8) : Color.white.opacity(0.2))
                             }
-                            .buttonStyle(.plain)
+                            .padding(.horizontal, 12).padding(.vertical, 7)
+                            .background(isActive ? gold.opacity(0.08) : Color.clear)
+                            .contentShape(Rectangle())
                         }
-                        .padding(.horizontal, 12).padding(.vertical, 7)
+                        .buttonStyle(.plain)
                         if i < reel.paths.count - 1 {
                             Divider().background(Color.white.opacity(0.06))
                         }
@@ -1549,6 +1555,173 @@ private struct ReelDetailSidebar: View {
         }
         .id(reel.id)
         .background(Color(red: 0.09, green: 0.10, blue: 0.14))
+    }
+}
+
+// MARK: - Fit video player (resizeAspect — shows full portrait video without cropping)
+
+private struct FitVideoPlayerView: NSViewRepresentable {
+    let player: AVPlayer
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        view.wantsLayer = true
+        let layer = AVPlayerLayer(player: player)
+        layer.videoGravity = .resizeAspect
+        layer.autoresizingMask = [.layerWidthSizable, .layerHeightSizable]
+        layer.frame = view.bounds
+        view.layer?.addSublayer(layer)
+        context.coordinator.layer = layer
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        context.coordinator.layer?.player = player
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    class Coordinator {
+        var layer: AVPlayerLayer?
+    }
+}
+
+// MARK: - Full-screen preview sheet
+
+private struct ReelFullPreviewSheet: View {
+    let url: URL
+    let cutPoints: [Double]
+    let gold: Color
+
+    @State private var player: AVPlayer?
+    @State private var isPlaying = false
+    @State private var currentTime: Double = 0
+    @State private var duration: Double = 1
+    @State private var timeObserverToken: Any?
+    @Environment(\.dismiss) private var dismiss
+
+    private func formatSecs(_ s: Double) -> String {
+        let i = Int(max(0, s)); return String(format: "%d:%02d", i / 60, i % 60)
+    }
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                // Header
+                HStack {
+                    Text(url.deletingPathExtension().lastPathComponent)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                    Spacer()
+                    Button(action: { dismiss() }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 20))
+                            .foregroundColor(Color.white.opacity(0.5))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 20).padding(.vertical, 14)
+
+                // Video — fit inside the window
+                FitVideoPlayerView(player: player ?? AVPlayer())
+                    .background(Color.black)
+                    .onTapGesture {
+                        guard let p = player else { return }
+                        if isPlaying { p.pause(); isPlaying = false }
+                        else { p.play(); isPlaying = true }
+                    }
+                    .overlay(
+                        Group {
+                            if !isPlaying {
+                                Image(systemName: "play.circle.fill")
+                                    .font(.system(size: 56))
+                                    .foregroundColor(.white.opacity(0.85))
+                                    .shadow(color: .black.opacity(0.5), radius: 8)
+                                    .allowsHitTesting(false)
+                            }
+                        }
+                    )
+
+                // Controls
+                VStack(spacing: 10) {
+                    // Scrubber with cut markers
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(Color.white.opacity(0.15)).frame(height: 4)
+                            let progress = duration > 0 ? min(1, currentTime / duration) : 0
+                            Capsule().fill(gold).frame(width: max(4, geo.size.width * progress), height: 4)
+                            ForEach(Array(cutPoints.enumerated()), id: \.offset) { _, frac in
+                                Rectangle().fill(Color.white).frame(width: 2, height: 14)
+                                    .offset(x: geo.size.width * frac - 1)
+                            }
+                            Circle().fill(Color.white).frame(width: 12, height: 12)
+                                .offset(x: max(0, min(geo.size.width - 12, geo.size.width * (duration > 0 ? min(1, currentTime / duration) : 0) - 6)))
+                        }
+                        .frame(height: 14)
+                        .contentShape(Rectangle())
+                        .gesture(DragGesture(minimumDistance: 0).onChanged { drag in
+                            let frac = max(0, min(1, drag.location.x / geo.size.width))
+                            player?.seek(to: CMTime(seconds: frac * duration, preferredTimescale: 600),
+                                         toleranceBefore: .zero, toleranceAfter: .zero)
+                            currentTime = frac * duration
+                        })
+                    }
+                    .frame(height: 14)
+
+                    HStack {
+                        Text(formatSecs(currentTime)).font(.system(size: 11, design: .monospaced)).foregroundColor(Color.white.opacity(0.5))
+                        Spacer()
+                        HStack(spacing: 20) {
+                            Button(action: { player?.seek(to: CMTime(seconds: max(0, currentTime - 5), preferredTimescale: 600)) }) {
+                                Image(systemName: "gobackward.5").font(.system(size: 18)).foregroundColor(.white.opacity(0.7))
+                            }.buttonStyle(.plain)
+                            Button(action: {
+                                guard let p = player else { return }
+                                if isPlaying { p.pause(); isPlaying = false } else { p.play(); isPlaying = true }
+                            }) {
+                                Image(systemName: isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                                    .font(.system(size: 36)).foregroundColor(gold)
+                            }.buttonStyle(.plain)
+                            Button(action: { player?.seek(to: CMTime(seconds: min(duration, currentTime + 5), preferredTimescale: 600)) }) {
+                                Image(systemName: "goforward.5").font(.system(size: 18)).foregroundColor(.white.opacity(0.7))
+                            }.buttonStyle(.plain)
+                        }
+                        Spacer()
+                        Text(formatSecs(duration)).font(.system(size: 11, design: .monospaced)).foregroundColor(Color.white.opacity(0.5))
+                    }
+                }
+                .padding(.horizontal, 24).padding(.vertical, 16)
+
+                if !cutPoints.isEmpty {
+                    Text("\(cutPoints.count) cut\(cutPoints.count == 1 ? "" : "s") — white marks on scrubber")
+                        .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.35))
+                        .padding(.bottom, 14)
+                }
+            }
+        }
+        .frame(minWidth: 480, minHeight: 600)
+        .preferredColorScheme(.dark)
+        .onAppear {
+            let p = AVPlayer(url: url)
+            player = p
+            NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime,
+                object: p.currentItem, queue: .main) { _ in p.seek(to: .zero); isPlaying = false; currentTime = 0 }
+            let interval = CMTime(seconds: 0.1, preferredTimescale: 600)
+            timeObserverToken = p.addPeriodicTimeObserver(forInterval: interval, queue: .main) { t in
+                currentTime = CMTimeGetSeconds(t)
+                if let dur = p.currentItem?.duration, dur.isValid && !dur.isIndefinite {
+                    duration = max(1, CMTimeGetSeconds(dur))
+                }
+            }
+            p.play(); isPlaying = true
+        }
+        .onDisappear {
+            if let token = timeObserverToken { player?.removeTimeObserver(token) }
+            player?.pause(); player = nil
+        }
     }
 }
 
