@@ -135,12 +135,11 @@ class AutoReelsStore: ObservableObject {
     static let shared = AutoReelsStore()
 
     @Published var reels: [AutoReelRecord] = []
-    @Published var activeJob: AutoReelJob?
+    @Published var activeJobs: [AutoReelJob] = []   // supports multiple concurrent jobs
     @Published var pendingReelName: String = ""
-    @Published var rerollVariation: Int = 0   // increments each Redo so AI picks different clips
+    @Published var rerollVariation: Int = 0
 
     private let key = "autoReelsHistory"
-    private var exportContinuation: CheckedContinuation<Bool, Never>?
 
     init() { load() }
 
@@ -149,52 +148,20 @@ class AutoReelsStore: ObservableObject {
         save()
     }
 
-    func updateJob(_ job: AutoReelJob) { activeJob = job }
-    func clearJob() { activeJob = nil }
-
-    func setPendingExport(clips: [Clip], jobID: UUID, jobTitle: String) async -> Bool {
-        // If this job is no longer active (user cancelled mid-pipeline), bail immediately
-        guard activeJob?.id == jobID else { return false }
-        pendingReelName = jobTitle
-        if var job = activeJob {
-            job.pendingClips = clips
-            job.statusMsg = "\(clips.count) clips selected — ready to export"
-            job.progress = 0.48
-            activeJob = job
-        }
-        return await withCheckedContinuation { cont in
-            exportContinuation = cont
+    func updateJob(_ job: AutoReelJob) {
+        if let idx = activeJobs.firstIndex(where: { $0.id == job.id }) {
+            activeJobs[idx] = job
+        } else {
+            activeJobs.append(job)
         }
     }
 
-    func confirmExport() {
-        exportContinuation?.resume(returning: true)
-        exportContinuation = nil
+    func clearJob(id: UUID) {
+        activeJobs.removeAll { $0.id == id }
     }
 
-    func cancelExport() {
-        rerollVariation += 1            // next AI call will get a variation hint
-        exportContinuation?.resume(returning: false)
-        exportContinuation = nil
-        activeJob = nil
-    }
-
-    func removePendingClip(at index: Int) {
-        guard var job = activeJob, var clips = job.pendingClips,
-              clips.indices.contains(index) else { return }
-        clips.remove(at: index)
-        job.pendingClips = clips
-        job.statusMsg = "\(clips.count) clips selected — ready to export"
-        activeJob = job
-    }
-
-    func movePendingClip(from: Int, to: Int) {
-        guard var job = activeJob, var clips = job.pendingClips,
-              clips.indices.contains(from), clips.indices.contains(to) else { return }
-        let clip = clips.remove(at: from)
-        clips.insert(clip, at: to)
-        job.pendingClips = clips
-        activeJob = job
+    func clearAllFinished() {
+        activeJobs.removeAll { $0.isFinished }
     }
 
     func remove(id: UUID) {
@@ -802,7 +769,7 @@ struct AutoReelsTab: View {
                     .background(gold).cornerRadius(10)
                 }
                 .buttonStyle(.plain)
-                .disabled(store.activeJob != nil)
+                .disabled(false)
             }
         }
     }
@@ -821,12 +788,17 @@ struct AutoReelsTab: View {
 
     var historyPanel: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if let job = store.activeJob {
-                activeJobCard(job)
+            // Active job queue — stacked cards, one per running/finished job
+            if !store.activeJobs.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(store.activeJobs) { job in
+                        activeJobCard(job)
+                    }
+                }
                 Divider().background(Color.white.opacity(0.08))
             }
 
-            if store.reels.isEmpty && store.activeJob == nil {
+            if store.reels.isEmpty && store.activeJobs.isEmpty {
                 emptyPanel
             } else if !store.reels.isEmpty {
                 HStack {
@@ -872,7 +844,7 @@ struct AutoReelsTab: View {
                 }
                 Spacer()
                 if job.isFinished {
-                    Button(action: { store.clearJob() }) {
+                    Button(action: { store.clearJob(id: job.id) }) {
                         Image(systemName: "xmark").font(.system(size: 10))
                             .foregroundColor(Color.white.opacity(0.4))
                     }
@@ -1516,8 +1488,6 @@ private extension AutoReelsTab {
 
         func upd(_ progress: Double, _ msg: String, finished: Bool = false, error: String? = nil, out: URL? = nil) async {
             await MainActor.run {
-                // Don't overwrite a newer pipeline's job — prevents stale updates from cancelled runs
-                guard store.activeJob == nil || store.activeJob?.id == jobID else { return }
                 store.updateJob(AutoReelJob(id: jobID, title: title, progress: progress,
                                            statusMsg: msg, isFinished: finished, error: error, outputURL: out))
             }
@@ -1574,13 +1544,7 @@ private extension AutoReelsTab {
             } ?? ""
             let finalReelTitle = hookPreview.count > 4 ? hookPreview : title
 
-            // Update job status and proceed directly to export (no approval step)
-            await MainActor.run {
-                if var job = store.activeJob, job.id == jobID {
-                    job.statusMsg = "Preparing export…"
-                    store.activeJob = job
-                }
-            }
+            await upd(0.49, "Preparing export…")
 
             let desktop = outputDir
 
