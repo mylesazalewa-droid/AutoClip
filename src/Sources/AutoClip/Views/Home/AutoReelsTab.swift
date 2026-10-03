@@ -204,6 +204,7 @@ struct AutoReelsTab: View {
     @State private var previewTimeObserver: Any?
     @State private var isScrubbing = false
     @State private var previewCutPoints: [Double] = []
+    @State private var selectedReel: AutoReelRecord?
 
     // Settings — @AppStorage so they survive tab switches and relaunches
     @AppStorage("ar_format")      private var formatRaw: String = VideoExportService.ExportFormat.vertical9x16.rawValue
@@ -559,7 +560,7 @@ struct AutoReelsTab: View {
 
             // Auto reel count info — shown when multiple reels selected
             if exportMode == .multipleReels {
-                Label("Reel count is calculated automatically from your video length.", systemImage: "info.circle")
+                Label("Reel count is calculated automatically. Longer videos produce more reels (up to 10).", systemImage: "info.circle")
                     .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.35))
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -777,51 +778,61 @@ struct AutoReelsTab: View {
     // MARK: - Right panel
 
     var rightPanel: some View {
-        ZStack {
-            if let url = previewURL, showingPreviewFor != nil {
-                previewPanel(url: url)
-            } else {
-                historyPanel
-            }
-        }
+        historyPanel
     }
 
     var historyPanel: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Active job queue — stacked cards, one per running/finished job
-            if !store.activeJobs.isEmpty {
-                VStack(spacing: 0) {
-                    ForEach(store.activeJobs) { job in
-                        activeJobCard(job)
+        HStack(spacing: 0) {
+            // ── Left: job cards + reel grid ──────────────────────────────────
+            VStack(alignment: .leading, spacing: 0) {
+                // Active job queue — stacked cards, one per running/finished job
+                if !store.activeJobs.isEmpty {
+                    VStack(spacing: 0) {
+                        ForEach(store.activeJobs) { job in
+                            activeJobCard(job)
+                        }
+                    }
+                    Divider().background(Color.white.opacity(0.08))
+                }
+
+                if store.reels.isEmpty && store.activeJobs.isEmpty {
+                    emptyPanel
+                } else if !store.reels.isEmpty {
+                    HStack {
+                        Text("My Reels")
+                            .font(.system(size: 15, weight: .semibold)).foregroundColor(.white)
+                        Text("(\(store.reels.count))")
+                            .font(.system(size: 15)).foregroundColor(Color.white.opacity(0.4))
+                        Spacer()
+                    }
+                    .padding(.horizontal, 20).padding(.top, 16).padding(.bottom, 4)
+
+                    ScrollView {
+                        LazyVGrid(
+                            columns: [GridItem(.adaptive(minimum: 220, maximum: 320), spacing: 12)],
+                            spacing: 12
+                        ) {
+                            ForEach(store.reels) { reel in reelCard(reel) }
+                        }
+                        .padding(.horizontal, 20).padding(.bottom, 30)
                     }
                 }
-                Divider().background(Color.white.opacity(0.08))
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
-            if store.reels.isEmpty && store.activeJobs.isEmpty {
-                emptyPanel
-            } else if !store.reels.isEmpty {
-                HStack {
-                    Text("My Reels")
-                        .font(.system(size: 15, weight: .semibold)).foregroundColor(.white)
-                    Text("(\(store.reels.count))")
-                        .font(.system(size: 15)).foregroundColor(Color.white.opacity(0.4))
-                    Spacer()
-                }
-                .padding(.horizontal, 20).padding(.top, 16).padding(.bottom, 4)
-
-                ScrollView {
-                    LazyVGrid(
-                        columns: [GridItem(.adaptive(minimum: 220, maximum: 320), spacing: 12)],
-                        spacing: 12
-                    ) {
-                        ForEach(store.reels) { reel in reelCard(reel) }
-                    }
-                    .padding(.horizontal, 20).padding(.bottom, 30)
-                }
+            // ── Right: detail sidebar ─────────────────────────────────────────
+            if let reel = selectedReel {
+                Divider().background(Color.white.opacity(0.08))
+                ReelDetailSidebar(
+                    reel: reel,
+                    gold: gold,
+                    onPlay: { url, pts, dur in showPreview(url: url, id: reel.id, cutPoints: pts, reelDuration: dur) },
+                    onFinder: { urls in NSWorkspace.shared.activateFileViewerSelecting(urls) },
+                    onDelete: { store.remove(id: reel.id); selectedReel = nil }
+                )
+                .frame(width: 300)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     func activeJobCard(_ job: AutoReelJob) -> some View {
@@ -939,9 +950,11 @@ struct AutoReelsTab: View {
 
     func reelCard(_ reel: AutoReelRecord) -> some View {
         ReelCard(reel: reel, gold: gold,
+                 isSelected: selectedReel?.id == reel.id,
+                 onSelect: { selectedReel = reel },
                  onPlay: { url, pts, dur in showPreview(url: url, id: reel.id, cutPoints: pts, reelDuration: dur) },
                  onFinder: { urls in NSWorkspace.shared.activateFileViewerSelecting(urls) },
-                 onDelete: { store.remove(id: reel.id) })
+                 onDelete: { store.remove(id: reel.id); if selectedReel?.id == reel.id { selectedReel = nil } })
     }
 
     var emptyPanel: some View {
@@ -960,24 +973,78 @@ struct AutoReelsTab: View {
 private struct ReelCard: View {
     let reel: AutoReelRecord
     let gold: Color
-    let onPlay: (URL, [Double], Double) -> Void
-    let onFinder: ([URL]) -> Void
-    let onDelete: () -> Void
+    let isSelected: Bool
+    var onSelect: () -> Void
+    var onPlay: (URL, [Double], Double) -> Void
+    var onFinder: ([URL]) -> Void
+    var onDelete: () -> Void
 
     @State private var isHovered = false
 
     private var isMulti: Bool { reel.paths.count > 1 }
     private var primaryURL: URL { URL(fileURLWithPath: reel.path) }
 
+    /// Stable waveform bar heights seeded by reel.id
+    private var waveformBars: [CGFloat] {
+        var seed = reel.id.hashValue
+        return (0..<24).map { _ in
+            seed = seed &* 1664525 &+ 1013904223
+            let h = CGFloat((seed >> 16) & 0xFF) / 255.0
+            return 0.15 + h * 0.85
+        }
+    }
+
+    /// First 6 words of the title
+    private var captionSnippet: String {
+        let words = reel.title.split(separator: " ").prefix(6)
+        return words.joined(separator: " ")
+    }
+
+    /// Duration-based score badge (0–100)
+    private var scoreBadge: Int {
+        // Simple heuristic: normalise duration in range 30–180s → 60–95
+        let clamped = min(max(reel.duration, 30), 180)
+        return Int(60 + (clamped - 30) / 150 * 35)
+    }
+
+    private func shortDate(_ ts: Double) -> String {
+        let df = DateFormatter()
+        df.dateStyle = .short; df.timeStyle = .none
+        return df.string(from: Date(timeIntervalSince1970: ts))
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // ── Thumbnail ────────────────────────────────────────────────────
             ZStack(alignment: .bottomLeading) {
                 ReelThumbnailView(path: reel.path)
-                    .frame(height: 160)
+                    .frame(height: 200)
                     .clipped()
 
-                // Multi-reel badge
+                // Top bar: date (left) + duration badge (right)
+                VStack {
+                    HStack {
+                        Text(shortDate(reel.dateCreated))
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 5).padding(.vertical, 2)
+                            .background(Color.black.opacity(0.55))
+                            .cornerRadius(4)
+                        Spacer()
+                        HStack(spacing: 4) {
+                            Circle().fill(Color(red: 1, green: 0.3, blue: 0.3)).frame(width: 5, height: 5)
+                            Text(formatReelDur(reel.duration))
+                                .font(.system(size: 9, weight: .medium)).foregroundColor(.white)
+                        }
+                        .padding(.horizontal, 5).padding(.vertical, 2)
+                        .background(Color.black.opacity(0.55))
+                        .cornerRadius(4)
+                    }
+                    .padding(6)
+                    Spacer()
+                }
+
+                // Multi-reel badge (bottom-left)
                 if isMulti {
                     Text("\(reel.paths.count) Reels")
                         .font(.system(size: 10, weight: .semibold))
@@ -988,10 +1055,31 @@ private struct ReelCard: View {
                         .padding(8)
                 }
 
+                // Caption overlay on thumbnail (bottom)
+                VStack {
+                    Spacer()
+                    HStack {
+                        Text(captionSnippet)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                            .shadow(color: .black.opacity(0.8), radius: 2, x: 0, y: 1)
+                        Spacer()
+                        // Score badge
+                        ZStack {
+                            Circle().fill(gold).frame(width: 26, height: 26)
+                            Text("\(scoreBadge)")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundColor(.black)
+                        }
+                    }
+                    .padding(.horizontal, 8).padding(.bottom, 6)
+                }
+
                 // Hover action overlay
                 if isHovered {
                     ZStack {
-                        Color.black.opacity(0.5)
+                        Color.black.opacity(0.45)
                         HStack(spacing: 10) {
                             Button(action: {
                                 let pts = reel.cutPointsPerReel.first ?? reel.cutPoints
@@ -1037,13 +1125,26 @@ private struct ReelCard: View {
                     }
                 }
             }
-            .frame(height: 160)
+            .frame(height: 200)
             .cornerRadius(8, corners: [.topLeft, .topRight])
+            .onTapGesture { onSelect() }
+
+            // ── Waveform ──────────────────────────────────────────────────────
+            HStack(alignment: .bottom, spacing: 2) {
+                ForEach(Array(waveformBars.enumerated()), id: \.offset) { _, h in
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(gold.opacity(0.5))
+                        .frame(width: 3, height: max(3, 18 * h))
+                }
+            }
+            .frame(height: 20)
+            .padding(.horizontal, 12).padding(.top, 8)
+            .background(Color(red: 0.13, green: 0.15, blue: 0.20))
 
             // ── Info ─────────────────────────────────────────────────────────
             VStack(alignment: .leading, spacing: 4) {
                 Text(reel.title)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.white)
                     .lineLimit(2)
 
@@ -1067,7 +1168,7 @@ private struct ReelCard: View {
                         .foregroundColor(Color.white.opacity(0.35))
                 }
             }
-            .padding(.horizontal, 12).padding(.vertical, 10)
+            .padding(.horizontal, 12).padding(.vertical, 8)
             .background(Color(red: 0.13, green: 0.15, blue: 0.20))
 
             // ── Per-reel rows for multi-reel packs ──────────────────────────
@@ -1117,9 +1218,11 @@ private struct ReelCard: View {
         .cornerRadius(8)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(isHovered ? gold.opacity(0.4) : Color.white.opacity(0.06), lineWidth: 1)
+                .stroke(isSelected ? gold : (isHovered ? gold.opacity(0.4) : Color.white.opacity(0.06)),
+                        lineWidth: isSelected ? 1.5 : 1)
         )
         .onHover { isHovered = $0 }
+        .onTapGesture { onSelect() }
     }
 
     private func formatReelDur(_ s: Double) -> String {
@@ -1131,6 +1234,165 @@ private struct ReelCard: View {
         let d = Date(timeIntervalSince1970: ts)
         let df = RelativeDateTimeFormatter(); df.unitsStyle = .short
         return df.localizedString(for: d, relativeTo: Date())
+    }
+}
+
+// MARK: - Reel detail sidebar
+
+private enum ReelDetailTab: String, CaseIterable {
+    case actions    = "Actions"
+    case transcript = "Transcript"
+}
+
+private struct ReelDetailSidebar: View {
+    let reel: AutoReelRecord
+    let gold: Color
+    var onPlay: (URL, [Double], Double) -> Void
+    var onFinder: ([URL]) -> Void
+    var onDelete: () -> Void
+
+    @State private var selectedTab: ReelDetailTab = .actions
+    @State private var player: AVPlayer?
+    @State private var isPlaying = false
+
+    private var primaryURL: URL { URL(fileURLWithPath: reel.path) }
+    private var isMulti: Bool { reel.paths.count > 1 }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // ── Video preview ─────────────────────────────────────────────────
+            ZStack {
+                Color.black
+                if let player = player {
+                    VideoPlayerView(player: player, captionStyle: CaptionStyle.all[0],
+                                    currentWord: nil, showCaptionBg: false,
+                                    captionBgOpacity: 0, captionBgColor: .black)
+                }
+                if !isPlaying {
+                    Image(systemName: "play.circle.fill")
+                        .font(.system(size: 40))
+                        .foregroundColor(.white.opacity(0.85))
+                        .shadow(color: .black.opacity(0.5), radius: 6)
+                }
+                Color.clear.contentShape(Rectangle()).onTapGesture {
+                    guard let p = player else { return }
+                    if isPlaying { p.pause(); isPlaying = false }
+                    else { p.play(); isPlaying = true }
+                }
+            }
+            .frame(height: 200)
+            .onAppear {
+                let p = AVPlayer(url: primaryURL)
+                player = p
+                NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime,
+                    object: p.currentItem, queue: .main) { _ in
+                    p.seek(to: .zero); isPlaying = false
+                }
+            }
+            .onDisappear { player?.pause(); player = nil }
+
+            Divider().background(Color.white.opacity(0.08))
+
+            // ── Reel list (multi-reel packs) ──────────────────────────────────
+            if isMulti {
+                VStack(spacing: 0) {
+                    ForEach(Array(reel.paths.enumerated()), id: \.offset) { i, path in
+                        let url = URL(fileURLWithPath: path)
+                        let exists = FileManager.default.fileExists(atPath: path)
+                        let pts = i < reel.cutPointsPerReel.count ? reel.cutPointsPerReel[i] : reel.cutPoints
+                        HStack(spacing: 8) {
+                            Image(systemName: "film").font(.system(size: 10)).foregroundColor(gold.opacity(0.6))
+                            Text("Reel \(i + 1)")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(exists ? .white : Color.white.opacity(0.3))
+                            Spacer()
+                            Button(action: { if exists { onPlay(url, pts, reel.duration) } }) {
+                                Image(systemName: "play.circle.fill")
+                                    .font(.system(size: 18))
+                                    .foregroundColor(exists ? gold.opacity(0.8) : Color.white.opacity(0.2))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.horizontal, 12).padding(.vertical, 7)
+                        if i < reel.paths.count - 1 {
+                            Divider().background(Color.white.opacity(0.06))
+                        }
+                    }
+                }
+                .background(Color.white.opacity(0.04))
+                Divider().background(Color.white.opacity(0.08))
+            }
+
+            // ── Tab bar ───────────────────────────────────────────────────────
+            HStack(spacing: 0) {
+                ForEach(ReelDetailTab.allCases, id: \.self) { tab in
+                    Button(action: { selectedTab = tab }) {
+                        Text(tab.rawValue)
+                            .font(.system(size: 12, weight: selectedTab == tab ? .semibold : .regular))
+                            .foregroundColor(selectedTab == tab ? gold : Color.white.opacity(0.5))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 9)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .background(Color.white.opacity(0.05))
+            Divider().background(Color.white.opacity(0.08))
+
+            // ── Tab content ───────────────────────────────────────────────────
+            ScrollView {
+                if selectedTab == .actions {
+                    VStack(spacing: 10) {
+                        Button(action: {
+                            let urls = reel.paths.map { URL(fileURLWithPath: $0) }
+                                .filter { FileManager.default.fileExists(atPath: $0.path) }
+                            onFinder(urls.isEmpty ? [primaryURL] : urls)
+                        }) {
+                            Label("Export / Show in Finder", systemImage: "square.and.arrow.up")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(.black)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 9)
+                                .background(gold)
+                                .cornerRadius(8)
+                        }
+                        .buttonStyle(.plain)
+
+                        Button(action: {
+                            NSWorkspace.shared.activateFileViewerSelecting([primaryURL])
+                        }) {
+                            Label("Show in Finder", systemImage: "folder")
+                                .font(.system(size: 12))
+                                .foregroundColor(Color.white.opacity(0.7))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                                .background(Color.white.opacity(0.08))
+                                .cornerRadius(8)
+                        }
+                        .buttonStyle(.plain)
+
+                        Button(action: { onDelete() }) {
+                            Text("Delete Reel")
+                                .font(.system(size: 12))
+                                .foregroundColor(Color(red: 1, green: 0.38, blue: 0.38))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                                .background(Color.white.opacity(0.04))
+                                .cornerRadius(8)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(14)
+                } else {
+                    Text(reel.title)
+                        .font(.system(size: 12))
+                        .foregroundColor(Color.white.opacity(0.75))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(14)
+                }
+            }
+        }
+        .background(Color(red: 0.09, green: 0.10, blue: 0.14))
     }
 }
 
@@ -1535,7 +1797,7 @@ private extension AutoReelsTab {
             // Each reel targets targetDur seconds; cap at 10 and require at least 2.
             let totalSpeechDur = words.last.map { $0.endTime } ?? 0
             let autoReels = exportMode == .multipleReels
-                ? max(2, min(10, Int(totalSpeechDur / max(30, targetDur))))
+                ? max(2, min(10, Int((totalSpeechDur / max(15.0, targetDur * 0.8)).rounded())))
                 : 1
 
             // Derive reel title from the first segment's opening words

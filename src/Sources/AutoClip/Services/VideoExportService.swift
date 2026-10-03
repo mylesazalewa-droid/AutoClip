@@ -622,14 +622,14 @@ class VideoExportService {
     }
 
     /// Returns (hook, chronologicalRest) where hook is the best opening moment.
-    /// Hook = highest score clip that is ≤ hookMaxDuration seconds.
+    /// Hook = highest score clip that is ≤ min(targetDuration*0.45, 45) seconds.
     /// Rest = best-scoring clips that fit within targetDuration — count is auto-determined.
     func selectHookAndClips(
         from clips: [Clip],
         targetDuration: Double,
-        hookMaxDuration: Double = 20,
         variation: Int = 0
     ) -> (hook: Clip?, rest: [Clip]) {
+        let hookMaxDuration = min(targetDuration * 0.45, 45.0)
         guard !clips.isEmpty else { return (nil, []) }
 
         // For variation > 0, shuffle clips within score tiers so each reel picks different moments.
@@ -667,7 +667,7 @@ class VideoExportService {
         for clip in byScore {
             guard !usedIDs.contains(clip.id) else { continue }
             let trimmed = trimToWordBoundary(clip)
-            if usedDuration + trimmed.duration > targetDuration { continue }
+            if usedDuration + trimmed.duration > targetDuration * 1.15 { continue }
             selected.append(trimmed)
             usedDuration += trimmed.duration
             usedIDs.insert(clip.id)
