@@ -627,7 +627,8 @@ class VideoExportService {
     func selectHookAndClips(
         from clips: [Clip],
         targetDuration: Double,
-        variation: Int = 0
+        variation: Int = 0,
+        previouslyUsedIDs: Set<UUID> = []
     ) -> (hook: Clip?, rest: [Clip]) {
         let hookMaxDuration = min(targetDuration * 0.45, 45.0)
         guard !clips.isEmpty else { return (nil, []) }
@@ -655,8 +656,14 @@ class VideoExportService {
             byScore = clips.sorted { $0.score > $1.score }
         }
 
-        // Best hook: highest score clip under hookMaxDuration; fall back to overall best
-        let hookCandidate = byScore.first { $0.duration <= hookMaxDuration } ?? byScore.first!
+        // Partition: fresh clips first (not used in any prior reel), then reused ones as fallback.
+        // This ensures reel N picks different moments from reel N-1 without sacrificing quality.
+        let fresh = byScore.filter { !previouslyUsedIDs.contains($0.id) }
+        let fallback = byScore.filter { previouslyUsedIDs.contains($0.id) }
+        let ordered = fresh + fallback
+
+        // Best hook: prefer fresh, highest score clip under hookMaxDuration; fall back to overall best
+        let hookCandidate = ordered.first { $0.duration <= hookMaxDuration } ?? ordered.first!
         let hook = trimToWordBoundary(hookCandidate)
         var usedDuration = hook.duration
         var usedIDs: Set<UUID> = [hookCandidate.id]
@@ -664,7 +671,7 @@ class VideoExportService {
         let autoCeiling = clips.count
 
         var selected: [Clip] = []
-        for clip in byScore {
+        for clip in ordered {
             guard !usedIDs.contains(clip.id) else { continue }
             let trimmed = trimToWordBoundary(clip)
             if usedDuration + trimmed.duration > targetDuration * 1.15 { continue }

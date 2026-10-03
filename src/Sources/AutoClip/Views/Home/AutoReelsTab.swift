@@ -2141,6 +2141,7 @@ private extension AutoReelsTab {
             // Always create multiple reels — count is user-specified or auto from video length
             let baseVariation = await MainActor.run { store.rerollVariation }
             var reelGroups: [[Clip]] = []
+            var usedClipIDs: Set<UUID> = []
             for i in 0..<autoReels {
                 await upd(0.40 + Double(i) / Double(autoReels) * 0.10,
                           "Selecting clips for reel \(i + 1) of \(autoReels)…")
@@ -2154,16 +2155,21 @@ private extension AutoReelsTab {
                             numberOfReels: 1, variation: baseVariation + i)
                     } catch {
                         let (hook, rest) = svc.selectHookAndClips(from: segments, targetDuration: targetDur,
-                                                                   variation: localVariation)
+                                                                   variation: localVariation,
+                                                                   previouslyUsedIDs: usedClipIDs)
                         reelClips = hook.map { [$0] + rest } ?? rest
                     }
                 } else {
                     let (hook, rest) = svc.selectHookAndClips(from: segments, targetDuration: targetDur,
-                                                               variation: localVariation)
+                                                               variation: localVariation,
+                                                               previouslyUsedIDs: usedClipIDs)
                     reelClips = hook.map { [$0] + rest } ?? rest
                 }
                 if let smode = storylineMode { reelClips = smode.order(reelClips) }
-                if !reelClips.isEmpty { reelGroups.append(reelClips) }
+                if !reelClips.isEmpty {
+                    reelGroups.append(reelClips)
+                    usedClipIDs.formUnion(reelClips.map { $0.id })
+                }
             }
             guard !reelGroups.isEmpty else {
                 throw NSError(domain: "AutoClip", code: 4, userInfo: [NSLocalizedDescriptionKey: "No clips could be selected."])
