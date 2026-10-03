@@ -473,24 +473,15 @@ struct AutoReelsTab: View {
                             Divider().background(Color.white.opacity(0.06)).padding(.top, 8)
                         }
 
-                        // Active job queue
-                        if !store.activeJobs.isEmpty {
-                            VStack(spacing: 0) {
-                                ForEach(store.activeJobs) { job in activeJobCard(job) }
-                            }
-                            Divider().background(Color.white.opacity(0.06))
+                        // Active jobs + finished reels in a single unified grid
+                        LazyVGrid(
+                            columns: [GridItem(.adaptive(minimum: 220, maximum: 320), spacing: 12)],
+                            spacing: 12
+                        ) {
+                            ForEach(store.activeJobs) { job in activeJobCard(job) }
+                            ForEach(store.reels) { reel in reelCard(reel) }
                         }
-
-                        // Reel grid
-                        if !store.reels.isEmpty {
-                            LazyVGrid(
-                                columns: [GridItem(.adaptive(minimum: 220, maximum: 320), spacing: 12)],
-                                spacing: 12
-                            ) {
-                                ForEach(store.reels) { reel in reelCard(reel) }
-                            }
-                            .padding(.horizontal, 20).padding(.vertical, 16)
-                        }
+                        .padding(.horizontal, 20).padding(.vertical, 16)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -959,49 +950,80 @@ struct AutoReelsTab: View {
     // MARK: - Active job card
 
     func activeJobCard(_ job: AutoReelJob) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                HStack(spacing: 6) {
-                    if job.isFinished && job.error == nil {
-                        Image(systemName: "checkmark.circle.fill").foregroundColor(gold).font(.system(size: 13))
-                    } else if job.error != nil {
-                        Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.orange).font(.system(size: 13))
-                    } else {
-                        ProgressView().scaleEffect(0.65).tint(gold)
+        VStack(alignment: .leading, spacing: 0) {
+            // Thumbnail area — matches ReelCard height
+            ZStack(alignment: .bottom) {
+                // Placeholder background
+                Rectangle()
+                    .fill(Color.white.opacity(0.05))
+                    .frame(height: 200)
+                    .overlay(
+                        Image(systemName: job.error != nil ? "exclamationmark.triangle" : "film.stack")
+                            .font(.system(size: 36))
+                            .foregroundColor(Color.white.opacity(0.10))
+                    )
+
+                if job.isFinished && job.error == nil {
+                    // Done state: green check + file count
+                    HStack(spacing: 6) {
+                        Image(systemName: "checkmark.circle.fill").foregroundColor(gold).font(.system(size: 11))
+                        Text(job.outputURLs != nil ? "\(job.outputURLs!.count) reels saved to Desktop" : "Reel ready")
+                            .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.8))
+                        Spacer()
                     }
-                    Text(job.isFinished
-                         ? (job.error != nil ? "Failed"
-                            : job.outputURLs != nil ? "\((job.outputURLs?.count ?? 0)) files ready"
-                            : "Reel ready")
-                         : "Creating reel…")
-                        .font(.system(size: 13, weight: .semibold)).foregroundColor(.white)
+                    .padding(.horizontal, 8).padding(.vertical, 6)
+                    .background(Color.black.opacity(0.75))
+                } else if let err = job.error {
+                    // Error state
+                    HStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.orange).font(.system(size: 10))
+                        Text(err).font(.system(size: 10)).foregroundColor(Color(red: 1, green: 0.55, blue: 0.4)).lineLimit(2)
+                    }
+                    .padding(.horizontal, 8).padding(.vertical, 6)
+                    .background(Color.black.opacity(0.80))
+                } else {
+                    // Processing overlay — matches ProjectCard style
+                    VStack(spacing: 4) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "waveform").font(.system(size: 10)).foregroundColor(gold)
+                            Text(job.statusMsg).font(.system(size: 10)).foregroundColor(Color.white.opacity(0.7)).lineLimit(1)
+                            Spacer()
+                            Text("\(Int(job.progress * 100))%")
+                                .font(.system(size: 10, design: .monospaced)).foregroundColor(gold)
+                        }
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                RoundedRectangle(cornerRadius: 2).fill(Color.white.opacity(0.15)).frame(height: 3)
+                                RoundedRectangle(cornerRadius: 2).fill(gold)
+                                    .frame(width: geo.size.width * job.progress, height: 3)
+                                    .animation(.easeOut(duration: 0.3), value: job.progress)
+                            }
+                        }
+                        .frame(height: 3)
+                    }
+                    .padding(.horizontal, 8).padding(.vertical, 6)
+                    .background(Color.black.opacity(0.75))
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+            // Title row
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(job.title).font(.system(size: 13, weight: .semibold)).foregroundColor(.white).lineLimit(1)
+                    Text(job.isFinished && job.error == nil ? "Complete" : job.error != nil ? "Failed" : "Processing…")
+                        .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.4))
                 }
                 Spacer()
                 if job.isFinished {
                     Button(action: { store.clearJob(id: job.id) }) {
-                        Image(systemName: "xmark").font(.system(size: 10))
-                            .foregroundColor(Color.white.opacity(0.4))
+                        Image(systemName: "xmark.circle.fill").font(.system(size: 16))
+                            .foregroundColor(Color.white.opacity(0.25))
                     }
                     .buttonStyle(.plain)
                 }
             }
-
-            Text(job.error ?? job.statusMsg)
-                .font(.system(size: 11))
-                .foregroundColor(job.error != nil ? Color(red: 1, green: 0.45, blue: 0.45) : Color.white.opacity(0.5))
-                .lineLimit(2)
-
-            if !job.isFinished {
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 3).fill(Color.white.opacity(0.1)).frame(height: 4)
-                        RoundedRectangle(cornerRadius: 3).fill(gold)
-                            .frame(width: geo.size.width * job.progress, height: 4)
-                            .animation(.easeOut(duration: 0.3), value: job.progress)
-                    }
-                }
-                .frame(height: 4)
-            }
+            .padding(.horizontal, 10).padding(.top, 8).padding(.bottom, 4)
 
             if job.isFinished, job.error == nil {
                 if let urls = job.outputURLs, urls.count > 1 {
@@ -1062,10 +1084,9 @@ struct AutoReelsTab: View {
                 }
             }
         }
-        .padding(16)
-        .background(Color.white.opacity(0.04))
-        .cornerRadius(10)
-        .padding(.horizontal, 16).padding(.top, 16)
+        .background(Color(red: 0.11, green: 0.12, blue: 0.17))
+        .cornerRadius(12)
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.07), lineWidth: 1))
     }
 
     func reelCard(_ reel: AutoReelRecord) -> some View {
