@@ -1143,8 +1143,17 @@ class VideoExportService {
             // Floating-point accumulation across many clips can leave a tiny gap between
             // the final instruction's end and the composition's true duration, which
             // causes AVFoundation to return "Operation Stopped" (-11803).
-            if !instructions.isEmpty {
-                let compEnd  = CMTime(seconds: reelOffset, preferredTimescale: 600)
+            // Use the composition's actual duration (not reelOffset) as the canonical end.
+            let compActualDur = try await composition.load(.duration)
+            let compEnd = compActualDur > .zero ? compActualDur : CMTime(seconds: reelOffset, preferredTimescale: 600)
+            if instructions.isEmpty {
+                // Fallback: single passthrough instruction covering the whole composition
+                let passthrough = AVMutableVideoCompositionInstruction()
+                passthrough.timeRange = CMTimeRange(start: .zero, duration: compEnd)
+                let li = AVMutableVideoCompositionLayerInstruction(assetTrack: compVideo)
+                passthrough.layerInstructions = [li]
+                instructions.append(passthrough)
+            } else {
                 let lastStart = instructions[instructions.count - 1].timeRange.start
                 if compEnd > lastStart {
                     instructions[instructions.count - 1].timeRange =

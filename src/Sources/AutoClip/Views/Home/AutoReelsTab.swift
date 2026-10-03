@@ -1818,48 +1818,36 @@ private extension AutoReelsTab {
             opts.emojiOverlays = emojiOverlays
 
             if exportMode == .multipleReels {
-                // Each reel gets its OWN independent clip selection so every reel is
-                // the full targetDur length. We pass variation = baseVariation + reelIndex
-                // so AI picks different moments for each reel.
-                // We also track which clips were already used and exclude them from later
-                // reels so local-mode reels are never identical to each other.
-                // If the AI call fails for a reel, we fall back to local scoring so the
-                // overall export never crashes just because one API call timed out.
+                // Each reel gets its OWN independent clip selection from the FULL segment pool.
+                // Diversity comes from the variation seed (score-tier shuffle), not by starving
+                // later reels of high-quality clips. A different variation index ensures each
+                // reel picks a genuinely different mix of the best moments.
                 let baseVariation = await MainActor.run { store.rerollVariation }
                 var reelGroups: [[Clip]] = []
-                var usedStartTimes = Set<Double>()
                 for i in 0..<autoReels {
                     await upd(0.40 + Double(i) / Double(autoReels) * 0.10,
                               "Selecting clips for reel \(i + 1) of \(autoReels)…")
-                    // Prefer segments not already used; fall back to full pool when exhausted
-                    let freshSegments = segments.filter { !usedStartTimes.contains($0.startTime) }
-                    let pool = freshSegments.isEmpty ? segments : freshSegments
-                    // Each reel index = distinct variation so local selection shuffles within score tiers
                     let localVariation = baseVariation + i + 1
                     var reelClips: [Clip]
                     if useAI && !apiKey.isEmpty {
                         do {
                             reelClips = try await LLMClipService.shared.selectSegments(
-                                from: pool, provider: provider, apiKey: apiKey,
+                                from: segments, provider: provider, apiKey: apiKey,
                                 targetDuration: targetDur, topic: topic.isEmpty ? nil : topic,
                                 numberOfReels: 1, variation: baseVariation + i)
                         } catch {
-                            let (hook, rest) = svc.selectHookAndClips(from: pool, targetDuration: targetDur,
+                            let (hook, rest) = svc.selectHookAndClips(from: segments, targetDuration: targetDur,
                                                                        variation: localVariation)
                             reelClips = hook.map { [$0] + rest } ?? rest
                         }
                     } else {
-                        let (hook, rest) = svc.selectHookAndClips(from: pool, targetDuration: targetDur,
+                        let (hook, rest) = svc.selectHookAndClips(from: segments, targetDuration: targetDur,
                                                                    variation: localVariation)
                         reelClips = hook.map { [$0] + rest } ?? rest
                     }
                     if let smode = storylineMode { reelClips = smode.order(reelClips) }
                     if !reelClips.isEmpty {
                         reelGroups.append(reelClips)
-                        reelClips.forEach { usedStartTimes.insert($0.startTime) }
-                    }
-                    if i < autoReels - 1 {
-                        try? await Task.sleep(nanoseconds: 1_000_000_000)
                     }
                 }
                 guard !reelGroups.isEmpty else {
