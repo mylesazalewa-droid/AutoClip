@@ -164,7 +164,17 @@ Respond with ONLY valid JSON — no markdown fences, no explanation:
         // For multi-reel, request more clips so each reel gets a diverse set
         let baseCount = Int((targetDuration / max(5.0, avgDur)).rounded(.up)) + 2
         let targetCount = max(3, min(40, numberOfReels > 1 ? baseCount + numberOfReels * 2 : baseCount))
-        let list = formatSegments(segments)
+        // Cap segments sent to AI — long videos can have 200+ segments, blowing the token budget.
+        // Sample evenly so the AI still sees the full arc of the video.
+        let maxSegments = 80
+        let sampledSegments: [Clip]
+        if segments.count > maxSegments {
+            let step = Double(segments.count) / Double(maxSegments)
+            sampledSegments = (0..<maxSegments).map { segments[Int(Double($0) * step)] }
+        } else {
+            sampledSegments = segments
+        }
+        let list = formatSegments(sampledSegments)
         let prompt = buildSegmentPrompt(segmentList: list, targetCount: targetCount,
                                         targetDuration: targetDuration, topic: topic,
                                         numberOfReels: numberOfReels, variation: variation)
@@ -176,7 +186,10 @@ Respond with ONLY valid JSON — no markdown fences, no explanation:
         case .google:    text = try await callGoogle(prompt: prompt, apiKey: apiKey)
         }
 
-        return try parseSegmentJSON(from: text, segments: segments)
+        // Parse against sampledSegments so indices align, then map back to originals
+        let sampled = try parseSegmentJSON(from: text, segments: sampledSegments)
+        // Re-map: find each sampled clip in the original list by id
+        return sampled.compactMap { s in segments.first { $0.id == s.id } ?? s }
     }
 
     // MARK: - Anthropic
@@ -234,7 +247,7 @@ Respond with ONLY valid JSON — no markdown fences, no explanation:
     private func callGoogle(prompt: String, apiKey: String) async throws -> String {
         let body: [String: Any] = [
             "contents": [["parts": [["text": prompt]]]],
-            "generationConfig": ["temperature": 0.2, "maxOutputTokens": 2048]
+            "generationConfig": ["temperature": 0.2, "maxOutputTokens": 8192]
         ]
         let model: String
         if let cached = cachedGeminiModel {
@@ -264,14 +277,19 @@ Respond with ONLY valid JSON — no markdown fences, no explanation:
             let raw = String(data: data, encoding: .utf8) ?? ""
             throw llmError("Gemini returned no candidates.\n\(raw.prefix(200))")
         }
-        // Surface finish reason when content is missing
-        if let finishReason = first["finishReason"] as? String, finishReason != "STOP" {
-            throw llmError("Gemini stopped early (\(finishReason)). Try shortening the video or disabling AI mode.")
-        }
+        let finishReason = first["finishReason"] as? String ?? "STOP"
         guard let content = first["content"] as? [String: Any],
               let parts = content["parts"] as? [[String: Any]],
               let text = parts.first?["text"] as? String else {
+            // No content at all — now surface finish reason
+            if finishReason != "STOP" {
+                throw llmError("Gemini stopped early (\(finishReason)). Try shortening the video or disabling AI mode.")
+            }
             throw llmError("Gemini response missing text content")
+        }
+        // MAX_TOKENS: response was cut mid-JSON — try partial parse, only error if nothing useful
+        if finishReason == "MAX_TOKENS", !text.contains("[") {
+            throw llmError("Gemini hit output limit (MAX_TOKENS). Try disabling AI mode or using a shorter video.")
         }
         return text
     }
