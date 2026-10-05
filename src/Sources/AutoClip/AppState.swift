@@ -112,10 +112,26 @@ class AppState: ObservableObject {
                 }
 
                 let videoURL = URL(fileURLWithPath: project.videoPath)
-                let clips = await ai.generateClips(from: words, videoDuration: project.duration, videoURL: videoURL) { p, msg in
+                var clips = await ai.generateClips(from: words, videoDuration: project.duration, videoURL: videoURL) { p, msg in
                     DispatchQueue.main.async {
-                        self.analyzeProgress = 0.7 + p * 0.25
+                        self.analyzeProgress = 0.7 + p * 0.20
                         self.analyzeStatus = msg
+                    }
+                }
+
+                // Optional LLM re-ranking for Auto Clips
+                let useAIRanking = UserDefaults.standard.bool(forKey: "ac_useAI")
+                let providerRaw = UserDefaults.standard.string(forKey: "ac_provider") ?? LLMClipService.AIProvider.anthropic.rawValue
+                if useAIRanking, let provider = LLMClipService.AIProvider(rawValue: providerRaw),
+                   let apiKey = await LLMClipService.shared.loadAPIKey(for: provider), !apiKey.isEmpty {
+                    await MainActor.run {
+                        self.analyzeProgress = 0.90
+                        self.analyzeStatus = "AI ranking clips..."
+                    }
+                    if let ranked = try? await LLMClipService.shared.selectSegments(
+                        from: clips, provider: provider, apiKey: apiKey,
+                        targetDuration: project.duration * 0.3) {
+                        clips = ranked
                     }
                 }
 

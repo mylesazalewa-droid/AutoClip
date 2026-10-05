@@ -4,6 +4,30 @@ import Security
 actor LLMClipService {
     static let shared = LLMClipService()
 
+    private var cachedGeminiModel: String? = nil
+
+    private func fetchBestGeminiModel(apiKey: String) async -> String {
+        let urlStr = "https://generativelanguage.googleapis.com/v1beta/models?key=\(apiKey)"
+        guard let url = URL(string: urlStr),
+              let (data, _) = try? await URLSession.shared.data(from: url),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let models = json["models"] as? [[String: Any]] else {
+            return "gemini-2.0-flash"
+        }
+        let names: [String] = models.compactMap { m -> String? in
+            guard let name = m["name"] as? String else { return nil }
+            let methods = m["supportedGenerationMethods"] as? [String] ?? []
+            guard methods.contains("generateContent") else { return nil }
+            return name.replacingOccurrences(of: "models/", with: "")
+        }
+        let preferred = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-flash-preview-04-17",
+                         "gemini-2.0-flash-exp", "gemini-1.5-flash"]
+        for p in preferred { if names.contains(p) { return p } }
+        if let flash = names.first(where: { $0.contains("flash") && !$0.contains("lite") }) { return flash }
+        if let any = names.first(where: { $0.contains("flash") }) { return any }
+        return names.first ?? "gemini-2.0-flash"
+    }
+
     // MARK: - Provider
 
     enum AIProvider: String, CaseIterable, Identifiable {
@@ -25,7 +49,7 @@ actor LLMClipService {
             switch self {
             case .anthropic: return "claude-haiku-4-5"
             case .openai:    return "gpt-4o-mini"
-            case .google:    return "gemini-1.5-flash"
+            case .google:    return "Gemini (auto-select)"
             }
         }
 
@@ -212,7 +236,15 @@ Respond with ONLY valid JSON — no markdown fences, no explanation:
             "contents": [["parts": [["text": prompt]]]],
             "generationConfig": ["temperature": 0.2, "maxOutputTokens": 2048]
         ]
-        let urlStr = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=\(apiKey)"
+        let model: String
+        if let cached = cachedGeminiModel {
+            model = cached
+        } else {
+            let resolved = await fetchBestGeminiModel(apiKey: apiKey)
+            cachedGeminiModel = resolved
+            model = resolved
+        }
+        let urlStr = "https://generativelanguage.googleapis.com/v1beta/models/\(model):generateContent?key=\(apiKey)"
         var req = URLRequest(url: URL(string: urlStr)!)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")

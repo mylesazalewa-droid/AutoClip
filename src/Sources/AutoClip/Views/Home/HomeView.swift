@@ -12,6 +12,7 @@ struct HomeView: View {
     @State private var filterCategory = "All"
     @State private var isDropTargeted = false
     @State private var activeTab: HomeTab = .projects
+    @State private var showAutoClipsSettings = false
 
     private let gold = Color(red: 1.0, green: 0.75, blue: 0.0)
 
@@ -51,7 +52,10 @@ struct HomeView: View {
                         projectsContent
                     }
                 case .projects:
-                    CombinedProjectsView()
+                    CombinedProjectsView(
+                        onSwitchToAutoClips: { activeTab = .autoClips },
+                        onSwitchToAutoReels: { activeTab = .autoReels }
+                    )
                 }
             }
         }
@@ -180,6 +184,20 @@ struct HomeView: View {
                     .cornerRadius(8)
                 }
                 .buttonStyle(.plain)
+
+                Button(action: { showAutoClipsSettings = true }) {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 14))
+                        .foregroundColor(Color.white.opacity(0.5))
+                        .padding(.horizontal, 8).padding(.vertical, 7)
+                        .background(Color.white.opacity(0.06))
+                        .cornerRadius(7)
+                }
+                .buttonStyle(.plain)
+                .help("Auto Clips Settings")
+                .sheet(isPresented: $showAutoClipsSettings) {
+                    AutoClipsSettingsSheet()
+                }
             }
             Color.clear.frame(width: 16, height: 1)
         }
@@ -376,46 +394,61 @@ struct HomeView: View {
 struct CombinedProjectsView: View {
     @ObservedObject private var library = LibraryService.shared
     @ObservedObject private var reelsStore = AutoReelsStore.shared
+    var onSwitchToAutoClips: (() -> Void)?
+    var onSwitchToAutoReels: (() -> Void)?
     private let gold = Color(red: 1.0, green: 0.75, blue: 0.0)
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                // Auto Reels section
-                if !reelsStore.reels.isEmpty || !reelsStore.activeJobs.isEmpty {
-                    sectionHeader(title: "Auto Reels", count: reelsStore.reels.count,
-                                  icon: "play.rectangle.on.rectangle.fill")
-                    LazyVGrid(
-                        columns: [GridItem(.adaptive(minimum: 200, maximum: 280), spacing: 12)],
-                        spacing: 12
-                    ) {
-                        ForEach(reelsStore.reels) { reel in
-                            reelMiniCard(reel)
+        VStack(spacing: 0) {
+            Divider().background(Color.white.opacity(0.08))
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    // Auto Reels section
+                    if !reelsStore.reels.isEmpty || !reelsStore.activeJobs.isEmpty {
+                        sectionHeader(title: "Auto Reels", count: reelsStore.reels.count,
+                                      icon: "play.rectangle.on.rectangle.fill")
+                        LazyVGrid(
+                            columns: [GridItem(.adaptive(minimum: 220, maximum: 320), spacing: 12)],
+                            spacing: 12
+                        ) {
+                            ForEach(reelsStore.reels) { reel in
+                                reelMiniCard(reel)
+                                    .onTapGesture {
+                                        AutoReelsStore.shared.navigateToReelID = reel.id
+                                        onSwitchToAutoReels?()
+                                    }
+                            }
                         }
-                    }
-                    .padding(.horizontal, 20).padding(.bottom, 24)
-                }
-
-                // Auto Clips section
-                sectionHeader(title: "Auto Clips", count: library.projects.count,
-                              icon: "folder.fill")
-                if library.projects.isEmpty {
-                    Text("No clips yet. Create one in the Auto Clips tab.")
-                        .font(.system(size: 13)).foregroundColor(Color.white.opacity(0.35))
                         .padding(.horizontal, 20).padding(.bottom, 24)
-                } else {
-                    LazyVGrid(
-                        columns: [GridItem(.adaptive(minimum: 200, maximum: 280), spacing: 12)],
-                        spacing: 12
-                    ) {
-                        ForEach(library.projects) { project in
-                            ProjectCard(project: project)
-                        }
                     }
-                    .padding(.horizontal, 20).padding(.bottom, 24)
+
+                    // Auto Clips section
+                    sectionHeader(title: "Auto Clips", count: library.projects.count,
+                                  icon: "folder.fill")
+                    if library.projects.isEmpty {
+                        Text("No clips yet. Create one in the Auto Clips tab.")
+                            .font(.system(size: 13)).foregroundColor(Color.white.opacity(0.35))
+                            .padding(.horizontal, 20).padding(.bottom, 24)
+                    } else {
+                        LazyVGrid(
+                            columns: [GridItem(.adaptive(minimum: 220, maximum: 320), spacing: 12)],
+                            spacing: 12
+                        ) {
+                            ForEach(library.projects) { project in
+                                ProjectCard(project: project)
+                                    .onTapGesture {
+                                        AppState.shared.selectedProject = project
+                                        AppState.shared.selectedClip = nil
+                                        onSwitchToAutoClips?()
+                                    }
+                            }
+                        }
+                        .padding(.horizontal, 20).padding(.bottom, 24)
+                    }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, 16)
             }
-            .padding(.top, 16)
         }
         .background(Color(red: 0.07, green: 0.08, blue: 0.12))
     }
@@ -699,6 +732,148 @@ struct YouTubeURLSheet: View {
                     self.error = "Could not launch yt-dlp at \(ytdlp):\n\(error.localizedDescription)"
                 }
             }
+        }
+    }
+}
+
+// MARK: - Auto Clips Settings Sheet
+
+struct AutoClipsSettingsSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @AppStorage("ac_useAI")      private var useAI: Bool = false
+    @AppStorage("ac_provider")   private var providerRaw: String = LLMClipService.AIProvider.anthropic.rawValue
+    @AppStorage("whisper_model_size") private var whisperModelSize: String = "small"
+    @State private var apiKeys: [LLMClipService.AIProvider: String] = [:]
+    @State private var showKey = false
+
+    private let gold = Color(red: 1.0, green: 0.75, blue: 0.0)
+
+    private var aiProvider: LLMClipService.AIProvider {
+        get { LLMClipService.AIProvider(rawValue: providerRaw) ?? .anthropic }
+        nonmutating set { providerRaw = newValue.rawValue }
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+
+                    // Whisper model
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "waveform").foregroundColor(gold).font(.system(size: 11))
+                            Text("Transcription Model")
+                                .font(.system(size: 13, weight: .semibold)).foregroundColor(.white)
+                        }
+                        Text("A larger model is more accurate but slower to download and transcribe.")
+                            .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.45))
+                            .fixedSize(horizontal: false, vertical: true)
+                        VStack(spacing: 4) {
+                            ForEach(WhisperService.modelSizes, id: \.key) { size in
+                                Button(action: {
+                                    whisperModelSize = size.key
+                                    WhisperService.shared.invalidateIfVariantChanged()
+                                }) {
+                                    HStack {
+                                        Text(size.label)
+                                            .font(.system(size: 12, weight: whisperModelSize == size.key ? .semibold : .regular))
+                                            .foregroundColor(whisperModelSize == size.key ? .black : .white)
+                                        Spacer()
+                                        if whisperModelSize == size.key {
+                                            Image(systemName: "checkmark").font(.system(size: 10, weight: .bold)).foregroundColor(.black)
+                                        }
+                                    }
+                                    .padding(.horizontal, 12).padding(.vertical, 8)
+                                    .background(whisperModelSize == size.key ? gold : Color.white.opacity(0.06))
+                                    .cornerRadius(8)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    .padding(14).background(Color.white.opacity(0.04)).cornerRadius(10)
+
+                    // AI clip ranking
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "sparkles").foregroundColor(gold).font(.system(size: 11))
+                            Text("AI Clip Ranking")
+                                .font(.system(size: 13, weight: .semibold)).foregroundColor(.white)
+                            Spacer()
+                            Toggle("", isOn: $useAI).toggleStyle(.switch).tint(gold)
+                        }
+                        if useAI {
+                            Text("After local analysis, an LLM re-ranks clips for viral potential.")
+                                .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.45))
+                                .fixedSize(horizontal: false, vertical: true)
+                            HStack(spacing: 6) {
+                                ForEach(LLMClipService.AIProvider.allCases) { p in
+                                    Button(action: { aiProvider = p }) {
+                                        Text(shortLabel(p))
+                                            .font(.system(size: 11, weight: aiProvider == p ? .semibold : .regular))
+                                            .foregroundColor(aiProvider == p ? .black : Color.white.opacity(0.6))
+                                            .padding(.horizontal, 8).padding(.vertical, 5)
+                                            .background(aiProvider == p ? gold : Color.white.opacity(0.07))
+                                            .cornerRadius(6)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            HStack(spacing: 6) {
+                                let binding = Binding<String>(
+                                    get: { apiKeys[aiProvider] ?? "" },
+                                    set: { v in
+                                        apiKeys[aiProvider] = v
+                                        Task { await LLMClipService.shared.saveAPIKey(v, for: aiProvider) }
+                                    }
+                                )
+                                Group {
+                                    if showKey { TextField(aiProvider.keyPlaceholder, text: binding) }
+                                    else { SecureField(aiProvider.keyPlaceholder, text: binding) }
+                                }
+                                .font(.system(size: 11, design: .monospaced))
+                                .textFieldStyle(.plain)
+                                .padding(.horizontal, 8).padding(.vertical, 6)
+                                .background(Color.white.opacity(0.06)).cornerRadius(6)
+                                Button(action: { showKey.toggle() }) {
+                                    Image(systemName: showKey ? "eye.slash" : "eye")
+                                        .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.4))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            Text("Stored in macOS Keychain.")
+                                .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.3))
+                        }
+                    }
+                    .padding(14).background(Color.white.opacity(0.04)).cornerRadius(10)
+                }
+                .padding(20)
+            }
+            .background(Color(red: 0.07, green: 0.08, blue: 0.12))
+            .navigationTitle("Auto Clips Settings")
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                        .foregroundColor(gold)
+                }
+            }
+        }
+        .frame(minWidth: 380, minHeight: 460)
+        .preferredColorScheme(.dark)
+        .task {
+            var loaded: [LLMClipService.AIProvider: String] = [:]
+            for p in LLMClipService.AIProvider.allCases {
+                if let k = await LLMClipService.shared.loadAPIKey(for: p), !k.isEmpty { loaded[p] = k }
+            }
+            apiKeys = loaded
+        }
+    }
+
+    private func shortLabel(_ p: LLMClipService.AIProvider) -> String {
+        switch p {
+        case .anthropic: return "Claude"
+        case .openai:    return "GPT-4o"
+        case .google:    return "Gemini"
         }
     }
 }

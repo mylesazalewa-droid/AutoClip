@@ -1017,13 +1017,14 @@ class VideoExportService {
             throw ExportError.exportFailed("Could not create composition video track")
         }
         compVideo.preferredTransform = primaryTransform
-        let compAudio = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)
+        var compAudio: AVMutableCompositionTrack? = nil  // created lazily only when a source has audio
 
         // ── Pass 1: stitch clips + remap words to reel timeline ──────────────
-        var insertTime    = CMTime.zero
-        var reelOffset    = 0.0
-        var remappedWords = [Word]()
-        var insertedClips = [Clip]()  // only clips that actually made it into the composition
+        var insertTime      = CMTime.zero
+        var reelOffset      = 0.0
+        var remappedWords   = [Word]()
+        var insertedClips   = [Clip]()     // only clips that actually made it into the composition
+        var clipInsertTimes = [CMTime]()   // exact timeline position of each inserted clip
 
         for (i, clip) in clips.enumerated() {
             await MainActor.run { progress(Double(i) / Double(clips.count) * 0.25, "Stitching clip \(i + 1) of \(clips.count)...") }
@@ -1048,7 +1049,13 @@ class VideoExportService {
             } catch {
                 continue  // skip clips whose range can't be inserted (malformed asset)
             }
-            if let compAudio, let srcAudio { try? compAudio.insertTimeRange(range, of: srcAudio, at: insertTime) }
+            clipInsertTimes.append(insertTime)  // record exact CMTime before advancing
+            if let srcAudio {
+                if compAudio == nil {
+                    compAudio = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)
+                }
+                try? compAudio?.insertTimeRange(range, of: srcAudio, at: insertTime)
+            }
 
             // Remap word times from source → reel timeline, filtering filler words from captions
             for w in clip.words {
@@ -1090,9 +1097,9 @@ class VideoExportService {
             let needsFace = options.format == .vertical9x16 || options.format == .square1x1
 
             var instructions = [AVMutableVideoCompositionInstruction]()
-            var segStart     = CMTime.zero
 
             for (i, clip) in insertedClips.enumerated() {
+                let segStart = clipInsertTimes[i]  // use exact CMTime from Pass 1 — no floating-point drift
                 await MainActor.run { progress(0.25 + Double(i) / Double(insertedClips.count) * 0.35, "Analyzing clip \(i + 1)...") }
 
                 let clipAsset = sourceAsset(for: clip)
@@ -1146,7 +1153,6 @@ class VideoExportService {
 
                 instr.layerInstructions = [li]
                 instructions.append(instr)
-                segStart = CMTime(seconds: CMTimeGetSeconds(segStart) + CMTimeGetSeconds(segDur), preferredTimescale: 600)
             }
 
             // Extend the last instruction to cover exactly the composition end.
@@ -1193,17 +1199,37 @@ class VideoExportService {
         // ── Pass 3: export ────────────────────────────────────────────────────
         await MainActor.run { progress(0.65, "Exporting reel...") }
 
+        // Load the true composition duration so we can set an explicit timeRange on the session.
+        // This prevents AVFoundation from guessing the duration (which can cause -11803).
+        let compDurationForExport = (try? await composition.load(.duration)) ?? CMTime(seconds: reelOffset, preferredTimescale: 600)
+
         // AVAssetExportSession requires output URL to not already exist
         try? FileManager.default.removeItem(at: outputURL)
 
-        // Pass the original source asset — compositions always report HighestQuality as compatible
-        // so checking the composition alone never triggers the HEVC/iPhone fallback preset.
-        let preset = bestExportPreset(for: composition, sourceAsset: primaryAsset)
+        // When a videoComposition is in use, frames are being re-composited — AVFoundation
+        // cannot do a passthrough export.  AVAssetExportPresetHighestQuality is a passthrough
+        // preset and fails (-11803 "Operation Stopped") in that case.  Use a resolution-
+        // specific preset instead, which always triggers a full re-encode.
+        let preset: String
+        if videoComposition != nil {
+            let maxDim = max(renderSize.width, renderSize.height)
+            if maxDim > 1920 {
+                preset = AVAssetExportPreset3840x2160
+            } else if maxDim > 1280 {
+                preset = AVAssetExportPreset1920x1080
+            } else {
+                preset = AVAssetExportPreset1280x720
+            }
+        } else {
+            preset = bestExportPreset(for: composition, sourceAsset: primaryAsset)
+        }
+
         guard let session = AVAssetExportSession(asset: composition, presetName: preset) else {
             throw ExportError.exportFailed("Could not create export session")
         }
-        session.outputURL  = outputURL
+        session.outputURL   = outputURL
         session.outputFileType = .mp4
+        session.timeRange   = CMTimeRange(start: .zero, duration: compDurationForExport)
         if let vc = videoComposition { session.videoComposition = vc }
 
         let timer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { _ in

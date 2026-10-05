@@ -11,6 +11,7 @@ class WhisperService: ObservableObject {
     @Published var statusMessage = ""
 
     private var whisper: WhisperKit?
+    private var loadedVariant: String?
 
     private let modelDir: URL = {
         URL(fileURLWithPath: NSHomeDirectory())
@@ -19,13 +20,26 @@ class WhisperService: ObservableObject {
 
     private init() {}
 
+    static let modelSizes: [(key: String, label: String, mb: Int)] = [
+        ("tiny",   "Tiny — fastest, ~39 MB",      39),
+        ("base",   "Base — fast, ~74 MB",          74),
+        ("small",  "Small — balanced, ~244 MB",   244),
+        ("medium", "Medium — accurate, ~769 MB",  769)
+    ]
+
+    var selectedVariant: String {
+        let size = UserDefaults.standard.string(forKey: "whisper_model_size") ?? "small"
+        return "openai_whisper-\(size).en"
+    }
+
     var modelExists: Bool {
         let modelPath = modelDir
-            .appendingPathComponent("models/argmaxinc/whisperkit-coreml/openai_whisper-small.en")
+            .appendingPathComponent("models/argmaxinc/whisperkit-coreml/\(selectedVariant)")
         return FileManager.default.fileExists(atPath: modelPath.path)
     }
 
     func loadModel(progress: ((Double, String) -> Void)? = nil) async throws {
+        let variant = selectedVariant
         await MainActor.run {
             isLoading = true
             loadProgress = 0
@@ -33,8 +47,8 @@ class WhisperService: ObservableObject {
         }
 
         let config = WhisperKitConfig(
-            model: "openai_whisper-small.en",
-            modelFolder: modelDir.appendingPathComponent("models/argmaxinc/whisperkit-coreml/openai_whisper-small.en").path,
+            model: variant,
+            modelFolder: modelDir.appendingPathComponent("models/argmaxinc/whisperkit-coreml/\(variant)").path,
             verbose: false
         )
 
@@ -42,6 +56,7 @@ class WhisperService: ObservableObject {
 
         await MainActor.run {
             self.whisper = kit
+            self.loadedVariant = variant
             self.isModelLoaded = true
             self.isLoading = false
             self.loadProgress = 1.0
@@ -50,6 +65,7 @@ class WhisperService: ObservableObject {
     }
 
     func downloadModel(progress: @escaping (Double, String) -> Void) async throws {
+        let variant = selectedVariant
         await MainActor.run {
             isLoading = true
             statusMessage = "Downloading model..."
@@ -58,7 +74,7 @@ class WhisperService: ObservableObject {
         try FileManager.default.createDirectory(at: modelDir, withIntermediateDirectories: true)
 
         _ = try await WhisperKit.download(
-            variant: "openai_whisper-small.en",
+            variant: variant,
             downloadBase: modelDir.appendingPathComponent("models"),
             useBackgroundSession: false
         ) { prog in
@@ -73,6 +89,14 @@ class WhisperService: ObservableObject {
         }
 
         try await loadModel(progress: progress)
+    }
+
+    func invalidateIfVariantChanged() {
+        if isModelLoaded, let loaded = loadedVariant, loaded != selectedVariant {
+            whisper = nil
+            isModelLoaded = false
+            loadedVariant = nil
+        }
     }
 
     func transcribe(audioURL: URL, progress: ((Double) -> Void)? = nil) async throws -> [Word] {

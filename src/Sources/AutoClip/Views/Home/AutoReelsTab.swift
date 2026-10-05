@@ -34,11 +34,12 @@ struct AutoReelRecord: Identifiable, Codable {
     var cutPoints: [Double]       // fractional [0,1] cut positions for scrubber (primary reel)
     var cutPointsPerReel: [[Double]] // per-reel cut points for multi-reel packs
     var transcript: String = ""   // joined words from selected clips
+    var reelTitles: [String] = [] // unique per-reel title derived from hook clip
 
     init(id: UUID, title: String, path: String, paths: [String] = [],
          format: String, duration: Double, clipCount: Int, dateCreated: Double,
          cutPoints: [Double] = [], cutPointsPerReel: [[Double]] = [],
-         transcript: String = "") {
+         transcript: String = "", reelTitles: [String] = []) {
         self.id = id; self.title = title; self.path = path
         self.paths = paths.isEmpty ? [path] : paths
         self.format = format; self.duration = duration
@@ -46,7 +47,26 @@ struct AutoReelRecord: Identifiable, Codable {
         self.cutPoints = cutPoints
         self.cutPointsPerReel = cutPointsPerReel
         self.transcript = transcript
+        self.reelTitles = reelTitles
     }
+}
+
+// MARK: - Pipeline params (stored for retry)
+
+struct AutoReelJobParams: Codable {
+    var videoURL: URL
+    var formatRaw: String
+    var captions: Bool
+    var captionStyleIndex: Int
+    var targetDuration: Double
+    var useAI: Bool
+    var providerRaw: String
+    var desiredReelCount: Int
+    var storylineModeRaw: String?
+    var topic: String
+    var crossDissolve: Bool
+    var emojiOverlays: Bool
+    var outputDir: URL
 }
 
 // MARK: - Active job (lives in store, survives tab switches)
@@ -64,16 +84,19 @@ struct AutoReelJob: Identifiable {
     var reelDuration: Double     // total duration of the primary reel (for cut point math)
     var pendingClips: [Clip]?    // non-nil = waiting for user to confirm export
     var sourceVideoPath: String? // for thumbnail generation during processing
+    var retryParams: AutoReelJobParams? // stored so failed jobs can be retried
 
     init(id: UUID, title: String, progress: Double, statusMsg: String,
          isFinished: Bool, error: String? = nil, outputURL: URL? = nil,
          outputURLs: [URL]? = nil, cutPoints: [Double] = [], reelDuration: Double = 0,
-         pendingClips: [Clip]? = nil, sourceVideoPath: String? = nil) {
+         pendingClips: [Clip]? = nil, sourceVideoPath: String? = nil,
+         retryParams: AutoReelJobParams? = nil) {
         self.id = id; self.title = title; self.progress = progress
         self.statusMsg = statusMsg; self.isFinished = isFinished
         self.error = error; self.outputURL = outputURL; self.outputURLs = outputURLs
         self.cutPoints = cutPoints; self.reelDuration = reelDuration
         self.pendingClips = pendingClips; self.sourceVideoPath = sourceVideoPath
+        self.retryParams = retryParams
     }
 }
 
@@ -156,10 +179,13 @@ class AutoReelsStore: ObservableObject {
     @Published var activeJobs: [AutoReelJob] = []
     @Published var pendingReelName: String = ""
     @Published var rerollVariation: Int = 0
+    @Published var navigateToReelID: UUID? = nil   // set by Projects tab to deep-link into a reel
 
     private let key = "autoReelsHistory"
+    private let failedJobsKey = "autoReels_failedJobs"
+    private var activeTasks: [UUID: Task<Void, Never>] = [:]
 
-    init() { load() }
+    init() { load(); loadFailedJobs() }
 
     func add(_ reel: AutoReelRecord) {
         reels.insert(reel, at: 0)
@@ -172,14 +198,42 @@ class AutoReelsStore: ObservableObject {
         } else {
             activeJobs.append(job)
         }
+        if job.isFinished && job.error == nil {
+            activeTasks.removeValue(forKey: job.id)
+            let jobID = job.id
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 4_000_000_000)
+                self.activeJobs.removeAll { $0.id == jobID }
+            }
+        }
+        if job.isFinished && job.error != nil {
+            saveFailedJobs()
+        }
+    }
+
+    func registerTask(_ task: Task<Void, Never>, for jobID: UUID) {
+        activeTasks[jobID] = task
+    }
+
+    func cancelJob(id: UUID) {
+        activeTasks[id]?.cancel()
+        activeTasks.removeValue(forKey: id)
+        if let idx = activeJobs.firstIndex(where: { $0.id == id }) {
+            activeJobs[idx].error = "Cancelled"
+            activeJobs[idx].isFinished = true
+            activeJobs[idx].statusMsg = "Cancelled"
+            activeJobs[idx].progress = 0
+        }
     }
 
     func clearJob(id: UUID) {
         activeJobs.removeAll { $0.id == id }
+        saveFailedJobs()
     }
 
     func clearAllFinished() {
         activeJobs.removeAll { $0.isFinished }
+        saveFailedJobs()
     }
 
     func remove(id: UUID) {
@@ -197,6 +251,35 @@ class AutoReelsStore: ObservableObject {
         guard let data = UserDefaults.standard.data(forKey: key),
               let saved = try? JSONDecoder().decode([AutoReelRecord].self, from: data) else { return }
         reels = saved.filter { FileManager.default.fileExists(atPath: $0.path) }
+    }
+
+    private func saveFailedJobs() {
+        struct PersistedJob: Codable {
+            var id: UUID; var title: String; var error: String; var retryParams: AutoReelJobParams?
+        }
+        let failed = activeJobs.filter { $0.isFinished && $0.error != nil }.map {
+            PersistedJob(id: $0.id, title: $0.title, error: $0.error ?? "", retryParams: $0.retryParams)
+        }
+        if let data = try? JSONEncoder().encode(failed) {
+            UserDefaults.standard.set(data, forKey: failedJobsKey)
+        }
+    }
+
+    private func loadFailedJobs() {
+        struct PersistedJob: Codable {
+            var id: UUID; var title: String; var error: String; var retryParams: AutoReelJobParams?
+        }
+        guard let data = UserDefaults.standard.data(forKey: failedJobsKey),
+              let jobs = try? JSONDecoder().decode([PersistedJob].self, from: data) else { return }
+        for j in jobs {
+            // Only restore if not already in active jobs (avoid duplication on normal session)
+            guard !activeJobs.contains(where: { $0.id == j.id }) else { continue }
+            let srcPath = j.retryParams?.videoURL.path
+            let job = AutoReelJob(id: j.id, title: j.title, progress: 0, statusMsg: j.error,
+                                  isFinished: true, error: j.error,
+                                  sourceVideoPath: srcPath, retryParams: j.retryParams)
+            activeJobs.append(job)
+        }
     }
 }
 
@@ -252,7 +335,9 @@ struct AutoReelsTab: View {
 
     @State private var apiKeys: [LLMClipService.AIProvider: String] = [:]
     @State private var showKey = false
-    @State private var topicText: String = ""
+    @AppStorage("ar_topic") private var topicText: String = ""
+    @State private var errorDetailText: String? = nil
+    @State private var reelSearch: String = ""
 
     private let gold = Color(red: 1.0, green: 0.75, blue: 0.0)
     private let captionStyles = CaptionStyle.all
@@ -260,17 +345,24 @@ struct AutoReelsTab: View {
     enum InputMode { case file, youtube }
 
     var body: some View {
-        ZStack {
-            Color(red: 0.07, green: 0.08, blue: 0.12).ignoresSafeArea()
-
+        Group {
             if store.reels.isEmpty && store.activeJobs.isEmpty && !isDownloading {
                 landingPage
             } else {
                 gridView
             }
         }
+        .background(Color(red: 0.07, green: 0.08, blue: 0.12))
         .sheet(isPresented: $showingCreateSheet) {
             createReelSheet
+        }
+        .alert("Error Detail", isPresented: Binding(
+            get: { errorDetailText != nil },
+            set: { if !$0 { errorDetailText = nil } }
+        )) {
+            Button("OK") { errorDetailText = nil }
+        } message: {
+            Text(errorDetailText ?? "")
         }
         .task {
             var loaded: [LLMClipService.AIProvider: String] = [:]
@@ -281,6 +373,11 @@ struct AutoReelsTab: View {
             }
             apiKeys = loaded
             if !loaded.isEmpty { useAI = true }
+        }
+        .onChange(of: store.navigateToReelID) { reelID in
+            guard let reelID else { return }
+            selectedReel = store.reels.first { $0.id == reelID }
+            store.navigateToReelID = nil
         }
     }
 
@@ -427,12 +524,26 @@ struct AutoReelsTab: View {
 
     var gridView: some View {
         VStack(spacing: 0) {
+            // Header outside ScrollView — Divider forces VStack to full width (same as Auto Clips)
             HStack {
                 Text("My Reels")
                     .font(.system(size: 15, weight: .semibold)).foregroundColor(.white)
-                Text("(\(store.reels.count))")
+                let displayCount = reelSearch.isEmpty ? store.reels.count
+                    : store.reels.filter { $0.title.localizedCaseInsensitiveContains(reelSearch) }.count
+                Text("(\(displayCount))")
                     .font(.system(size: 15)).foregroundColor(Color.white.opacity(0.4))
                 Spacer()
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass").font(.system(size: 11))
+                        .foregroundColor(Color.white.opacity(0.35))
+                    TextField("Search reels…", text: $reelSearch)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 12))
+                        .foregroundColor(.white)
+                        .frame(width: 120)
+                }
+                .padding(.horizontal, 9).padding(.vertical, 5)
+                .background(Color.white.opacity(0.07)).cornerRadius(7)
                 Button(action: {
                     pickedVideoURL = nil
                     inputMode = .file
@@ -454,68 +565,65 @@ struct AutoReelsTab: View {
 
             Divider().background(Color.white.opacity(0.08))
 
-            HStack(spacing: 0) {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        // YouTube download progress
-                        if isDownloading {
-                            VStack(alignment: .leading, spacing: 10) {
-                                HStack {
-                                    ProgressView().scaleEffect(0.65).tint(gold)
-                                    Text("Downloading from YouTube…")
-                                        .font(.system(size: 13, weight: .semibold)).foregroundColor(.white)
-                                    Spacer()
-                                }
-                                Text(downloadStatus)
-                                    .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.5)).lineLimit(1)
-                                GeometryReader { geo in
-                                    ZStack(alignment: .leading) {
-                                        RoundedRectangle(cornerRadius: 3).fill(Color.white.opacity(0.1)).frame(height: 4)
-                                        RoundedRectangle(cornerRadius: 3).fill(gold)
-                                            .frame(width: geo.size.width * max(0.03, downloadProgress), height: 4)
-                                            .animation(.easeOut(duration: 0.3), value: downloadProgress)
-                                    }
-                                }
-                                .frame(height: 4)
-                                if let err = downloadError {
-                                    Text(err)
-                                        .font(.system(size: 11))
-                                        .foregroundColor(Color(red: 1, green: 0.45, blue: 0.45))
-                                        .fixedSize(horizontal: false, vertical: true)
-                                }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+
+                    // YouTube download progress
+                    if isDownloading {
+
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack {
+                                ProgressView().scaleEffect(0.65).tint(gold)
+                                Text("Downloading from YouTube…")
+                                    .font(.system(size: 13, weight: .semibold)).foregroundColor(.white)
+                                Spacer()
                             }
-                            .padding(16)
-                            .background(Color.white.opacity(0.04))
-                            .cornerRadius(10)
-                            .padding(.horizontal, 16).padding(.top, 16)
-                            Divider().background(Color.white.opacity(0.06)).padding(.top, 8)
+                            Text(downloadStatus)
+                                .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.5)).lineLimit(1)
+                            ProgressView(value: max(0.03, downloadProgress))
+                                .tint(gold)
+                                .frame(height: 4)
+                            if let err = downloadError {
+                                Text(err)
+                                    .font(.system(size: 11))
+                                    .foregroundColor(Color(red: 1, green: 0.45, blue: 0.45))
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                         }
-
-                        // Active jobs + finished reels in a single unified grid
-                        LazyVGrid(
-                            columns: [GridItem(.adaptive(minimum: 220, maximum: 320), spacing: 12)],
-                            spacing: 12
-                        ) {
-                            ForEach(store.activeJobs) { job in activeJobCard(job) }
-                            ForEach(store.reels) { reel in reelCard(reel) }
-                        }
-                        .padding(.horizontal, 20).padding(.vertical, 16)
+                        .padding(16)
+                        .background(Color.white.opacity(0.04))
+                        .cornerRadius(10)
+                        .padding(.horizontal, 20)
+                        .padding(.top, 16)
                     }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                if let reel = selectedReel {
-                    Divider().background(Color.white.opacity(0.08))
-                    ReelDetailSidebar(
-                        reel: reel,
-                        gold: gold,
-                        onPlay: { url, pts, dur in showPreview(url: url, id: reel.id, cutPoints: pts, reelDuration: dur) },
-                        onFinder: { urls in NSWorkspace.shared.activateFileViewerSelecting(urls) },
-                        onDelete: { store.remove(id: reel.id); selectedReel = nil }
-                    )
-                    .frame(width: 300)
+                    // Active jobs + finished reels — same grid structure as Auto Clips
+                    LazyVGrid(
+                        columns: [GridItem(.adaptive(minimum: 260, maximum: 360), spacing: 12)],
+                        spacing: 12
+                    ) {
+                        ForEach(store.activeJobs) { job in activeJobCard(job) }
+                        let visibleReels = reelSearch.isEmpty ? store.reels
+                            : store.reels.filter { $0.title.localizedCaseInsensitiveContains(reelSearch) }
+                        ForEach(visibleReels) { reel in reelCard(reel) }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 16)
+                    .padding(.bottom, 30)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
+        }
+        // Reel detail opens as a sheet (same pattern as clicking into a project)
+        .sheet(item: $selectedReel) { reel in
+            ReelDetailSidebar(
+                reel: reel,
+                gold: gold,
+                onPlay: { url, pts, dur in showPreview(url: url, id: reel.id, cutPoints: pts, reelDuration: dur) },
+                onFinder: { urls in NSWorkspace.shared.activateFileViewerSelecting(urls) },
+                onDelete: { store.remove(id: reel.id); selectedReel = nil }
+            )
+            .frame(minWidth: 420, minHeight: 600)
         }
     }
 
@@ -998,13 +1106,17 @@ struct AutoReelsTab: View {
                     .padding(.horizontal, 8).padding(.vertical, 6)
                     .background(Color.black.opacity(0.75))
                 } else if let err = job.error {
-                    // Error state
+                    // Error state — tap for full error detail
                     HStack(spacing: 6) {
                         Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.orange).font(.system(size: 10))
                         Text(err).font(.system(size: 10)).foregroundColor(Color(red: 1, green: 0.55, blue: 0.4)).lineLimit(2)
+                        Spacer()
+                        Image(systemName: "info.circle").font(.system(size: 10)).foregroundColor(Color.white.opacity(0.3))
                     }
                     .padding(.horizontal, 8).padding(.vertical, 6)
                     .background(Color.black.opacity(0.80))
+                    .contentShape(Rectangle())
+                    .onTapGesture { errorDetailText = err }
                 } else {
                     // Processing overlay — matches ProjectCard style
                     VStack(spacing: 4) {
@@ -1040,9 +1152,30 @@ struct AutoReelsTab: View {
                 }
                 Spacer()
                 if job.isFinished {
+                    if job.error != nil, let params = job.retryParams {
+                        Button(action: { retryJob(params: params, oldJobID: job.id) }) {
+                            Text("Retry")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(.black)
+                                .padding(.horizontal, 9).padding(.vertical, 4)
+                                .background(gold)
+                                .cornerRadius(6)
+                        }
+                        .buttonStyle(.plain)
+                    }
                     Button(action: { store.clearJob(id: job.id) }) {
                         Image(systemName: "xmark.circle.fill").font(.system(size: 16))
                             .foregroundColor(Color.white.opacity(0.25))
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Button(action: { store.cancelJob(id: job.id) }) {
+                        Text("Cancel")
+                            .font(.system(size: 11))
+                            .foregroundColor(Color.white.opacity(0.5))
+                            .padding(.horizontal, 9).padding(.vertical, 4)
+                            .background(Color.white.opacity(0.08))
+                            .cornerRadius(6)
                     }
                     .buttonStyle(.plain)
                 }
@@ -1351,6 +1484,7 @@ private struct ReelDetailSidebar: View {
     var onFinder: ([URL]) -> Void
     var onDelete: () -> Void
 
+    @Environment(\.dismiss) private var dismiss
     @State private var selectedTab: ReelDetailTab = .actions
     @State private var player: AVPlayer?
     @State private var isPlaying = false
@@ -1408,9 +1542,19 @@ private struct ReelDetailSidebar: View {
                         .shadow(color: .black.opacity(0.5), radius: 6)
                         .allowsHitTesting(false)
                 }
-                // Full-screen preview button
+                // Top controls: close (left) + full-screen (right)
                 VStack {
                     HStack {
+                        Button(action: { dismiss() }) {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.7))
+                                .padding(6)
+                                .background(Color.black.opacity(0.5))
+                                .cornerRadius(6)
+                        }
+                        .buttonStyle(.plain)
+                        .padding(6)
                         Spacer()
                         Button(action: { showFullPreview = true }) {
                             Image(systemName: "arrow.up.left.and.arrow.down.right")
@@ -1495,9 +1639,10 @@ private struct ReelDetailSidebar: View {
                                 Image(systemName: "film")
                                     .font(.system(size: 10))
                                     .foregroundColor(isActive ? gold : gold.opacity(0.4))
-                                Text("Reel \(i + 1)")
+                                Text(i < reel.reelTitles.count ? reel.reelTitles[i] : "Reel \(i + 1)")
                                     .font(.system(size: 12, weight: isActive ? .semibold : .medium))
                                     .foregroundColor(exists ? (isActive ? gold : .white) : Color.white.opacity(0.3))
+                                    .lineLimit(1)
                                 Spacer()
                                 Button(action: { if exists { NSWorkspace.shared.activateFileViewerSelecting([url]) } }) {
                                     Image(systemName: "folder")
@@ -2056,13 +2201,18 @@ private extension AutoReelsTab {
                     self.isDownloading = false
                     self.pickedVideoURL = videoURL
                 }
+                let ytParams = AutoReelJobParams(videoURL: videoURL, formatRaw: fmt.rawValue,
+                    captions: captions, captionStyleIndex: styleIdx, targetDuration: dur,
+                    useAI: ai, providerRaw: prov.rawValue, desiredReelCount: reelCnt,
+                    storylineModeRaw: sMode?.rawValue, topic: topic, crossDissolve: dissolve,
+                    emojiOverlays: emojis, outputDir: outDir)
                 await self.startPipelineAsync(videoURL: videoURL, format: fmt, captions: captions,
                                               styleIdx: styleIdx, targetDur: dur,
                                               useAI: ai, provider: prov, apiKey: key,
                                               desiredReelCount: reelCnt,
                                               storylineMode: sMode, topic: topic,
                                               crossDissolve: dissolve, emojiOverlays: emojis,
-                                              outputDir: outDir)
+                                              outputDir: outDir, retryParams: ytParams)
             } catch {
                 await MainActor.run { self.isDownloading = false; self.downloadError = error.localizedDescription }
             }
@@ -2093,18 +2243,50 @@ private extension AutoReelsTab {
         let key = apiKeys[aiProvider] ?? ""; let reelCnt = desiredReelCount
         let sMode = useStoryline ? storylineMode : nil
         let topic = topicText; let dissolve = crossDissolve; let emojis = emojiOverlays
-        Task.detached(priority: .userInitiated) {
-            await self.startPipelineAsync(videoURL: videoURL, format: fmt, captions: captions,
-                                          styleIdx: styleIdx, targetDur: dur,
+        let params = AutoReelJobParams(videoURL: videoURL, formatRaw: fmt.rawValue,
+                                       captions: captions, captionStyleIndex: styleIdx,
+                                       targetDuration: dur, useAI: ai, providerRaw: prov.rawValue,
+                                       desiredReelCount: reelCnt, storylineModeRaw: sMode?.rawValue,
+                                       topic: topic, crossDissolve: dissolve,
+                                       emojiOverlays: emojis, outputDir: outDir)
+        let jobID = UUID()
+        let task = Task.detached(priority: .userInitiated) {
+            await self.startPipelineAsync(jobID: jobID, videoURL: videoURL, format: fmt,
+                                          captions: captions, styleIdx: styleIdx, targetDur: dur,
                                           useAI: ai, provider: prov, apiKey: key,
                                           desiredReelCount: reelCnt,
                                           storylineMode: sMode, topic: topic,
                                           crossDissolve: dissolve, emojiOverlays: emojis,
-                                          outputDir: outDir)
+                                          outputDir: outDir, retryParams: params)
         }
+        store.registerTask(task, for: jobID)
     }
 
-    private func startPipelineAsync(videoURL: URL, format: VideoExportService.ExportFormat,
+    private func retryJob(params: AutoReelJobParams, oldJobID: UUID) {
+        guard let outDir = pickOutputDirectory() else { return }
+        store.clearJob(id: oldJobID)
+        let fmt = VideoExportService.ExportFormat(rawValue: params.formatRaw) ?? .vertical9x16
+        let prov = LLMClipService.AIProvider(rawValue: params.providerRaw) ?? .anthropic
+        let apiKey = apiKeys[prov] ?? ""
+        let sMode = params.storylineModeRaw.flatMap { StorylineMode(rawValue: $0) }
+        var newParams = params; newParams.outputDir = outDir
+        let jobID = UUID()
+        let task = Task.detached(priority: .userInitiated) {
+            await self.startPipelineAsync(jobID: jobID, videoURL: params.videoURL, format: fmt,
+                                          captions: params.captions, styleIdx: params.captionStyleIndex,
+                                          targetDur: params.targetDuration,
+                                          useAI: params.useAI, provider: prov, apiKey: apiKey,
+                                          desiredReelCount: params.desiredReelCount,
+                                          storylineMode: sMode, topic: params.topic,
+                                          crossDissolve: params.crossDissolve,
+                                          emojiOverlays: params.emojiOverlays,
+                                          outputDir: outDir, retryParams: newParams)
+        }
+        store.registerTask(task, for: jobID)
+    }
+
+    private func startPipelineAsync(jobID: UUID = UUID(),
+                                    videoURL: URL, format: VideoExportService.ExportFormat,
                                     captions: Bool, styleIdx: Int, targetDur: Double,
                                     useAI: Bool = false,
                                     provider: LLMClipService.AIProvider = .anthropic,
@@ -2114,8 +2296,8 @@ private extension AutoReelsTab {
                                     topic: String = "",
                                     crossDissolve: Bool = true,
                                     emojiOverlays: Bool = false,
-                                    outputDir: URL = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first!) async {
-        let jobID = UUID()
+                                    outputDir: URL = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first!,
+                                    retryParams: AutoReelJobParams? = nil) async {
         let title = videoURL.deletingPathExtension().lastPathComponent
 
         let srcPath = videoURL.path
@@ -2123,7 +2305,7 @@ private extension AutoReelsTab {
             await MainActor.run {
                 store.updateJob(AutoReelJob(id: jobID, title: title, progress: progress,
                                            statusMsg: msg, isFinished: finished, error: error, outputURL: out,
-                                           sourceVideoPath: srcPath))
+                                           sourceVideoPath: srcPath, retryParams: retryParams))
             }
         }
 
@@ -2154,6 +2336,8 @@ private extension AutoReelsTab {
             guard !words.isEmpty else {
                 throw NSError(domain: "AutoClip", code: 3, userInfo: [NSLocalizedDescriptionKey: "No speech detected in video."])
             }
+
+            try Task.checkCancellation()
 
             await upd(0.45, "Finding best moments…")
             let segments = svc.autoSegmentsFromWords(words)
@@ -2257,13 +2441,36 @@ private extension AutoReelsTab {
             }.joined(separator: " ")
 
             let reelLabel = reelGroups.count == 1 ? "\(finalReelTitle) – Reel" : "\(finalReelTitle) – \(reelGroups.count) Reels"
+            // Build unique per-reel titles from hook clip words.
+            // Try words 1-6, then 4-10, then 7-13 until titles are distinct.
+            func snippetFrom(_ words: [Word], range: Range<Int>) -> String {
+                let slice = Array(words)[range.clamped(to: 0..<words.count)]
+                return slice.map { $0.word }.joined(separator: " ")
+            }
+            var perReelTitles: [String] = reelGroups.map { group in
+                snippetFrom(group.first?.words ?? [], range: 0..<6)
+            }
+            // If titles are not all unique, try a later window
+            for startOffset in [3, 6, 9] {
+                if Set(perReelTitles).count < perReelTitles.count {
+                    perReelTitles = reelGroups.enumerated().map { i, group in
+                        let w = group.first?.words ?? []
+                        let s = snippetFrom(w, range: startOffset..<(startOffset + 6))
+                        return s.isEmpty ? "Reel \(i + 1)" : s
+                    }
+                }
+            }
+            // Last resort: append reel number
+            if Set(perReelTitles).count < perReelTitles.count {
+                perReelTitles = perReelTitles.enumerated().map { "\($1) #\($0 + 1)" }
+            }
             let record = AutoReelRecord(id: UUID(), title: reelLabel,
                                          path: outURLs.first?.path ?? "",
                                          paths: outURLs.map { $0.path },
                                          format: fmtLabel(format), duration: firstReelDur,
                                          clipCount: totalClipCount, dateCreated: Date().timeIntervalSince1970,
                                          cutPoints: cutPts, cutPointsPerReel: allCutPts,
-                                         transcript: transcriptText)
+                                         transcript: transcriptText, reelTitles: perReelTitles)
             await MainActor.run {
                 AutoReelsStore.shared.add(record)
                 store.updateJob(AutoReelJob(id: jobID, title: finalReelTitle, progress: 1.0,
@@ -2273,6 +2480,8 @@ private extension AutoReelsTab {
                                            cutPoints: cutPts, reelDuration: firstReelDur))
             }
 
+        } catch is CancellationError {
+            await upd(0, "Cancelled", finished: true, error: "Cancelled")
         } catch {
             await upd(0, "", finished: true, error: error.localizedDescription)
         }
