@@ -184,6 +184,20 @@ class AutoReelsStore: ObservableObject {
     private let key = "autoReelsHistory"
     private let failedJobsKey = "autoReels_failedJobs"
     private var activeTasks: [UUID: Task<Void, Never>] = [:]
+    private var backgroundActivity: NSObjectProtocol?
+
+    /// While any reel is in progress, tell macOS not to throttle us (App Nap) or let the Mac
+    /// idle-sleep — so reels keep rendering at full speed when AutoClip is in the background.
+    private func refreshBackgroundActivity() {
+        let busy = activeJobs.contains { !$0.isFinished }
+        if busy, backgroundActivity == nil {
+            backgroundActivity = ProcessInfo.processInfo.beginActivity(
+                options: [.userInitiated, .idleSystemSleepDisabled], reason: "Creating Auto Reels")
+        } else if !busy, let a = backgroundActivity {
+            ProcessInfo.processInfo.endActivity(a)
+            backgroundActivity = nil
+        }
+    }
 
     init() { load(); loadFailedJobs() }
 
@@ -209,6 +223,7 @@ class AutoReelsStore: ObservableObject {
         if job.isFinished && job.error != nil {
             saveFailedJobs()
         }
+        refreshBackgroundActivity()
     }
 
     func registerTask(_ task: Task<Void, Never>, for jobID: UUID) {
@@ -224,6 +239,7 @@ class AutoReelsStore: ObservableObject {
             activeJobs[idx].statusMsg = "Cancelled"
             activeJobs[idx].progress = 0
         }
+        refreshBackgroundActivity()
     }
 
     func clearJob(id: UUID) {
@@ -292,9 +308,6 @@ struct AutoReelsTab: View {
     @State private var pickedVideoURL: URL?
     @State private var inputMode: InputMode = .file
     @State private var youtubeURL = ""
-    @State private var isDownloading = false
-    @State private var downloadProgress: Double = 0
-    @State private var downloadStatus = ""
     @State private var downloadError: String?
 
     @State private var previewURL: URL?
@@ -347,7 +360,7 @@ struct AutoReelsTab: View {
 
     var body: some View {
         Group {
-            if store.reels.isEmpty && store.activeJobs.isEmpty && !isDownloading {
+            if store.reels.isEmpty && store.activeJobs.isEmpty {
                 landingPage
             } else {
                 gridView
@@ -569,34 +582,6 @@ struct AutoReelsTab: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
 
-                    // YouTube download progress
-                    if isDownloading {
-
-                        VStack(alignment: .leading, spacing: 10) {
-                            HStack {
-                                ProgressView().scaleEffect(0.65).tint(gold)
-                                Text("Downloading from YouTube…")
-                                    .font(.system(size: 13, weight: .semibold)).foregroundColor(.white)
-                                Spacer()
-                            }
-                            Text(downloadStatus)
-                                .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.5)).lineLimit(1)
-                            ProgressView(value: max(0.03, downloadProgress))
-                                .tint(gold)
-                                .frame(height: 4)
-                            if let err = downloadError {
-                                Text(err)
-                                    .font(.system(size: 11))
-                                    .foregroundColor(Color(red: 1, green: 0.45, blue: 0.45))
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-                        .padding(16)
-                        .background(Color.white.opacity(0.04))
-                        .cornerRadius(10)
-                        .padding(.horizontal, 20)
-                        .padding(.top, 16)
-                    }
 
                     // Active jobs + finished reels — same grid structure as Auto Clips
                     LazyVGrid(
@@ -2120,6 +2105,8 @@ private extension AutoReelsTab {
 
     // MARK: - YouTube download
 
+    /// Downloads run as a regular job in AutoReelsStore (not view state), so progress stays
+    /// visible and the work keeps going when you switch to Projects / Auto Clips and back.
     private func startYouTubeDownload() {
         let rawURL = youtubeURL.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !rawURL.isEmpty else { return }
@@ -2128,11 +2115,7 @@ private extension AutoReelsTab {
             return
         }
         downloadError = nil
-        isDownloading = true
-        downloadProgress = 0
-        downloadStatus = "Starting download…"
-
-        guard let outDir = pickOutputDirectory() else { isDownloading = false; return }
+        guard let outDir = pickOutputDirectory() else { return }
 
         let fmt = selectedFormat; let captions = burnCaptions
         let styleIdx = captionStyleIndex; let dur = targetDuration
@@ -2140,8 +2123,18 @@ private extension AutoReelsTab {
         let key = apiKeys[aiProvider] ?? ""; let reelCnt = desiredReelCount
         let sMode = useStoryline ? storylineMode : nil
         let topic = topicText; let dissolve = crossDissolve; let emojis = emojiOverlays
+        let store = self.store
 
-        Task.detached(priority: .userInitiated) {
+        let jobID = UUID()
+        func report(_ progress: Double, _ msg: String, error: String? = nil) {
+            Task { @MainActor in
+                store.updateJob(AutoReelJob(id: jobID, title: "YouTube video", progress: progress,
+                                            statusMsg: msg, isFinished: error != nil, error: error))
+            }
+        }
+        report(0, "Starting download…")
+
+        let task = Task.detached(priority: .userInitiated) {
             let videosDir = URL(fileURLWithPath: NSHomeDirectory())
                 .appendingPathComponent("Documents/AutoClip/Videos")
             try? FileManager.default.createDirectory(at: videosDir, withIntermediateDirectories: true)
@@ -2149,16 +2142,8 @@ private extension AutoReelsTab {
 
             let process = Process()
             process.executableURL = URL(fileURLWithPath: ytdlp)
-            process.arguments = [
-                "--format", "bestvideo[ext=mp4][vcodec^=avc1][height>=1080]+bestaudio[ext=m4a]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best",
-                "--merge-output-format", "mp4",
-                "--force-overwrites",              // never reuse an old (possibly low-res) download
-                "--concurrent-fragments", "4",
-                "--output", outTemplate,
-                "--print", "after_move:filepath",
-                "--no-playlist", "--no-warnings",
-                rawURL
-            ]
+            process.arguments = YTDLP.arguments(url: rawURL, outTemplate: outTemplate)
+            process.environment = YTDLP.environment
             process.currentDirectoryURL = videosDir
 
             let outPipe = Pipe(); let errPipe = Pipe()
@@ -2168,56 +2153,43 @@ private extension AutoReelsTab {
             errPipe.fileHandleForReading.readabilityHandler = { h in
                 guard let line = String(data: h.availableData, encoding: .utf8), !line.isEmpty else { return }
                 stderrBuf += line
-                if line.contains("%") {
-                    let parts = line.split(separator: "%")
-                    if let n = parts.first?.split(separator: " ").compactMap({ Double($0) }).last {
-                        Task { @MainActor in self.downloadProgress = n / 100.0 }
-                    }
+                if line.contains("%"),
+                   let n = line.split(separator: "%").first?.split(separator: " ").compactMap({ Double($0) }).last {
+                    // Download is the first 10% of the job; the pipeline takes it from there
+                    report(min(0.1, n / 1000.0), "Downloading video: \(Int(n))%")
+                } else if line.contains("Merger") {
+                    report(0.1, "Combining video and audio…")
                 }
-                let t = line.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !t.isEmpty { Task { @MainActor in self.downloadStatus = String(t.prefix(80)) } }
             }
 
             do {
-                try process.run(); process.waitUntilExit()
+                try await withTaskCancellationHandler {
+                    try process.run(); process.waitUntilExit()
+                } onCancel: { process.terminate() }
                 errPipe.fileHandleForReading.readabilityHandler = nil
+                if Task.isCancelled { return }
 
                 guard process.terminationStatus == 0 else {
                     let detail = stderrBuf.trimmingCharacters(in: .whitespacesAndNewlines)
-                    await MainActor.run {
-                        self.isDownloading = false
-                        self.downloadError = detail.isEmpty ? "Download failed (exit \(process.terminationStatus))" : String(detail.suffix(250))
-                    }
+                    report(0, "Download failed", error: detail.isEmpty ? "Download failed (exit \(process.terminationStatus))" : String(detail.suffix(250)))
                     return
                 }
 
                 let printed = String(data: outPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
                     .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                var fileURL: URL?
-                if !printed.isEmpty && FileManager.default.fileExists(atPath: printed) {
-                    fileURL = URL(fileURLWithPath: printed)
-                } else {
-                    let files = (try? FileManager.default.contentsOfDirectory(at: videosDir, includingPropertiesForKeys: [.creationDateKey], options: .skipsHiddenFiles)) ?? []
-                    fileURL = files.filter { $0.pathExtension.lowercased() == "mp4" }
-                        .sorted { (try? $0.resourceValues(forKeys:[.creationDateKey]).creationDate ?? .distantPast) ?? .distantPast > (try? $1.resourceValues(forKeys:[.creationDateKey]).creationDate ?? .distantPast) ?? .distantPast }
-                        .first
-                }
-
-                guard let videoURL = fileURL else {
-                    await MainActor.run { self.isDownloading = false; self.downloadError = "Download succeeded but file not found." }
+                guard !printed.isEmpty, FileManager.default.fileExists(atPath: printed),
+                      !YTDLP.isPartialStream(URL(fileURLWithPath: printed)) else {
+                    report(0, "Download failed", error: "Download finished but the video and audio couldn't be combined. Make sure ffmpeg is installed (brew install ffmpeg).")
                     return
                 }
+                let videoURL = URL(fileURLWithPath: printed)
 
-                await MainActor.run {
-                    self.isDownloading = false
-                    self.pickedVideoURL = videoURL
-                }
                 let ytParams = AutoReelJobParams(videoURL: videoURL, formatRaw: fmt.rawValue,
                     captions: captions, captionStyleIndex: styleIdx, targetDuration: dur,
                     useAI: ai, providerRaw: prov.rawValue, desiredReelCount: reelCnt,
                     storylineModeRaw: sMode?.rawValue, topic: topic, crossDissolve: dissolve,
                     emojiOverlays: emojis, outputDir: outDir)
-                await self.startPipelineAsync(videoURL: videoURL, format: fmt, captions: captions,
+                await self.startPipelineAsync(jobID: jobID, videoURL: videoURL, format: fmt, captions: captions,
                                               styleIdx: styleIdx, targetDur: dur,
                                               useAI: ai, provider: prov, apiKey: key,
                                               desiredReelCount: reelCnt,
@@ -2225,9 +2197,11 @@ private extension AutoReelsTab {
                                               crossDissolve: dissolve, emojiOverlays: emojis,
                                               outputDir: outDir, retryParams: ytParams)
             } catch {
-                await MainActor.run { self.isDownloading = false; self.downloadError = error.localizedDescription }
+                report(0, "Download failed", error: error.localizedDescription)
             }
         }
+        store.registerTask(task, for: jobID)
+        youtubeURL = ""
     }
 
     // MARK: - Save location picker
@@ -2289,9 +2263,17 @@ private extension AutoReelsTab {
         let apiKey = apiKeys[prov] ?? ""
         let sMode = params.storylineModeRaw.flatMap { StorylineMode(rawValue: $0) }
         var newParams = params; newParams.outputDir = outDir
+        // Jobs from before 2.60 may point at an unmerged video-only part ("Title.f299.mp4");
+        // use the combined file instead when it exists.
+        if YTDLP.isPartialStream(params.videoURL) {
+            let base = params.videoURL.deletingPathExtension().lastPathComponent
+                .replacingOccurrences(of: #"\.f\d+(-\d+)?$"#, with: "", options: .regularExpression)
+            let merged = params.videoURL.deletingLastPathComponent().appendingPathComponent(base + ".mp4")
+            if FileManager.default.fileExists(atPath: merged.path) { newParams.videoURL = merged }
+        }
         let jobID = UUID()
         let task = Task.detached(priority: .userInitiated) {
-            await self.startPipelineAsync(jobID: jobID, videoURL: params.videoURL, format: fmt,
+            await self.startPipelineAsync(jobID: jobID, videoURL: newParams.videoURL, format: fmt,
                                           captions: params.captions, styleIdx: params.captionStyleIndex,
                                           targetDur: params.targetDuration,
                                           useAI: params.useAI, provider: prov, apiKey: apiKey,
