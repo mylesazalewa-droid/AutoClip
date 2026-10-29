@@ -744,15 +744,20 @@ class VideoExportService {
             return !fillerWords.contains(w)
         } ?? inRange.first!
 
-        // Skip trailing filler words so the clip ends cleanly
-        let lastReal = inRange.last {
-            let w = $0.word.lowercased().trimmingCharacters(in: .punctuationCharacters)
-            return !fillerWords.contains(w)
-        } ?? inRange.last!
+        // Skip trailing filler only if what's left still ends a sentence —
+        // never trade a complete ending ("…you know.") for a mid-sentence one
+        let lastReal: Word = {
+            guard let candidate = inRange.last(where: {
+                !fillerWords.contains($0.word.lowercased().trimmingCharacters(in: .punctuationCharacters))
+            }) else { return inRange.last! }
+            let endsSentence = candidate.word.last.map { ".!?\"”".contains($0) } ?? false
+            return endsSentence ? candidate : inRange.last!
+        }()
 
+        // Keep the segment's own edge padding when no words were dropped at that edge
         var c = clip
-        c.startTime = max(0, firstReal.startTime - 0.05)
-        c.endTime = lastReal.endTime + 0.15
+        if firstReal.id != inRange.first!.id { c.startTime = max(0, firstReal.startTime - 0.05) }
+        if lastReal.id != inRange.last!.id { c.endTime = lastReal.endTime + 0.2 }
         return c
     }
 
@@ -891,9 +896,9 @@ class VideoExportService {
 
             // Hard boundary: sentence-ending punctuation + small pause
             let hardBoundary = endsWithSentence && nextGap > 0.15
-            // Soft boundary: long silence (speaker stopped) — only if we already have ≥5s
+            // Soft boundary: the speaker fully stopped (not just a breath) — only if we already have ≥5s
             let currentDur = (current.last?.endTime ?? 0) - (current.first?.startTime ?? 0)
-            let softBoundary = nextGap > 1.5 && currentDur >= 5.0 && !endsWithComma
+            let softBoundary = nextGap > 2.5 && currentDur >= 5.0 && !endsWithComma
 
             if hardBoundary || softBoundary {
                 segments.append(current)
@@ -958,21 +963,15 @@ class VideoExportService {
             .filter { dedupedIDs.contains($1.id) }
             .map    { $0.0 }
 
-        // ── Pause-split surviving segments at gaps > 0.4s → tight, gap-free clips ──
-        var finalSegs: [[Word]] = []
-        for seg in survivingGroups {
-            var currentRun: [Word] = []
-            for (i, word) in seg.enumerated() {
-                if i > 0 {
-                    let gap = word.startTime - seg[i - 1].endTime
-                    if gap > 0.4 {
-                        if !currentRun.isEmpty { finalSegs.append(currentRun) }
-                        currentRun = []
-                    }
-                }
-                currentRun.append(word)
-            }
-            if !currentRun.isEmpty { finalSegs.append(currentRun) }
+        // Segments stay whole sentences. (A previous pass re-split them at every 0.4s pause,
+        // but speakers breathe mid-sentence constantly — that was producing clips that started
+        // and ended mid-thought.)
+        let finalSegs = survivingGroups
+
+        // Word index lookup so we can check what comes right before a segment
+        var prevWordEnd: [UUID: (word: String, gap: Double)] = [:]
+        for (i, w) in sorted.enumerated() where i > 0 {
+            prevWordEnd[w.id] = (sorted[i - 1].word, w.startTime - sorted[i - 1].endTime)
         }
 
         // Engaging hook words — phrases/words that signal a strong standalone moment
@@ -989,10 +988,16 @@ class VideoExportService {
             let dur = last.endTime - first.startTime
             // Require clean sentence-ending punctuation for short/sparse clips.
             // Non-clean-ending fragments must be longer (>8s, 10+ words) to avoid mid-sentence cuts.
-            let endsClean = last.word.last.map { ".!?".contains($0) } ?? false
-            let minDur: Double = endsClean ? 5.0 : 8.0
-            let minWords = endsClean ? 7 : 10
-            guard dur >= minDur, words.count >= minWords else { return nil }
+            // Every candidate must be a complete thought: begin where a sentence begins and
+            // finish on sentence-ending punctuation (or right before the speaker stops talking).
+            let endsClean = (last.word.last.map { ".!?\"”".contains($0) } ?? false)
+            let nextGap = sorted.first(where: { $0.startTime > last.startTime }).map { $0.startTime - last.endTime } ?? 99
+            guard endsClean || nextGap > 2.5 else { return nil }
+            if let prev = prevWordEnd[first.id] {
+                let prevEndsSentence = prev.word.trimmingCharacters(in: .whitespaces).last.map { ".!?\"”".contains($0) } ?? false
+                guard prevEndsSentence || prev.gap > 2.5 else { return nil }
+            }
+            guard dur >= 6.0, words.count >= 10 else { return nil }
 
             // Measure filler density — skip segments where >20% of words are fillers
             let cleanWords = words.map { $0.word.lowercased().trimmingCharacters(in: .punctuationCharacters) }
@@ -1018,15 +1023,22 @@ class VideoExportService {
             let posScore = (first.startTime / max(1, totalDuration)) < 0.25 ? 10.0 : 0.0
             // Strong bonus for complete sentences — penalise mid-statement fragments
             let cleanEndBonus = endsClean ? 18.0 : -8.0
+            // Openers like "And…"/"But…"/"So…" sound like the middle of a thought
+            let opener = first.word.lowercased().trimmingCharacters(in: .punctuationCharacters)
+            let openerPenalty: Double = ["and", "but", "so", "because", "or", "then", "which", "that"].contains(opener) ? 10.0 : 0.0
             // Penalise filler-heavy and hesitant delivery
             let fillerPenalty = fillerRatio * 25.0
             let pausePenalty  = Double(internalPauses) * 4.0
 
-            let score = min(100, max(0, lenScore + hookCount * 10 + emphasisBonus + posScore + cleanEndBonus - fillerPenalty - pausePenalty))
+            let score = min(100, max(0, lenScore + hookCount * 10 + emphasisBonus + posScore + cleanEndBonus - fillerPenalty - pausePenalty - openerPenalty))
 
             let title = words.prefix(8).map { $0.word }.joined(separator: " ")
-            var clip = Clip(id: UUID(), title: title, startTime: max(0, first.startTime - 0.1),
-                            endTime: last.endTime + 0.15, score: score, scoreReason: "Auto-segmented from transcript",
+            // Pad edges so the last syllable isn't clipped, without catching neighbouring words
+            let prevGap = prevWordEnd[first.id]?.gap ?? 1
+            let headPad = min(0.15, max(0.02, prevGap - 0.05))
+            let tailPad = min(0.35, max(0.1, nextGap - 0.05))
+            var clip = Clip(id: UUID(), title: title, startTime: max(0, first.startTime - headPad),
+                            endTime: last.endTime + tailPad, score: score, scoreReason: "Auto-segmented from transcript",
                             words: words, isLiked: false, starRating: 0,
                             captionStyleName: "Karaoke", aspectRatio: "9:16", notes: "", thumbnailData: nil)
             clip.sourceVideoPath = sourceVideoPath

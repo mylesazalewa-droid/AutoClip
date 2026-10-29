@@ -44,44 +44,52 @@ class AIService {
         guard !words.isEmpty else { return [] }
 
         var segments: [(startTime: Double, endTime: Double, words: [Word])] = []
-        var currentStart = words[0].startTime
         var currentWords: [Word] = []
-        var sentenceWords: [Word] = []
 
-        for word in words {
-            sentenceWords.append(word)
+        func endsSentence(_ w: Word) -> Bool {
+            w.word.last.map { ".!?\"”".contains($0) } ?? false
+        }
+        func emit(_ ws: [Word], nextStart: Double?) {
+            guard let first = ws.first, let last = ws.last else { return }
+            // Pad the tail so the last syllable isn't clipped, but stop before the next word
+            let tail = min(0.3, max(0.1, (nextStart ?? .greatestFiniteMagnitude) - last.endTime - 0.05))
+            let endTime = min(last.endTime + tail, videoDuration)
+            if endTime - first.startTime >= 15 {
+                segments.append((max(0, first.startTime - 0.05), endTime, ws))
+            }
+        }
+
+        // Clips always begin at a sentence start and end at a sentence end. Once a clip
+        // passes 20s it closes at the next sentence end; if it runs past 65s without one
+        // being reached, it closes at the last sentence end it contains and the rest
+        // carries into the next clip — never a hard cut mid-sentence.
+        for (i, word) in words.enumerated() {
             currentWords.append(word)
+            let nextStart = i + 1 < words.count ? words[i + 1].startTime : nil
+            let elapsed = word.endTime - currentWords[0].startTime
 
-            let elapsed = word.endTime - currentStart
-            let text = word.word
-
-            let isSentenceEnd = text.hasSuffix(".") || text.hasSuffix("?") || text.hasSuffix("!")
-            let isLongEnough = elapsed >= 20
-            let isTooLong = elapsed >= 65
-
-            if (isSentenceEnd && isLongEnough) || isTooLong {
-                // Check for natural break (pause)
-                let nextWordIdx = words.firstIndex(where: { $0.id == word.id }).map { $0 + 1 }
-                let pause = nextWordIdx.flatMap { $0 < words.count ? words[$0].startTime - word.endTime : nil } ?? 0
-
-                if isTooLong || (isSentenceEnd && (isLongEnough || pause > 0.5)) {
-                    let endTime = min(word.endTime + 0.3, videoDuration)
-                    if endTime - currentStart >= 15 {
-                        segments.append((currentStart, endTime, currentWords))
-                    }
-                    currentStart = words[nextWordIdx ?? 0].startTime
-                    currentWords = []
-                    sentenceWords = []
+            if endsSentence(word) && elapsed >= 20 {
+                emit(currentWords, nextStart: nextStart)
+                currentWords = []
+            } else if elapsed >= 65 {
+                if let cut = currentWords.lastIndex(where: endsSentence), cut < currentWords.count - 1 {
+                    emit(Array(currentWords[...cut]), nextStart: currentWords[cut + 1].startTime)
+                    currentWords = Array(currentWords[(cut + 1)...])
+                } else if let gapCut = currentWords.indices.dropLast().max(by: {
+                    (currentWords[$0 + 1].startTime - currentWords[$0].endTime) <
+                    (currentWords[$1 + 1].startTime - currentWords[$1].endTime)
+                }) {
+                    // No punctuation at all (rare) — cut at the longest pause instead
+                    emit(Array(currentWords[...gapCut]), nextStart: currentWords[gapCut + 1].startTime)
+                    currentWords = Array(currentWords[(gapCut + 1)...])
                 }
             }
         }
 
         // Add remaining words if they form a reasonable clip
-        if !currentWords.isEmpty {
-            let endTime = min(currentWords.last!.endTime + 0.3, videoDuration)
-            if endTime - currentStart >= 10 {
-                segments.append((currentStart, endTime, currentWords))
-            }
+        if let first = currentWords.first, let last = currentWords.last,
+           min(last.endTime + 0.3, videoDuration) - first.startTime >= 10 {
+            segments.append((first.startTime, min(last.endTime + 0.3, videoDuration), currentWords))
         }
 
         // Limit to reasonable number
