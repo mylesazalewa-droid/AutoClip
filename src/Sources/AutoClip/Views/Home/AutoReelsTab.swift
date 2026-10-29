@@ -772,8 +772,10 @@ struct AutoReelsTab: View {
                         .cornerRadius(12)
                 }
                 .buttonStyle(.plain)
-                .padding(.horizontal, 20).padding(.bottom, 20)
+                .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 20)
                 .disabled(!canCreate)
+                // Opaque bar so scrolled settings don't show through the (translucent) disabled button
+                .background(Color(red: 0.07, green: 0.08, blue: 0.12))
             }
         }
         .frame(minWidth: 420, minHeight: 500)

@@ -14,6 +14,7 @@ struct AutoReelSheet: View {
     @State private var selectedFormat: VideoExportService.ExportFormat = .vertical9x16
     @State private var burnCaptions: Bool = true
     @State private var captionStyleIndex: Int = 0
+    @State private var captionLook: CaptionLook = CaptionLook.load() ?? CaptionLook(preset: CaptionStyle.all[0])
 
     private var selectedClips: [Clip] {
         guard let hook = hookClip else { return [] }
@@ -154,7 +155,10 @@ struct AutoReelSheet: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
                             ForEach(Array(captionStyles.enumerated()), id: \.element.id) { i, style in
-                                Button(action: { captionStyleIndex = i }) {
+                                Button(action: {
+                                    captionStyleIndex = i
+                                    captionLook = CaptionLook(preset: style)
+                                }) {
                                     Text(style.name)
                                         .font(.system(size: 11, weight: captionStyleIndex == i ? .semibold : .regular))
                                         .foregroundColor(captionStyleIndex == i ? .black : Color.white.opacity(0.6))
@@ -167,6 +171,9 @@ struct AutoReelSheet: View {
                             }
                         }
                     }
+                    CaptionEditorView(look: $captionLook, gold: gold)
+                        .padding(.top, 4)
+                        .onChange(of: captionLook) { $0.save() }
                 }
             }
             .padding(14)
@@ -571,6 +578,7 @@ struct AutoReelSheet: View {
         if burnCaptions && captionStyleIndex < captionStyles.count {
             opts.captionStyle = captionStyles[captionStyleIndex]
         }
+        if opts.burnCaptions { opts.captionLook = captionLook }
 
         do {
             try await svc.createHighlightReel(

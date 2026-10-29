@@ -12,6 +12,7 @@ struct ExportOptionsView: View {
     @State private var captionBgEnabled = true
     @State private var captionBgOpacity: Double = 0.55
     @State private var captionBgColor: NSColor = .black
+    @State private var captionLook: CaptionLook = CaptionLook.load() ?? CaptionLook(preset: CaptionStyle.all[0])
 
     @State private var isExporting = false
     @State private var exportProgress: Double = 0
@@ -86,28 +87,9 @@ struct ExportOptionsView: View {
                                         }
                                     }
 
-                                    // Background toggle
-                                    Toggle(isOn: $captionBgEnabled) {
-                                        Text("Caption Background")
-                                            .font(.system(size: 12))
-                                            .foregroundColor(Color.white.opacity(0.7))
-                                    }
-                                    .toggleStyle(CheckboxToggleStyle())
-
-                                    if captionBgEnabled {
-                                        HStack(spacing: 12) {
-                                            Text("Opacity")
-                                                .font(.system(size: 12))
-                                                .foregroundColor(Color.white.opacity(0.5))
-                                                .frame(width: 52, alignment: .leading)
-                                            Slider(value: $captionBgOpacity, in: 0...1)
-                                                .accentColor(gold)
-                                            Text("\(Int(captionBgOpacity * 100))%")
-                                                .font(.system(size: 11))
-                                                .foregroundColor(Color.white.opacity(0.4))
-                                                .frame(width: 30)
-                                        }
-                                    }
+                                    CaptionEditorView(look: $captionLook, gold: gold)
+                                        .padding(.top, 4)
+                                        .onChange(of: captionLook) { $0.save() }
                                 }
                                 .padding(12)
                                 .background(Color.white.opacity(0.04))
@@ -177,7 +159,7 @@ struct ExportOptionsView: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 14)
         }
-        .frame(width: 420, height: 580)
+        .frame(width: 600, height: 720)
         .background(Color(red: 0.09, green: 0.10, blue: 0.15))
         .onAppear {
             selectedStyleName = clip.captionStyleName
@@ -237,7 +219,10 @@ struct ExportOptionsView: View {
 
     private func styleChip(_ style: CaptionStyle) -> some View {
         let selected = selectedStyleName == style.name
-        return Button(action: { selectedStyleName = style.name }) {
+        return Button(action: {
+            selectedStyleName = style.name
+            captionLook = CaptionLook(preset: style)
+        }) {
             Text(style.name)
                 .font(.system(size: 11, weight: selected ? .semibold : .regular))
                 .foregroundColor(selected ? .black : Color.white.opacity(0.6))
@@ -285,7 +270,8 @@ struct ExportOptionsView: View {
             captionStyle: selectedStyle,
             captionBgEnabled: captionBgEnabled,
             captionBgOpacity: captionBgOpacity,
-            captionBgColor: captionBgColor
+            captionBgColor: captionBgColor,
+            captionLook: burnCaptions ? captionLook : nil
         )
 
         Task {

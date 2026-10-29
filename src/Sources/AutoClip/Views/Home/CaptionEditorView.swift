@@ -125,13 +125,15 @@ struct CaptionEditorView: View {
     }
 
     private var colorRow: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 8) {
             label("Text")
             ColorPicker("", selection: $look.textColor.color, supportsOpacity: false).labelsHidden()
-            label("Active word")
+            Spacer(minLength: 6)
+            label("Highlight")
             ColorPicker("", selection: $look.highlightColor.color, supportsOpacity: false).labelsHidden()
-            Spacer()
-            Toggle("ABC", isOn: $look.uppercase).toggleStyle(.button).font(.system(size: 11))
+            Spacer(minLength: 6)
+            Toggle("AA", isOn: $look.uppercase).toggleStyle(.button).font(.system(size: 11, weight: .bold))
+                .help("ALL CAPS")
         }
     }
 
@@ -167,5 +169,6 @@ struct CaptionEditorView: View {
 
     private func label(_ s: String) -> some View {
         Text(s).font(.system(size: 12)).foregroundColor(Color.white.opacity(0.6))
+            .lineLimit(1).fixedSize()
     }
 }
