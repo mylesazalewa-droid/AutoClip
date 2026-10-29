@@ -179,15 +179,24 @@ Respond with ONLY valid JSON — no markdown fences, no explanation:
                                         targetDuration: targetDuration, topic: topic,
                                         numberOfReels: numberOfReels, variation: variation)
 
-        let text: String
-        switch provider {
-        case .anthropic: text = try await callAnthropic(prompt: prompt, apiKey: apiKey)
-        case .openai:    text = try await callOpenAI(prompt: prompt, apiKey: apiKey)
-        case .google:    text = try await callGoogle(prompt: prompt, apiKey: apiKey)
+        // LLM output is non-deterministic — one unparseable reply shouldn't fail the whole reel,
+        // so retry once before surfacing the error.
+        var sampled: [Clip] = []
+        for attempt in 1...2 {
+            let text: String
+            switch provider {
+            case .anthropic: text = try await callAnthropic(prompt: prompt, apiKey: apiKey)
+            case .openai:    text = try await callOpenAI(prompt: prompt, apiKey: apiKey)
+            case .google:    text = try await callGoogle(prompt: prompt, apiKey: apiKey)
+            }
+            // Parse against sampledSegments so indices align, then map back to originals
+            do {
+                sampled = try parseSegmentJSON(from: text, segments: sampledSegments)
+                break
+            } catch {
+                if attempt == 2 { throw error }
+            }
         }
-
-        // Parse against sampledSegments so indices align, then map back to originals
-        let sampled = try parseSegmentJSON(from: text, segments: sampledSegments)
         // Re-map: find each sampled clip in the original list by id
         return sampled.compactMap { s in segments.first { $0.id == s.id } ?? s }
     }
@@ -245,10 +254,6 @@ Respond with ONLY valid JSON — no markdown fences, no explanation:
     // MARK: - Google Gemini
 
     private func callGoogle(prompt: String, apiKey: String) async throws -> String {
-        let body: [String: Any] = [
-            "contents": [["parts": [["text": prompt]]]],
-            "generationConfig": ["temperature": 0.2, "maxOutputTokens": 8192]
-        ]
         let model: String
         if let cached = cachedGeminiModel {
             model = cached
@@ -257,6 +262,21 @@ Respond with ONLY valid JSON — no markdown fences, no explanation:
             cachedGeminiModel = resolved
             model = resolved
         }
+        // Force JSON output so Gemini can't answer in prose or markdown
+        var genConfig: [String: Any] = [
+            "temperature": 0.2,
+            "maxOutputTokens": 8192,
+            "responseMimeType": "application/json"
+        ]
+        // 2.5 models "think" by default and those tokens eat the output budget — cap it.
+        // (Older models reject thinkingConfig, so only send it to 2.5+.)
+        if model.contains("2.5") || model.contains("-3") {
+            genConfig["thinkingConfig"] = ["thinkingBudget": 512]
+        }
+        let body: [String: Any] = [
+            "contents": [["parts": [["text": prompt]]]],
+            "generationConfig": genConfig
+        ]
         let urlStr = "https://generativelanguage.googleapis.com/v1beta/models/\(model):generateContent?key=\(apiKey)"
         var req = URLRequest(url: URL(string: urlStr)!)
         req.httpMethod = "POST"
@@ -279,13 +299,20 @@ Respond with ONLY valid JSON — no markdown fences, no explanation:
         }
         let finishReason = first["finishReason"] as? String ?? "STOP"
         guard let content = first["content"] as? [String: Any],
-              let parts = content["parts"] as? [[String: Any]],
-              let text = parts.first?["text"] as? String else {
+              let parts = content["parts"] as? [[String: Any]] else {
             // No content at all — now surface finish reason
             if finishReason != "STOP" {
                 throw llmError("Gemini stopped early (\(finishReason)). Try shortening the video or disabling AI mode.")
             }
             throw llmError("Gemini response missing text content")
+        }
+        // The answer can be split across several parts; skip any thought-summary parts
+        let text = parts
+            .filter { ($0["thought"] as? Bool) != true }
+            .compactMap { $0["text"] as? String }
+            .joined()
+        if text.isEmpty {
+            throw llmError("Gemini response missing text content (\(finishReason))")
         }
         // MAX_TOKENS: response was cut mid-JSON — try partial parse, only error if nothing useful
         if finishReason == "MAX_TOKENS", !text.contains("[") {
@@ -325,14 +352,42 @@ Respond with ONLY valid JSON — no markdown fences, no explanation:
         NSError(domain: "LLM", code: 1, userInfo: [NSLocalizedDescriptionKey: msg])
     }
 
-    private func parseSegmentJSON(from text: String, segments: [Clip]) throws -> [Clip] {
-        guard let start = text.firstIndex(of: "["),
-              let end   = text.lastIndex(of: "]") else {
-            throw llmError("AI returned no parseable JSON.\n\nResponse: \(text.prefix(300))")
+    /// Pulls the segment array out of an LLM reply. Handles a bare array, an object wrapping
+    /// the array (e.g. {"clips":[...]}), a single object, and arrays truncated mid-item.
+    private func extractSegmentArray(from text: String) -> [[String: Any]]? {
+        func parse<S: StringProtocol>(_ s: S) -> Any? {
+            try? JSONSerialization.jsonObject(with: Data(String(s).utf8))
         }
-        guard let arr = try? JSONSerialization.jsonObject(
-            with: Data(String(text[start...end]).utf8)) as? [[String: Any]] else {
-            throw llmError("Could not parse AI segment array")
+        func segments(in obj: Any?) -> [[String: Any]]? {
+            if let arr = obj as? [[String: Any]] { return arr }
+            if let dict = obj as? [String: Any] {
+                if dict["index"] != nil { return [dict] }
+                for value in dict.values {
+                    if let arr = value as? [[String: Any]] { return arr }
+                }
+            }
+            return nil
+        }
+        if let start = text.firstIndex(where: { $0 == "[" || $0 == "{" }),
+           let end = text.lastIndex(where: { $0 == "]" || $0 == "}" }),
+           start < end,
+           let arr = segments(in: parse(text[start...end])) {
+            return arr
+        }
+        // Truncated reply: keep every complete {...} item and close the array
+        if let start = text.firstIndex(of: "["),
+           let lastObj = text.lastIndex(of: "}"),
+           start < lastObj,
+           let arr = parse(text[start...lastObj] + "]") as? [[String: Any]] {
+            return arr
+        }
+        return nil
+    }
+
+    private func parseSegmentJSON(from text: String, segments: [Clip]) throws -> [Clip] {
+        guard let arr = extractSegmentArray(from: text) else {
+            let preview = text.isEmpty ? "(empty)" : String(text.prefix(500))
+            throw llmError("AI returned no parseable JSON.\n\nResponse: \(preview)")
         }
         var seen = Set<Int>()
         var result: [Clip] = []
