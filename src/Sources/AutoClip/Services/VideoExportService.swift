@@ -52,6 +52,8 @@ class VideoExportService {
         var topicKeywords: [String] = []
         var crossDissolve: Bool = false
         var emojiOverlays: Bool = false
+        /// When set, overrides captionStyle / captionBg* with the user's custom look
+        var captionLook: CaptionLook? = nil
     }
 
     enum ExportError: LocalizedError {
@@ -152,7 +154,8 @@ class VideoExportService {
                 parentLayer.addSublayer(videoLayer)
 
                 let captions = buildCaptionLayer(clip: clip, style: options.captionStyle, renderSize: renderSize,
-                                                 bgEnabled: options.captionBgEnabled, bgOpacity: options.captionBgOpacity, bgColor: options.captionBgColor)
+                                                 bgEnabled: options.captionBgEnabled, bgOpacity: options.captionBgOpacity, bgColor: options.captionBgColor,
+                                                 look: options.captionLook)
                 parentLayer.addSublayer(captions)
 
                 videoComposition.animationTool = AVVideoCompositionCoreAnimationTool(postProcessingAsVideoLayer: videoLayer, in: parentLayer)
@@ -382,7 +385,11 @@ class VideoExportService {
 
     private func buildCaptionLayer(clip: Clip, style: CaptionStyle, renderSize: CGSize,
                                    bgEnabled: Bool, bgOpacity: Double, bgColor: NSColor,
-                                   keywords: Set<String> = [], emojiOverlays: Bool = false) -> CALayer {
+                                   keywords: Set<String> = [], emojiOverlays: Bool = false,
+                                   look: CaptionLook? = nil) -> CALayer {
+        if let look {
+            return buildLookCaptionLayer(clip: clip, look: look, renderSize: renderSize, emojiOverlays: emojiOverlays)
+        }
         let container = CALayer()
         container.frame = CGRect(origin: .zero, size: renderSize)
 
@@ -479,6 +486,99 @@ class VideoExportService {
             }
         }
 
+        return container
+    }
+
+    /// Edits-style captions: phrases of N words, the spoken word highlighted, optional outline
+    /// and a pill background sized to the text. One layer per word (the full phrase with that
+    /// word highlighted), each visible from its word's start until the next word starts.
+    private func buildLookCaptionLayer(clip: Clip, look: CaptionLook, renderSize: CGSize,
+                                       emojiOverlays: Bool) -> CALayer {
+        let container = CALayer()
+        container.frame = CGRect(origin: .zero, size: renderSize)
+
+        let fontSize = look.fontSize(forRenderWidth: renderSize.width)
+        let maxW = renderSize.width * 0.86
+        let centerY = renderSize.height * CGFloat(look.position)
+        let clipDur = clip.duration
+
+        var wordEmoji: [String: String] = [:]
+        if emojiOverlays {
+            for entry in Self.emojiMap { for w in entry.words { wordEmoji[w] = entry.emoji } }
+        }
+
+        // Clip-relative timing; drop Whisper control tokens and words outside the clip
+        let words: [(text: String, start: Double, end: Double)] = clip.words.compactMap { w in
+            let t = w.word.trimmingCharacters(in: .whitespaces)
+            guard !t.isEmpty, !t.hasPrefix("<|"), !t.hasSuffix("|>") else { return nil }
+            let ws = w.startTime - clip.startTime, we = min(w.endTime - clip.startTime, clipDur)
+            guard ws >= 0, ws < clipDur else { return nil }
+            return (t, ws, max(we, ws + 0.05))
+        }
+        let phrases = CaptionLook.phrases(words, maxWords: look.wordsPerCaption,
+                                          text: { $0.text }, start: { $0.start }, end: { $0.end })
+
+        for phrase in phrases {
+            let texts = phrase.map(\.text)
+            let phraseStart = phrase.first!.start
+            let phraseEnd = min(phrase.last!.end, clipDur)
+
+            // Measure with the widest variant so the pill doesn't jump between words
+            let measured = look.measure(look.attributedPhrase(texts, active: nil, fontSize: fontSize), maxWidth: maxW)
+            let textH = measured.height + fontSize * 0.1
+            let textRect = CGRect(x: (renderSize.width - maxW) / 2, y: centerY - textH / 2, width: maxW, height: textH)
+
+            if look.bgEnabled {
+                let padX = fontSize * 0.35, padY = fontSize * 0.18
+                let bg = CALayer()
+                bg.backgroundColor = look.bgColor.nsColor.withAlphaComponent(CGFloat(look.bgOpacity)).cgColor
+                bg.cornerRadius = fontSize * 0.25
+                bg.frame = CGRect(x: (renderSize.width - measured.width) / 2 - padX, y: textRect.minY - padY,
+                                  width: measured.width + padX * 2, height: textH + padY * 2)
+                bg.opacity = 0
+                bg.add(wordAnim(start: phraseStart, end: phraseEnd, total: clipDur), forKey: "opacity")
+                container.addSublayer(bg)
+            }
+
+            for (j, w) in phrase.enumerated() {
+                let start = j == 0 ? phraseStart : w.start
+                let end = j + 1 < phrase.count ? phrase[j + 1].start : phraseEnd
+                guard end > start else { continue }
+
+                let tl = CATextLayer()
+                tl.string = look.attributedPhrase(texts, active: j, fontSize: fontSize)
+                tl.isWrapped = true
+                tl.alignmentMode = .center
+                tl.truncationMode = .none
+                tl.contentsScale = 1.0
+                tl.shadowColor = NSColor.black.cgColor
+                tl.shadowOpacity = look.bgEnabled ? 0 : 0.8
+                tl.shadowRadius = 4
+                tl.shadowOffset = CGSize(width: 0, height: -1)
+                tl.frame = textRect
+                tl.opacity = 0
+                tl.add(wordAnim(start: start, end: end, total: clipDur), forKey: "opacity")
+                // Off-screen layers are never drawn by the export renderer unless forced
+                tl.setNeedsDisplay(); tl.displayIfNeeded()
+                container.addSublayer(tl)
+
+                let lower = w.text.lowercased().trimmingCharacters(in: .punctuationCharacters)
+                if emojiOverlays, let emoji = wordEmoji[lower] {
+                    let emojiSize = fontSize * 1.4
+                    let el = CATextLayer()
+                    el.string = emoji
+                    el.fontSize = emojiSize
+                    el.alignmentMode = .center
+                    el.contentsScale = 1.0
+                    el.frame = CGRect(x: renderSize.width / 2 - emojiSize, y: textRect.minY - emojiSize * 1.6,
+                                      width: emojiSize * 2, height: emojiSize * 1.4)
+                    el.opacity = 0
+                    el.add(wordAnim(start: w.start, end: min(w.end + 0.3, clipDur), total: clipDur), forKey: "opacity")
+                    el.setNeedsDisplay(); el.displayIfNeeded()
+                    container.addSublayer(el)
+                }
+            }
+        }
         return container
     }
 
@@ -1219,7 +1319,8 @@ class VideoExportService {
                 let captionLayer = buildCaptionLayer(clip: reelClip, style: options.captionStyle, renderSize: renderSize,
                                                      bgEnabled: options.captionBgEnabled, bgOpacity: options.captionBgOpacity,
                                                      bgColor: options.captionBgColor,
-                                                     keywords: keywordSet, emojiOverlays: options.emojiOverlays)
+                                                     keywords: keywordSet, emojiOverlays: options.emojiOverlays,
+                                                     look: options.captionLook)
                 parent.addSublayer(captionLayer)
                 vc.animationTool = AVVideoCompositionCoreAnimationTool(postProcessingAsVideoLayer: vl, in: parent)
             }

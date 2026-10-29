@@ -334,6 +334,7 @@ struct AutoReelsTab: View {
     }
 
     @State private var apiKeys: [LLMClipService.AIProvider: String] = [:]
+    @State private var captionLook: CaptionLook = CaptionLook.load() ?? CaptionLook(preset: CaptionStyle.all[0])
     @State private var showKey = false
     @AppStorage("ar_topic") private var topicText: String = ""
     @State private var errorDetailText: String? = nil
@@ -818,7 +819,10 @@ struct AutoReelsTab: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 6) {
                             ForEach(captionStyles.indices, id: \.self) { i in
-                                Button(action: { captionStyleIndex = i }) {
+                                Button(action: {
+                                    captionStyleIndex = i
+                                    captionLook = CaptionLook(preset: captionStyles[i])
+                                }) {
                                     Text(captionStyles[i].name)
                                         .font(.system(size: 11, weight: captionStyleIndex == i ? .semibold : .regular))
                                         .foregroundColor(captionStyleIndex == i ? .black : Color.white.opacity(0.6))
@@ -830,6 +834,9 @@ struct AutoReelsTab: View {
                             }
                         }
                     }
+                    CaptionEditorView(look: $captionLook, gold: gold)
+                        .padding(.top, 4)
+                        .onChange(of: captionLook) { $0.save() }
                 }
             }
             .padding(14).background(Color.white.opacity(0.04)).cornerRadius(10)
@@ -2375,6 +2382,9 @@ private extension AutoReelsTab {
             var opts = VideoExportService.ExportOptions()
             opts.format = format; opts.burnCaptions = captions
             if captions && styleIdx < CaptionStyle.all.count { opts.captionStyle = CaptionStyle.all[styleIdx] }
+            if captions {
+                opts.captionLook = CaptionLook.load() ?? CaptionLook(preset: CaptionStyle.all[min(styleIdx, CaptionStyle.all.count - 1)])
+            }
             opts.topicKeywords = topic.split(whereSeparator: { $0 == " " || $0 == "," }).map { String($0).lowercased() }
             opts.crossDissolve = crossDissolve
             opts.emojiOverlays = emojiOverlays
