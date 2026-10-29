@@ -5,6 +5,7 @@ struct ClipCard: View {
     let clip: Clip
     let project: Project
     let isSelected: Bool
+    var onToggleLike: (() -> Void)? = nil
 
     @State private var isHovered = false
 
@@ -104,6 +105,8 @@ struct ClipCard: View {
                 Image(systemName: clip.isLiked ? "heart.fill" : "heart")
                     .font(.system(size: 12))
                     .foregroundColor(clip.isLiked ? Color(red: 1, green: 0.3, blue: 0.4) : Color.white.opacity(0.35))
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
                     .onTapGesture {
                         toggleLike()
                     }
@@ -184,6 +187,7 @@ struct ClipCard: View {
     }
 
     func toggleLike() {
+        if let onToggleLike { onToggleLike(); return }
         var updated = clip
         updated.isLiked.toggle()
         LibraryService.shared.updateClip(updated, in: project)

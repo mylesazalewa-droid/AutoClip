@@ -433,7 +433,8 @@ struct ProjectDetailView: View {
         return ScrollView {
             LazyVGrid(columns: columns, spacing: 10) {
                 ForEach(filteredClips) { clip in
-                    ClipCard(clip: clip, project: project, isSelected: selectedClipId == clip.id)
+                    ClipCard(clip: clip, project: project, isSelected: selectedClipId == clip.id,
+                             onToggleLike: { toggleLike(clip) })
                         .onTapGesture {
                             selectedClipId = selectedClipId == clip.id ? nil : clip.id
                         }
@@ -447,7 +448,8 @@ struct ProjectDetailView: View {
         ScrollView {
             LazyVStack(spacing: 2) {
                 ForEach(filteredClips) { clip in
-                    ClipListRow(clip: clip, project: project, isSelected: selectedClipId == clip.id)
+                    ClipListRow(clip: clip, project: project, isSelected: selectedClipId == clip.id,
+                                onToggleLike: { toggleLike(clip) })
                         .onTapGesture {
                             selectedClipId = selectedClipId == clip.id ? nil : clip.id
                         }
@@ -455,6 +457,12 @@ struct ProjectDetailView: View {
             }
             .padding(.vertical, 6)
         }
+    }
+
+    // Write through the binding so the visible project (AppState copy) and the library both update
+    func toggleLike(_ clip: Clip) {
+        guard let i = project.clips.firstIndex(where: { $0.id == clip.id }) else { return }
+        project.clips[i].isLiked.toggle()
     }
 
     var analysisProgressView: some View {

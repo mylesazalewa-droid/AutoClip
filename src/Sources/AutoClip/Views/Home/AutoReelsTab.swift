@@ -1099,7 +1099,9 @@ struct AutoReelsTab: View {
                     // Done state: green check + file count
                     HStack(spacing: 6) {
                         Image(systemName: "checkmark.circle.fill").foregroundColor(gold).font(.system(size: 11))
-                        Text(job.outputURLs != nil ? "\(job.outputURLs!.count) reels saved to Desktop" : "Reel ready")
+                        Text(job.outputURLs != nil
+                             ? "\(job.outputURLs!.count) reels saved to \(job.outputURLs!.first?.deletingLastPathComponent().lastPathComponent ?? "folder")"
+                             : "Reel saved to \(job.outputURL?.deletingLastPathComponent().lastPathComponent ?? "folder")")
                             .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.8))
                         Spacer()
                     }
@@ -2229,8 +2231,16 @@ private extension AutoReelsTab {
         panel.canChooseDirectories = true
         panel.canCreateDirectories = true
         panel.prompt = "Save Here"
-        panel.directoryURL = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first
-        return panel.runModal() == .OK ? panel.url : nil
+        // Start in the last folder used so repeat exports are one click
+        let lastPath = UserDefaults.standard.string(forKey: "ar_lastOutputDir")
+        if let lastPath, FileManager.default.fileExists(atPath: lastPath) {
+            panel.directoryURL = URL(fileURLWithPath: lastPath)
+        } else {
+            panel.directoryURL = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first
+        }
+        guard panel.runModal() == .OK, let url = panel.url else { return nil }
+        UserDefaults.standard.set(url.path, forKey: "ar_lastOutputDir")
+        return url
     }
 
     // MARK: - Reel pipeline

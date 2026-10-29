@@ -134,14 +134,8 @@ class VideoExportService {
                 let t = cropTransform(centerX: videoSize.width / 2, videoSize: videoSize, renderSize: renderSize, preferredTransform: preferredTransform)
                 layerInstruction.setTransform(t, at: .zero)
             } else {
-                // Use setTransform at each sample point; smoothSamples already applies
-                // moving-average + exponential smoothing so 0.5s step changes are imperceptible,
-                // and this avoids AVFoundation throwing on floating-point boundary mismatches
-                // that setTransformRamp strictly validates.
-                for s in faceSamples {
-                    let t = cropTransform(centerX: s.centerX, videoSize: videoSize, renderSize: renderSize, preferredTransform: preferredTransform)
-                    layerInstruction.setTransform(t, at: CMTime(seconds: s.time, preferredTimescale: 600))
-                }
+                applyFaceTrack(faceSamples, to: layerInstruction, base: .zero, end: clipDuration,
+                               videoSize: videoSize, renderSize: renderSize, preferredTransform: preferredTransform)
             }
 
             instruction.layerInstructions = [layerInstruction]
@@ -228,13 +222,14 @@ class VideoExportService {
         case .original:
             return videoSize
         case .vertical9x16:
-            if videoSize.width > videoSize.height {
-                return CGSize(width: round(videoSize.height * 9 / 16), height: videoSize.height)
-            }
-            return videoSize
+            // A 9:16 crop of 1080p is only 608x1080 — export at a full 1080x1920 instead
+            let w = videoSize.width > videoSize.height ? round(videoSize.height * 9 / 16) : videoSize.width
+            if w < 1080 { return CGSize(width: 1080, height: 1920) }
+            return videoSize.width > videoSize.height ? CGSize(width: w, height: videoSize.height) : videoSize
         case .square1x1:
             let side = min(videoSize.width, videoSize.height)
-            return CGSize(width: side, height: side)
+            let out = max(side, 1080)
+            return CGSize(width: out, height: out)
         case .horizontal16x9:
             if videoSize.height > videoSize.width {
                 return CGSize(width: videoSize.width, height: round(videoSize.width * 9 / 16))
@@ -244,10 +239,46 @@ class VideoExportService {
     }
 
     private func cropTransform(centerX: Double, videoSize: CGSize, renderSize: CGSize, preferredTransform: CGAffineTransform) -> CGAffineTransform {
-        let clampedX = max(renderSize.width / 2, min(videoSize.width - renderSize.width / 2, centerX))
-        let originX = clampedX - renderSize.width / 2
-        let originY = (videoSize.height - renderSize.height) / 2
-        return preferredTransform.concatenating(CGAffineTransform(translationX: -originX, y: -originY))
+        // Largest window with the output's aspect ratio that fits in the source,
+        // then scale it to fill renderSize (renderSize may be larger than the crop).
+        let aspect = renderSize.width / renderSize.height
+        let cropH = min(videoSize.height, videoSize.width / aspect)
+        let cropW = cropH * aspect
+        let scale = renderSize.width / cropW
+        let clampedX = max(cropW / 2, min(videoSize.width - cropW / 2, centerX))
+        let originX = clampedX - cropW / 2
+        let originY = (videoSize.height - cropH) / 2
+        return preferredTransform
+            .concatenating(CGAffineTransform(translationX: -originX, y: -originY))
+            .concatenating(CGAffineTransform(scaleX: scale, y: scale))
+    }
+
+    /// Glide the crop between face samples with transform ramps (instead of jumping every sample).
+    /// All times are integer CMTimes clamped to `end`, so ramps are contiguous and never overlap
+    /// or overrun the instruction's time range (which AVFoundation rejects).
+    private func applyFaceTrack(_ samples: [(time: Double, centerX: Double)],
+                                to li: AVMutableVideoCompositionLayerInstruction,
+                                base: CMTime, end: CMTime, videoSize: CGSize, renderSize: CGSize,
+                                preferredTransform: CGAffineTransform) {
+        func at(_ sec: Double) -> CMTime {
+            CMTimeMinimum(CMTimeAdd(base, CMTime(value: Int64((sec * 600).rounded()), timescale: 600)), end)
+        }
+        for i in samples.indices {
+            let tA = at(samples[i].time)
+            guard CMTimeCompare(tA, end) < 0 else { break }
+            let a = cropTransform(centerX: samples[i].centerX, videoSize: videoSize,
+                                  renderSize: renderSize, preferredTransform: preferredTransform)
+            if i + 1 < samples.count {
+                let tB = at(samples[i + 1].time)
+                if CMTimeCompare(tB, tA) > 0 {
+                    let b = cropTransform(centerX: samples[i + 1].centerX, videoSize: videoSize,
+                                          renderSize: renderSize, preferredTransform: preferredTransform)
+                    li.setTransformRamp(fromStart: a, toEnd: b, timeRange: CMTimeRange(start: tA, end: tB))
+                    continue
+                }
+            }
+            li.setTransform(a, at: tA)
+        }
     }
 
     // MARK: - Face Detection
@@ -263,28 +294,38 @@ class VideoExportService {
         let endSec = startSec + CMTimeGetSeconds(clipRange.duration)
         let interval = 0.5
 
-        var results: [(time: Double, centerX: Double)] = []
+        var raw: [(time: Double, centerX: Double?)] = []
         var t = startSec
         while t <= endSec {
             let cm = CMTime(seconds: t, preferredTimescale: 600)
-            let relTime = t - startSec
+            var cx: Double? = nil
             if let img = try? generator.copyCGImage(at: cm, actualTime: nil) {
-                let cx = await detectFaceCenterX(in: img, sourceWidth: videoSize.width)
-                results.append((time: relTime, centerX: cx))
-            } else {
-                results.append((time: relTime, centerX: videoSize.width / 2))
+                cx = await detectFaceCenterX(in: img, sourceWidth: videoSize.width)
             }
+            raw.append((time: t - startSec, centerX: cx))
             t += interval
         }
 
-        return smoothSamples(results)
+        // Missed detections hold the last known position instead of snapping to center
+        guard let firstHit = raw.first(where: { $0.centerX != nil })?.centerX else {
+            return raw.map { (time: $0.time, centerX: Double(videoSize.width / 2)) }
+        }
+        var last = firstHit
+        let filled = raw.map { r -> (time: Double, centerX: Double) in
+            if let cx = r.centerX { last = cx }
+            return (time: r.time, centerX: last)
+        }
+        return smoothSamples(filled, frameWidth: Double(videoSize.width))
     }
 
-    private func detectFaceCenterX(in image: CGImage, sourceWidth: CGFloat) async -> Double {
+    private func detectFaceCenterX(in image: CGImage, sourceWidth: CGFloat) async -> Double? {
         await withCheckedContinuation { cont in
             let request = VNDetectFaceRectanglesRequest { req, _ in
-                guard let obs = req.results as? [VNFaceObservation], let face = obs.first else {
-                    cont.resume(returning: Double(sourceWidth / 2))
+                // Follow the largest (closest) face, not whichever Vision lists first
+                guard let obs = req.results as? [VNFaceObservation],
+                      let face = obs.max(by: { $0.boundingBox.width * $0.boundingBox.height
+                                             < $1.boundingBox.width * $1.boundingBox.height }) else {
+                    cont.resume(returning: nil)
                     return
                 }
                 // boundingBox is normalized with origin at bottom-left; midX gives horizontal center
@@ -296,43 +337,33 @@ class VideoExportService {
         }
     }
 
-    private func smoothSamples(_ samples: [(time: Double, centerX: Double)]) -> [(time: Double, centerX: Double)] {
+    private func smoothSamples(_ samples: [(time: Double, centerX: Double)], frameWidth: Double) -> [(time: Double, centerX: Double)] {
         guard samples.count > 2 else { return samples }
 
-        // Pass 1: wide moving average (window = 15, ~7.5s at 0.5s interval) to kill jitter
+        // Pass 1: median (window 5 ≈ 2.5s) removes one-off misdetections without lagging
         var pass1 = samples
-        let w = 15
-        for i in 0..<samples.count {
-            let lo = max(0, i - w / 2)
-            let hi = min(samples.count - 1, i + w / 2)
-            let avg = samples[lo...hi].map { $0.centerX }.reduce(0, +) / Double(hi - lo + 1)
-            pass1[i] = (time: samples[i].time, centerX: avg)
+        for i in samples.indices {
+            let win = samples[max(0, i - 2)...min(samples.count - 1, i + 2)].map(\.centerX).sorted()
+            pass1[i] = (time: samples[i].time, centerX: win[win.count / 2])
         }
 
-        // Pass 2: dead-zone — only commit a new center if it moved > 22% of range
-        // (wider zone = camera stays put longer before panning)
-        guard let minX = pass1.map(\.centerX).min(),
-              let maxX = pass1.map(\.centerX).max() else { return pass1 }
-        let range = max(maxX - minX, 1)
-        let threshold = range * 0.22
-
-        var out = pass1
+        // Pass 2: dead zone — hold the frame steady unless the speaker moves > 6% of frame width
+        let threshold = frameWidth * 0.06
+        var held = pass1
         var committed = pass1[0].centerX
-        for i in 0..<pass1.count {
-            if abs(pass1[i].centerX - committed) > threshold {
-                committed = pass1[i].centerX
-            }
-            out[i] = (time: pass1[i].time, centerX: committed)
+        for i in pass1.indices {
+            if abs(pass1[i].centerX - committed) > threshold { committed = pass1[i].centerX }
+            held[i] = (time: pass1[i].time, centerX: committed)
         }
 
-        // Pass 3: slow exponential smooth — camera barely moves between frames
-        var expOut = out
-        let alpha = 0.04  // very low = very smooth, cinematic pan
-        for i in 1..<out.count {
-            expOut[i] = (time: out[i].time,
-                         centerX: expOut[i-1].centerX * (1 - alpha) + out[i].centerX * alpha)
+        // Pass 3: ease into each new position over ~1.5s; ramps interpolate between samples
+        var out = held
+        let alpha = 0.3
+        for i in 1..<held.count {
+            out[i] = (time: held[i].time,
+                      centerX: out[i - 1].centerX * (1 - alpha) + held[i].centerX * alpha)
         }
-        return expOut
+        return out
     }
 
     // MARK: - Caption Layer
@@ -418,11 +449,14 @@ class VideoExportService {
             tl.shadowOpacity = isKeyword ? 1.0 : 0.9
             tl.shadowRadius = isKeyword ? 6 : 4
             tl.shadowOffset = CGSize(width: 0, height: -1)
-            // Shift keyword text up slightly to center in the slightly-larger layout
-            let yOff: CGFloat = isKeyword ? (rowH - keyFontSize * 1.7) / 2 : 0
-            tl.frame = CGRect(x: areaX, y: centerY - rowH / 2 + yOff, width: areaW, height: rowH)
+            // CATextLayer draws from the top of its frame, so size it to one line and center it in the row
+            let lineH = (isKeyword ? keyFontSize : fontSize) * 1.25
+            tl.frame = CGRect(x: areaX, y: centerY - lineH / 2, width: areaW, height: lineH)
             tl.opacity = 0
             tl.add(wordAnim(start: ws, end: we, total: clipDur), forKey: "opacity")
+            // Off-screen layers are never drawn by the export renderer — without this the
+            // caption pill shows but the words are blank.
+            tl.setNeedsDisplay(); tl.displayIfNeeded()
             container.addSublayer(tl)
 
             // Emoji overlay — pop up above the text at the keyword's spoken moment
@@ -440,6 +474,7 @@ class VideoExportService {
                                   width: areaW / 2, height: emojiSize * 1.5)
                 el.opacity = 0
                 el.add(wordAnim(start: ws, end: min(we + 0.3, clipDur), total: clipDur), forKey: "opacity")
+                el.setNeedsDisplay(); el.displayIfNeeded()
                 container.addSublayer(el)
             }
         }
@@ -1118,17 +1153,13 @@ class VideoExportService {
                 if needsFace && clipVideoSize.width > clipVideoSize.height {
                     let srcRange = CMTimeRange(start: CMTime(seconds: clip.startTime, preferredTimescale: 600), duration: segDur)
                     let faces    = await detectFaces(in: clipAsset, clipRange: srcRange, videoSize: clipVideoSize)
-                    let segBase  = CMTimeGetSeconds(segStart)
 
                     if faces.isEmpty {
                         let t = cropTransform(centerX: clipVideoSize.width / 2, videoSize: clipVideoSize, renderSize: renderSize, preferredTransform: clipTransform)
                         li.setTransform(t, at: segStart)
                     } else {
-                        for f in faces {
-                            let tStart = CMTime(seconds: segBase + f.time, preferredTimescale: 600)
-                            let tFrom  = cropTransform(centerX: f.centerX, videoSize: clipVideoSize, renderSize: renderSize, preferredTransform: clipTransform)
-                            li.setTransform(tFrom, at: tStart)
-                        }
+                        applyFaceTrack(faces, to: li, base: segStart, end: segRange.end,
+                                       videoSize: clipVideoSize, renderSize: renderSize, preferredTransform: clipTransform)
                     }
                 } else {
                     let t = cropTransform(centerX: clipVideoSize.width / 2, videoSize: clipVideoSize, renderSize: renderSize, preferredTransform: clipTransform)
@@ -1212,14 +1243,10 @@ class VideoExportService {
         // specific preset instead, which always triggers a full re-encode.
         let preset: String
         if videoComposition != nil {
-            let maxDim = max(renderSize.width, renderSize.height)
-            if maxDim > 1920 {
-                preset = AVAssetExportPreset3840x2160
-            } else if maxDim > 1280 {
-                preset = AVAssetExportPreset1920x1080
-            } else {
-                preset = AVAssetExportPreset1280x720
-            }
+            // Size presets are bounding boxes that only scale DOWN, and they compare against
+            // landscape dimensions — 1920x1080 would shrink a 1080x1920 reel to 608x1080.
+            // The 4K box fits every render size we produce, so output == renderSize.
+            preset = AVAssetExportPreset3840x2160
         } else {
             preset = bestExportPreset(for: composition, sourceAsset: primaryAsset)
         }
