@@ -2143,7 +2143,6 @@ private extension AutoReelsTab {
                 "--format", "bestvideo[ext=mp4][vcodec^=avc1][height>=1080]+bestaudio[ext=m4a]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best",
                 "--merge-output-format", "mp4",
                 "--concurrent-fragments", "4",
-                "--no-live-chat",
                 "--output", outTemplate,
                 "--print", "after_move:filepath",
                 "--no-playlist", "--no-warnings",
