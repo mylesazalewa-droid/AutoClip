@@ -627,14 +627,13 @@ struct YouTubeURLSheet: View {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: ytdlp)
             process.arguments = [
-                // ios client handles ended live streams / VOD replays; tv_embedded + web as fallbacks
-                "--extractor-args", "youtube:player_client=ios,tv_embedded,web,android",
                 // Priority:
                 //  1. Native H.264 mp4 ≥1080p + m4a audio — zero transcoding, best compatibility
                 //  2. Any mp4 video + m4a audio
                 //  3. Best available (yt-dlp picks codec, ffmpeg merges)
                 "--format", "bestvideo[ext=mp4][vcodec^=avc1][height>=1080]+bestaudio[ext=m4a]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best",
                 "--merge-output-format", "mp4",
+                "--force-overwrites",              // never reuse an old (possibly low-res) download
                 "--concurrent-fragments", "4",
                 "--output", outTemplate,
                 "--print", "after_move:filepath",
