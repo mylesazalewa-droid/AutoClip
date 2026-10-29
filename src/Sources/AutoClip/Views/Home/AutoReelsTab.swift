@@ -35,11 +35,14 @@ struct AutoReelRecord: Identifiable, Codable {
     var cutPointsPerReel: [[Double]] // per-reel cut points for multi-reel packs
     var transcript: String = ""   // joined words from selected clips
     var reelTitles: [String] = [] // unique per-reel title derived from hook clip
+    /// Editable reels (2.61+). nil for older records, which were rendered straight to files.
+    var drafts: [ReelDraft]? = nil
 
     init(id: UUID, title: String, path: String, paths: [String] = [],
          format: String, duration: Double, clipCount: Int, dateCreated: Double,
          cutPoints: [Double] = [], cutPointsPerReel: [[Double]] = [],
-         transcript: String = "", reelTitles: [String] = []) {
+         transcript: String = "", reelTitles: [String] = [], drafts: [ReelDraft]? = nil) {
+        self.drafts = drafts
         self.id = id; self.title = title; self.path = path
         self.paths = paths.isEmpty ? [path] : paths
         self.format = format; self.duration = duration
@@ -250,6 +253,12 @@ class AutoReelsStore: ObservableObject {
     func clearAllFinished() {
         activeJobs.removeAll { $0.isFinished }
         saveFailedJobs()
+    }
+
+    func update(_ reel: AutoReelRecord) {
+        guard let i = reels.firstIndex(where: { $0.id == reel.id }) else { return }
+        reels[i] = reel
+        save()
     }
 
     func remove(id: UUID) {
@@ -602,14 +611,20 @@ struct AutoReelsTab: View {
         }
         // Reel detail opens as a sheet (same pattern as clicking into a project)
         .sheet(item: $selectedReel) { reel in
-            ReelDetailSidebar(
-                reel: reel,
-                gold: gold,
-                onPlay: { url, pts, dur in showPreview(url: url, id: reel.id, cutPoints: pts, reelDuration: dur) },
-                onFinder: { urls in NSWorkspace.shared.activateFileViewerSelecting(urls) },
-                onDelete: { store.remove(id: reel.id); selectedReel = nil }
-            )
-            .frame(minWidth: 420, minHeight: 600)
+            if reel.drafts != nil {
+                // 2.61+ reels: review, edit and choose which to export
+                ReelDraftsView(recordID: reel.id, gold: gold,
+                               onDelete: { store.remove(id: reel.id); selectedReel = nil })
+            } else {
+                ReelDetailSidebar(
+                    reel: reel,
+                    gold: gold,
+                    onPlay: { url, pts, dur in showPreview(url: url, id: reel.id, cutPoints: pts, reelDuration: dur) },
+                    onFinder: { urls in NSWorkspace.shared.activateFileViewerSelecting(urls) },
+                    onDelete: { store.remove(id: reel.id); selectedReel = nil }
+                )
+                .frame(minWidth: 420, minHeight: 600)
+            }
         }
     }
 
@@ -1246,7 +1261,11 @@ struct AutoReelsTab: View {
         ReelCard(reel: reel, gold: gold,
                  isSelected: selectedReel?.id == reel.id,
                  onSelect: { selectedReel = reel },
-                 onPlay: { url, pts, dur in showPreview(url: url, id: reel.id, cutPoints: pts, reelDuration: dur) },
+                 onPlay: { url, pts, dur in
+                     // Draft reels aren't rendered files yet — open the review/editor instead
+                     if reel.drafts != nil { selectedReel = reel }
+                     else { showPreview(url: url, id: reel.id, cutPoints: pts, reelDuration: dur) }
+                 },
                  onFinder: { urls in NSWorkspace.shared.activateFileViewerSelecting(urls) },
                  onDelete: { store.remove(id: reel.id); if selectedReel?.id == reel.id { selectedReel = nil } })
     }
@@ -2115,7 +2134,7 @@ private extension AutoReelsTab {
             return
         }
         downloadError = nil
-        guard let outDir = pickOutputDirectory() else { return }
+        let outDir = Self.defaultOutputDir  // folder is chosen when a reel is exported
 
         let fmt = selectedFormat; let captions = burnCaptions
         let styleIdx = captionStyleIndex; let dur = targetDuration
@@ -2206,30 +2225,17 @@ private extension AutoReelsTab {
 
     // MARK: - Save location picker
 
-    @MainActor
-    private func pickOutputDirectory() -> URL? {
-        let panel = NSOpenPanel()
-        panel.title = "Choose where to save your clips"
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.canCreateDirectories = true
-        panel.prompt = "Save Here"
-        // Start in the last folder used so repeat exports are one click
-        let lastPath = UserDefaults.standard.string(forKey: "ar_lastOutputDir")
-        if let lastPath, FileManager.default.fileExists(atPath: lastPath) {
-            panel.directoryURL = URL(fileURLWithPath: lastPath)
-        } else {
-            panel.directoryURL = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first
-        }
-        guard panel.runModal() == .OK, let url = panel.url else { return nil }
-        UserDefaults.standard.set(url.path, forKey: "ar_lastOutputDir")
-        return url
+    static var defaultOutputDir: URL {
+        if let last = UserDefaults.standard.string(forKey: "ar_lastOutputDir"),
+           FileManager.default.fileExists(atPath: last) { return URL(fileURLWithPath: last) }
+        return FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first!
     }
+
 
     // MARK: - Reel pipeline
 
     private func startPipeline(videoURL: URL) {
-        guard let outDir = pickOutputDirectory() else { return }
+        let outDir = Self.defaultOutputDir  // folder is chosen when a reel is exported
         let fmt = selectedFormat; let captions = burnCaptions
         let styleIdx = captionStyleIndex; let dur = targetDuration
         let ai = useAI; let prov = aiProvider
@@ -2256,7 +2262,7 @@ private extension AutoReelsTab {
     }
 
     private func retryJob(params: AutoReelJobParams, oldJobID: UUID) {
-        guard let outDir = pickOutputDirectory() else { return }
+        let outDir = Self.defaultOutputDir  // folder is chosen when a reel is exported
         store.clearJob(id: oldJobID)
         let fmt = VideoExportService.ExportFormat(rawValue: params.formatRaw) ?? .vertical9x16
         let prov = LLMClipService.AIProvider(rawValue: params.providerRaw) ?? .anthropic
@@ -2361,7 +2367,6 @@ private extension AutoReelsTab {
 
             await upd(0.49, "Preparing export…")
 
-            let desktop = outputDir
 
             var opts = VideoExportService.ExportOptions()
             opts.format = format; opts.burnCaptions = captions
@@ -2376,6 +2381,10 @@ private extension AutoReelsTab {
             // Always create multiple reels — count is user-specified or auto from video length
             let baseVariation = await MainActor.run { store.rerollVariation }
             var reelGroups: [[Clip]] = []
+            var aiTitles: [String] = []
+            // Story mode works on the full transcript, one sentence per line
+            let storySentences = ReelDraft.sentences(from: words)
+            var usedSentences = Set<Int>()
             var usedClipIDs: Set<UUID> = []
             for i in 0..<autoReels {
                 await upd(0.40 + Double(i) / Double(autoReels) * 0.10,
@@ -2384,14 +2393,32 @@ private extension AutoReelsTab {
                 var reelClips: [Clip]
                 if useAI && !apiKey.isEmpty {
                     await upd(0.40 + Double(i) / Double(autoReels) * 0.10,
-                              "Asking AI to select clips for reel \(i + 1)…")
+                              "AI is writing the story for reel \(i + 1)…")
                     do {
-                        reelClips = try await LLMClipService.shared.selectSegments(
-                            from: segments, provider: provider, apiKey: apiKey,
+                        let plan = try await LLMClipService.shared.composeStory(
+                            sentences: storySentences.map { ($0.start, $0.end, $0.text) },
                             targetDuration: targetDur, topic: topic.isEmpty ? nil : topic,
-                            numberOfReels: 1, variation: baseVariation + i)
+                            avoid: usedSentences, reelNumber: i + 1,
+                            provider: provider, apiKey: apiKey)
+                        var ranges = plan.ranges
+                        func total(_ rs: [ClosedRange<Int>]) -> Double {
+                            rs.reduce(0) { acc, r in acc + (storySentences[r.upperBound].end - storySentences[r.lowerBound].start) }
+                        }
+                        // Keep it near the target if the model overshoots — drop trailing runs
+                        while ranges.count > 1 && total(ranges) > targetDur * 1.3 { ranges.removeLast() }
+                        usedSentences.formUnion(ranges.flatMap { Array($0) })
+                        reelClips = ranges.map { r in
+                            let ws = storySentences[r].flatMap(\.words)
+                            return Clip(id: UUID(), title: ws.prefix(8).map(\.word).joined(separator: " "),
+                                        startTime: max(0, (ws.first?.startTime ?? 0) - 0.1),
+                                        endTime: (ws.last?.endTime ?? 0) + 0.25,
+                                        score: 0, scoreReason: "AI story", words: ws, isLiked: false,
+                                        starRating: 0, captionStyleName: "Karaoke", aspectRatio: "9:16",
+                                        notes: "", thumbnailData: nil)
+                        }
+                        aiTitles.append(plan.title)
                         await upd(0.40 + Double(i) / Double(autoReels) * 0.10,
-                                  "AI selected clips for reel \(i + 1) ✓")
+                                  "AI built reel \(i + 1) ✓")
                     } catch {
                         // Surface the real error — don't silently fall back
                         throw NSError(domain: "AutoClip", code: 99, userInfo: [
@@ -2404,7 +2431,8 @@ private extension AutoReelsTab {
                                                                previouslyUsedIDs: usedClipIDs)
                     reelClips = hook.map { [$0] + rest } ?? rest
                 }
-                if let smode = storylineMode { reelClips = smode.order(reelClips) }
+                // AI story mode already decides the order (hook first, then the story)
+                if let smode = storylineMode, !(useAI && !apiKey.isEmpty) { reelClips = smode.order(reelClips) }
                 if !reelClips.isEmpty {
                     reelGroups.append(reelClips)
                     usedClipIDs.formUnion(reelClips.map { $0.id })
@@ -2414,74 +2442,49 @@ private extension AutoReelsTab {
                 throw NSError(domain: "AutoClip", code: 4, userInfo: [NSLocalizedDescriptionKey: "No clips could be selected."])
             }
 
-            var outURLs: [URL] = []
-            for (i, group) in reelGroups.enumerated() {
-                let pct = Double(i) / Double(reelGroups.count)
-                await upd(0.50 + pct * 0.48, "Stitching reel \(i + 1) of \(reelGroups.count)…")
-                let reelName = reelGroups.count == 1 ? "\(finalReelTitle) – Auto Reel" : "\(finalReelTitle) – Reel \(i + 1)"
-                let outURL = desktop.appendingPathComponent("\(reelName).mp4")
-                try await svc.createHighlightReel(clips: group, sourceVideoURL: workingURL,
-                                                  outputURL: outURL, options: opts) { _, _ in }
-                outURLs.append(outURL)
-                if i < reelGroups.count - 1 {
-                    try? await Task.sleep(nanoseconds: 500_000_000)
-                }
-            }
-
-            func reelCutPoints(_ group: [Clip]) -> [Double] {
-                let dur = group.reduce(0.0) { $0 + $1.duration }
-                guard dur > 0, group.count > 1 else { return [] }
-                var acc = 0.0
-                return group.dropLast().map { acc += $0.duration; return acc / dur }
-            }
-            let allCutPts = reelGroups.map { reelCutPoints($0) }
-            let cutPts = allCutPts.first ?? []
-            let firstGroup = reelGroups.first ?? []
-            let firstReelDur = firstGroup.reduce(0.0) { $0 + $1.duration }
-            let totalClipCount = reelGroups.reduce(0) { $0 + $1.count }
-
-            let transcriptText = reelGroups.flatMap { group in
-                group.flatMap { clip in clip.words.map { $0.word } }
-            }.joined(separator: " ")
-
-            let reelLabel = reelGroups.count == 1 ? "\(finalReelTitle) – Reel" : "\(finalReelTitle) – \(reelGroups.count) Reels"
-            // Build unique per-reel titles from hook clip words.
-            // Try words 1-6, then 4-10, then 7-13 until titles are distinct.
+            // Reels are saved as editable drafts — nothing is rendered until the user
+            // picks which ones to export (and can trim / restyle them first).
+            await upd(0.95, "Preparing \(reelGroups.count) reel\(reelGroups.count == 1 ? "" : "s") for review…")
             func snippetFrom(_ words: [Word], range: Range<Int>) -> String {
                 let slice = Array(words)[range.clamped(to: 0..<words.count)]
                 return slice.map { $0.word }.joined(separator: " ")
             }
-            var perReelTitles: [String] = reelGroups.map { group in
-                snippetFrom(group.first?.words ?? [], range: 0..<6)
-            }
-            // If titles are not all unique, try a later window
-            for startOffset in [3, 6, 9] {
-                if Set(perReelTitles).count < perReelTitles.count {
-                    perReelTitles = reelGroups.enumerated().map { i, group in
-                        let w = group.first?.words ?? []
-                        let s = snippetFrom(w, range: startOffset..<(startOffset + 6))
-                        return s.isEmpty ? "Reel \(i + 1)" : s
-                    }
+            var perReelTitles: [String] = reelGroups.map { snippetFrom($0.first?.words ?? [], range: 0..<6) }
+            for startOffset in [3, 6, 9] where Set(perReelTitles).count < perReelTitles.count {
+                perReelTitles = reelGroups.enumerated().map { i, group in
+                    let s = snippetFrom(group.first?.words ?? [], range: startOffset..<(startOffset + 6))
+                    return s.isEmpty ? "Reel \(i + 1)" : s
                 }
             }
-            // Last resort: append reel number
             if Set(perReelTitles).count < perReelTitles.count {
                 perReelTitles = perReelTitles.enumerated().map { "\($1) #\($0 + 1)" }
             }
+            // Prefer the AI's titles when it wrote the story
+            if aiTitles.count == perReelTitles.count {
+                perReelTitles = zip(aiTitles, perReelTitles).map { $0.isEmpty ? $1 : $0 }
+            }
+            let look = captions ? (opts.captionLook ?? CaptionLook.load()) : nil
+            let drafts = reelGroups.enumerated().map { i, group in
+                ReelDraft(title: perReelTitles[i], clips: group, sourceVideoPath: workingURL.path,
+                          formatRaw: format.rawValue, captions: captions, look: look,
+                          crossDissolve: crossDissolve, emojiOverlays: emojiOverlays,
+                          topicKeywords: opts.topicKeywords)
+            }
+            let firstReelDur = drafts.first?.duration ?? 0
+            let transcriptText = reelGroups.flatMap { $0.flatMap { $0.words.map(\.word) } }.joined(separator: " ")
+            let reelLabel = reelGroups.count == 1 ? "\(finalReelTitle) – Reel" : "\(finalReelTitle) – \(reelGroups.count) Reels"
             let record = AutoReelRecord(id: UUID(), title: reelLabel,
-                                         path: outURLs.first?.path ?? "",
-                                         paths: outURLs.map { $0.path },
-                                         format: fmtLabel(format), duration: firstReelDur,
-                                         clipCount: totalClipCount, dateCreated: Date().timeIntervalSince1970,
-                                         cutPoints: cutPts, cutPointsPerReel: allCutPts,
-                                         transcript: transcriptText, reelTitles: perReelTitles)
+                                        path: workingURL.path, paths: [workingURL.path],
+                                        format: fmtLabel(format), duration: firstReelDur,
+                                        clipCount: reelGroups.reduce(0) { $0 + $1.count },
+                                        dateCreated: Date().timeIntervalSince1970,
+                                        transcript: transcriptText, reelTitles: perReelTitles,
+                                        drafts: drafts)
             await MainActor.run {
                 AutoReelsStore.shared.add(record)
                 store.updateJob(AutoReelJob(id: jobID, title: finalReelTitle, progress: 1.0,
-                                           statusMsg: reelGroups.count == 1 ? "Reel saved to Desktop" : "\(reelGroups.count) reels saved to Desktop",
-                                           isFinished: true, error: nil,
-                                           outputURL: outURLs.first, outputURLs: outURLs,
-                                           cutPoints: cutPts, reelDuration: firstReelDur))
+                                           statusMsg: "\(drafts.count) reel\(drafts.count == 1 ? "" : "s") ready — open to review & export",
+                                           isFinished: true, error: nil))
             }
 
         } catch is CancellationError {

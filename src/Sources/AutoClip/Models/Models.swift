@@ -111,7 +111,7 @@ struct Clip: Identifiable, Codable {
 
 // MARK: - Word
 
-struct Word: Identifiable, Codable {
+struct Word: Identifiable, Codable, Equatable {
     var id: UUID
     var word: String
     var startTime: Double

@@ -201,6 +201,88 @@ Respond with ONLY valid JSON — no markdown fences, no explanation:
         return sampled.compactMap { s in segments.first { $0.id == s.id } ?? s }
     }
 
+    // MARK: - Story mode — AI reads the whole transcript and composes one coherent short
+
+    struct StoryPlan {
+        var title: String
+        var ranges: [ClosedRange<Int>]   // sentence index ranges, in playback order
+    }
+
+    /// Sends the full numbered transcript and asks the model to build ONE self-contained
+    /// short (hook → context → point → payoff) from runs of consecutive sentences.
+    /// `avoid` holds sentence indices already used by other reels from the same video.
+    func composeStory(sentences: [(start: Double, end: Double, text: String)],
+                      targetDuration: Double, topic: String?, avoid: Set<Int>,
+                      reelNumber: Int, provider: AIProvider, apiKey: String) async throws -> StoryPlan {
+        let lines = sentences.enumerated().map { i, s -> String in
+            let m = Int(s.start) / 60, sec = Int(s.start) % 60
+            let used = avoid.contains(i) ? " (USED)" : ""
+            return "[\(i)] \(m):\(String(format: "%02d", sec)) \(Int((s.end - s.start).rounded()))s\(used): \(s.text)"
+        }.joined(separator: "\n")
+        let topicLine = (topic?.trimmingCharacters(in: .whitespaces).isEmpty == false)
+            ? "\nTHEME: build the story around \"\(topic!)\".\n" : ""
+        let target = Int(targetDuration)
+
+        let prompt = """
+You are an expert short-form video editor (Reels, TikTok, Shorts). Below is the full transcript of a talk, one numbered sentence per line with its timestamp and length.
+\(topicLine)
+Build ONE coherent short of about \(target) seconds (acceptable: \(Int(Double(target) * 0.85))–\(Int(Double(target) * 1.15))s) by choosing runs of CONSECUTIVE sentences. It must make complete sense to someone who never saw the talk.
+
+Structure:
+1. HOOK (first 3–8s): the most curiosity-grabbing or bold line. It may come from anywhere in the talk.
+2. CONTEXT: just enough setup for the main idea to land.
+3. CORE: one main idea or story — stay on a single thread, no topic jumps.
+4. PAYOFF: end on a strong, conclusive line (a punchline, takeaway or challenge) — never mid-thought.
+
+Rules:
+- Each run starts where a thought starts — never with a line that depends on what came before ("And so that's why…", "This is…", "He said…" without who).
+- Keep runs in their original order after the hook. Prefer fewer, longer runs (2–5) over many tiny jumps.
+- Skip greetings, announcements, housekeeping, "turn to page…", jokes that need context, and anything referring to visuals the viewer can't see.
+- Never use sentences marked (USED) — they belong to other reels. This is reel #\(reelNumber); pick a different idea from the other reels.
+- Count the seconds: the sum of the chosen sentences' lengths must be within the range above.
+
+Transcript:
+\(lines)
+
+Respond with ONLY valid JSON, no markdown:
+{"title":"short catchy title (max 8 words)","segments":[{"from":12,"to":15},{"from":40,"to":47}]}
+"""
+        var lastError: Error = llmError("AI returned no story")
+        for _ in 1...2 {
+            let text: String
+            switch provider {
+            case .anthropic: text = try await callAnthropic(prompt: prompt, apiKey: apiKey)
+            case .openai:    text = try await callOpenAI(prompt: prompt, apiKey: apiKey)
+            case .google:    text = try await callGoogle(prompt: prompt, apiKey: apiKey)
+            }
+            do { return try parseStory(text, sentenceCount: sentences.count, avoid: avoid) }
+            catch { lastError = error }
+        }
+        throw lastError
+    }
+
+    private func parseStory(_ text: String, sentenceCount: Int, avoid: Set<Int>) throws -> StoryPlan {
+        guard let start = text.firstIndex(of: "{"), let end = text.lastIndex(of: "}"),
+              let obj = try? JSONSerialization.jsonObject(with: Data(String(text[start...end]).utf8)) as? [String: Any],
+              let segs = obj["segments"] as? [[String: Any]] else {
+            throw llmError("AI story wasn't valid JSON.\n\nResponse: \(text.prefix(400))")
+        }
+        var ranges: [ClosedRange<Int>] = []
+        var taken = Set<Int>()
+        for seg in segs {
+            guard var a = seg["from"] as? Int, var b = seg["to"] as? Int else { continue }
+            if a > b { swap(&a, &b) }
+            a = max(0, a); b = min(sentenceCount - 1, b)
+            guard a <= b else { continue }
+            let r = a...b
+            // Drop overlaps with earlier picks or other reels
+            guard r.allSatisfy({ !taken.contains($0) && !avoid.contains($0) }) else { continue }
+            ranges.append(r); taken.formUnion(r)
+        }
+        guard !ranges.isEmpty else { throw llmError("AI story had no usable segments.") }
+        return StoryPlan(title: (obj["title"] as? String) ?? "", ranges: ranges)
+    }
+
     // MARK: - Anthropic
 
     private func callAnthropic(prompt: String, apiKey: String) async throws -> String {
