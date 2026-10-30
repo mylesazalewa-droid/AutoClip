@@ -10,6 +10,10 @@ struct ReelDraft: Identifiable, Codable, Equatable {
         var id = UUID()
         var words: [Word]
         var included = true
+        /// Fine-tune (seconds) applied when this sentence starts / ends a stitched run.
+        /// Negative start = begin earlier, positive end = run longer. Optional so 2.61 drafts decode.
+        var startNudge: Double?
+        var endNudge: Double?
         var text: String { words.map(\.word).joined(separator: " ") }
         var start: Double { words.first?.startTime ?? 0 }
         var end: Double { words.last?.endTime ?? 0 }
@@ -63,21 +67,31 @@ struct ReelDraft: Identifiable, Codable, Equatable {
 
     // MARK: Rendering
 
+    /// One stitched run: the clip to render plus the sentences that bound it.
+    struct Run {
+        var clip: Clip
+        var firstSentenceID: UUID
+        var lastSentenceID: UUID
+    }
+
     /// Clips to stitch: each piece's included sentences, merged where they're back-to-back
     /// in the source, so removing a sentence mid-piece cuts it out cleanly.
-    var renderClips: [Clip] {
-        var clips: [Clip] = []
+    var renderRuns: [Run] {
+        var runs: [Run] = []
         for piece in pieces {
             var run: [Sentence] = []
             func flush() {
-                guard let first = run.first?.words.first, let last = run.last?.words.last else { return }
+                guard let firstS = run.first, let lastS = run.last,
+                      let first = firstS.words.first, let last = lastS.words.last else { run = []; return }
                 let words = run.flatMap(\.words)
+                let start = max(0, first.startTime - 0.1 + (firstS.startNudge ?? 0))
+                let end = max(start + 0.3, last.endTime + 0.25 + (lastS.endNudge ?? 0))
                 var c = Clip(id: UUID(), title: words.prefix(8).map(\.word).joined(separator: " "),
-                             startTime: max(0, first.startTime - 0.1), endTime: last.endTime + 0.25,
+                             startTime: start, endTime: end,
                              score: 0, scoreReason: "", words: words, isLiked: false, starRating: 0,
                              captionStyleName: "Karaoke", aspectRatio: "9:16", notes: "", thumbnailData: nil)
                 c.sourceVideoPath = piece.sourceVideoPath
-                clips.append(c)
+                runs.append(Run(clip: c, firstSentenceID: firstS.id, lastSentenceID: lastS.id))
                 run = []
             }
             for s in piece.sentences {
@@ -85,15 +99,39 @@ struct ReelDraft: Identifiable, Codable, Equatable {
             }
             flush()
         }
-        // Don't let padding overlap the next clip from the same source (avoids repeated syllables)
-        for i in clips.indices.dropLast() where clips[i].sourceVideoPath == clips[i + 1].sourceVideoPath {
-            let next = clips[i + 1]
-            if next.startTime > clips[i].startTime && clips[i].endTime > next.startTime {
-                let mid = ((clips[i].words.last?.endTime ?? clips[i].endTime) + (next.words.first?.startTime ?? next.startTime)) / 2
-                clips[i].endTime = mid; clips[i + 1].startTime = mid
+        // Don't let default padding overlap the next clip from the same source (avoids repeated
+        // syllables) — unless the user deliberately nudged that cut.
+        let nudged = Set(pieces.flatMap(\.sentences).filter { $0.startNudge != nil || $0.endNudge != nil }.map(\.id))
+        for i in runs.indices.dropLast() where runs[i].clip.sourceVideoPath == runs[i + 1].clip.sourceVideoPath {
+            guard !nudged.contains(runs[i].lastSentenceID), !nudged.contains(runs[i + 1].firstSentenceID) else { continue }
+            let next = runs[i + 1].clip
+            if next.startTime > runs[i].clip.startTime && runs[i].clip.endTime > next.startTime {
+                let mid = ((runs[i].clip.words.last?.endTime ?? runs[i].clip.endTime) + (next.words.first?.startTime ?? next.startTime)) / 2
+                runs[i].clip.endTime = mid; runs[i + 1].clip.startTime = mid
             }
         }
-        return clips
+        return runs
+    }
+
+    var renderClips: [Clip] { renderRuns.map(\.clip) }
+
+    /// Where a run begins / ends on the reel timeline (for previewing a cut).
+    func reelTime(runStartingWith sentenceID: UUID) -> Double? {
+        var t = 0.0
+        for r in renderRuns {
+            if r.firstSentenceID == sentenceID { return t }
+            t += r.clip.duration
+        }
+        return nil
+    }
+
+    func reelTime(runEndingWith sentenceID: UUID) -> Double? {
+        var t = 0.0
+        for r in renderRuns {
+            t += r.clip.duration
+            if r.lastSentenceID == sentenceID { return t }
+        }
+        return nil
     }
 
     var duration: Double { renderClips.reduce(0) { $0 + $1.duration } }

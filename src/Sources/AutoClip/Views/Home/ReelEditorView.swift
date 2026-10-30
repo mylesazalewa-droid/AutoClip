@@ -208,6 +208,8 @@ struct ReelEditorView: View {
     @State private var isPlaying = false
     @State private var observer: Any?
     @State private var reloadToken = 0
+    /// After a nudge, play across that cut once the preview has rebuilt
+    @State private var auditionAt: Double?
 
     private var look: CaptionLook { draft.look ?? CaptionLook.load() ?? CaptionLook(preset: CaptionStyle.all[0]) }
     private var previewAspect: CGFloat {
@@ -315,11 +317,14 @@ struct ReelEditorView: View {
         player.replaceCurrentItem(with: item)
         reelWords = words
         total = max(0.1, draft.duration)
-        await player.seek(to: CMTime(seconds: min(resumeAt, total), preferredTimescale: 600))
+        let seekTo = auditionAt.map { max(0, min($0, total - 0.2)) } ?? min(resumeAt, total)
+        await player.seek(to: CMTime(seconds: seekTo, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+        time = seekTo
         observer = player.addPeriodicTimeObserver(forInterval: CMTime(value: 1, timescale: 20), queue: .main) { t in
             time = CMTimeGetSeconds(t)
             if time >= total - 0.05 { isPlaying = false }
         }
+        if auditionAt != nil { auditionAt = nil; isPlaying = true }
         if isPlaying { player.play() }
     }
 
@@ -403,6 +408,9 @@ struct ReelEditorView: View {
                     .buttonStyle(.plain).foregroundColor(Color(red: 1, green: 0.45, blue: 0.45)).help("Remove this clip")
             }
             ForEach(Array(piece.sentences.enumerated()), id: \.element.id) { j, s in
+                let startsRun = s.included && (j == 0 || !piece.sentences[j - 1].included)
+                let endsRun = s.included && (j == piece.sentences.count - 1 || !piece.sentences[j + 1].included)
+                if startsRun { nudgeRow(piece: i, sentence: j, isStart: true) }
                 Button { draft.pieces[i].sentences[j].included.toggle() } label: {
                     HStack(alignment: .top, spacing: 8) {
                         Image(systemName: s.included ? "checkmark.square.fill" : "square")
@@ -417,12 +425,77 @@ struct ReelEditorView: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                if endsRun { nudgeRow(piece: i, sentence: j, isStart: false) }
             }
         }
         .padding(12)
         .background(Color.white.opacity(0.04))
         .cornerRadius(10)
         .opacity(kept.isEmpty ? 0.5 : 1)
+    }
+
+    // MARK: Micro-adjust cuts
+
+    /// Fine-tune where a stitched run starts or ends. Start: earlier ◀ ▶ later.
+    /// End: shorter ◀ ▶ longer. Each tap re-plays across that cut.
+    private func nudgeRow(piece i: Int, sentence j: Int, isStart: Bool) -> some View {
+        let s = draft.pieces[i].sentences[j]
+        let value = (isStart ? s.startNudge : s.endNudge) ?? 0
+        return HStack(spacing: 6) {
+            Image(systemName: isStart ? "arrow.right.to.line" : "arrow.left.to.line")
+                .font(.system(size: 10)).foregroundColor(gold.opacity(0.8))
+            Text(isStart ? "Starts" : "Ends").font(.system(size: 10, weight: .semibold))
+                .foregroundColor(Color.white.opacity(0.5)).frame(width: 38, alignment: .leading)
+            nudgeButton("−0.5", i, j, isStart, -0.5)
+            nudgeButton("−0.1", i, j, isStart, -0.1)
+            Text(value == 0 ? "0.0s" : String(format: "%+.1fs", value))
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundColor(value == 0 ? Color.white.opacity(0.4) : gold)
+                .frame(width: 40)
+            nudgeButton("+0.1", i, j, isStart, 0.1)
+            nudgeButton("+0.5", i, j, isStart, 0.5)
+            Text(isStart ? "earlier ◀ ▶ later" : "shorter ◀ ▶ longer")
+                .font(.system(size: 9)).foregroundColor(Color.white.opacity(0.3))
+            Spacer(minLength: 0)
+            if value != 0 {
+                Button("Reset") { setNudge(i, j, isStart, nil) }
+                    .buttonStyle(.plain).font(.system(size: 10)).foregroundColor(Color.white.opacity(0.5))
+            }
+            Button { audition(i, j, isStart) } label: { Image(systemName: "ear") }
+                .buttonStyle(.plain).font(.system(size: 11)).foregroundColor(Color.white.opacity(0.5))
+                .help("Play across this cut")
+        }
+        .padding(.vertical, 3).padding(.horizontal, 6)
+        .background(Color.white.opacity(0.03)).cornerRadius(5)
+    }
+
+    private func nudgeButton(_ label: String, _ i: Int, _ j: Int, _ isStart: Bool, _ delta: Double) -> some View {
+        Button(label) {
+            let s = draft.pieces[i].sentences[j]
+            let cur = (isStart ? s.startNudge : s.endNudge) ?? 0
+            // Limit to ±5s so a cut can't swallow a neighbouring thought by accident
+            let next = (min(5, max(-5, cur + delta)) * 10).rounded() / 10
+            setNudge(i, j, isStart, next == 0 ? nil : next)
+            audition(i, j, isStart)
+        }
+        .buttonStyle(.plain)
+        .font(.system(size: 10, weight: .medium, design: .monospaced))
+        .foregroundColor(.white)
+        .padding(.horizontal, 5).padding(.vertical, 2)
+        .background(Color.white.opacity(0.08)).cornerRadius(4)
+    }
+
+    private func setNudge(_ i: Int, _ j: Int, _ isStart: Bool, _ v: Double?) {
+        if isStart { draft.pieces[i].sentences[j].startNudge = v }
+        else { draft.pieces[i].sentences[j].endNudge = v }
+    }
+
+    /// Queue playback from just before the cut (start: 1.5s of the previous clip; end: last 2s of this run).
+    private func audition(_ i: Int, _ j: Int, _ isStart: Bool) {
+        let id = draft.pieces[i].sentences[j].id
+        if isStart, let t = draft.reelTime(runStartingWith: id) { auditionAt = max(0, t - 1.5) }
+        if !isStart, let t = draft.reelTime(runEndingWith: id) { auditionAt = max(0, t - 2.0) }
+        reloadToken += 1   // rebuilds the preview (with the new cut) and then plays from auditionAt
     }
 
     private func move(_ i: Int, by delta: Int) {
