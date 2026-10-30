@@ -315,6 +315,7 @@ class AutoReelsStore: ObservableObject {
 
 struct AutoReelsTab: View {
     @ObservedObject private var store = AutoReelsStore.shared
+    @Environment(\.openWindow) private var openWindow
     @State private var isDropTargeted = false
     @State private var showingCreateSheet = false
     @State private var pickedVideoURL: URL?
@@ -613,12 +614,16 @@ struct AutoReelsTab: View {
             }
         }
         // Reel detail opens as a sheet (same pattern as clicking into a project)
-        .sheet(item: $selectedReel) { reel in
-            if reel.drafts != nil {
-                // 2.61+ reels: review, edit and choose which to export
-                ReelDraftsView(recordID: reel.id, gold: gold,
-                               onDelete: { store.remove(id: reel.id); selectedReel = nil })
-            } else {
+        // 2.61+ reels open in their own resizable window (review, preview, edit, export)
+        .onChange(of: selectedReel?.id) { _ in
+            if let reel = selectedReel, reel.drafts != nil {
+                openWindow(id: "reel-window", value: reel.id)
+                selectedReel = nil
+            }
+        }
+        .sheet(item: Binding(get: { selectedReel?.drafts == nil ? selectedReel : nil },
+                             set: { selectedReel = $0 })) { reel in
+            Group {
                 ReelDetailSidebar(
                     reel: reel,
                     gold: gold,
@@ -1319,6 +1324,7 @@ private struct ReelCard: View {
         VStack(alignment: .leading, spacing: 0) {
             ZStack(alignment: .bottomLeading) {
                 ReelThumbnailView(path: reel.path)
+                    .frame(minWidth: 0, maxWidth: .infinity)   // wide thumbnails must not push past the column
                     .frame(height: 200)
                     .clipped()
 
@@ -2408,14 +2414,10 @@ private extension AutoReelsTab {
                         let plan = try await LLMClipService.shared.composeStory(
                             sentences: storySentences.map { ($0.start, $0.end, $0.text) },
                             targetDuration: targetDur, topic: topic.isEmpty ? nil : topic,
-                            avoid: usedSentences, reelNumber: i + 1,
+                            avoid: usedSentences, reelNumber: i + 1, otherTitles: aiTitles,
                             provider: provider, apiKey: apiKey)
-                        var ranges = plan.ranges
-                        func total(_ rs: [ClosedRange<Int>]) -> Double {
-                            rs.reduce(0) { acc, r in acc + (storySentences[r.upperBound].end - storySentences[r.lowerBound].start) }
-                        }
-                        // Keep it near the target if the model overshoots — drop trailing runs
-                        while ranges.count > 1 && total(ranges) > targetDur * 1.3 { ranges.removeLast() }
+                        // Keep it near the target if the model overshoots
+                        let ranges = ReelGenerator.fit(plan.ranges, to: targetDur, sentences: storySentences)
                         usedSentences.formUnion(ranges.flatMap { Array($0) })
                         reelClips = ranges.map { r in
                             let ws = storySentences[r].flatMap(\.words)

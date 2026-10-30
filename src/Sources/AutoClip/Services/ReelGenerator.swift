@@ -97,6 +97,18 @@ enum ReelGenerator {
         }
     }
 
+    /// Keep an AI story near the target: drop trailing runs, then trim the last run sentence
+    /// by sentence (a single long passage can otherwise come back at several minutes).
+    static func fit(_ ranges: [ClosedRange<Int>], to target: Double, sentences: [ReelDraft.Sentence]) -> [ClosedRange<Int>] {
+        var rs = ranges
+        func total() -> Double { rs.reduce(0) { $0 + (sentences[$1.upperBound].end - sentences[$1.lowerBound].start) } }
+        while rs.count > 1 && total() > target * 1.3 { rs.removeLast() }
+        while total() > target * 1.2, let last = rs.last, last.upperBound > last.lowerBound {
+            rs[rs.count - 1] = last.lowerBound...(last.upperBound - 1)
+        }
+        return rs
+    }
+
     /// Indices of transcript sentences already used by this record's reels.
     static func usedSentenceIndices(_ sentences: [ReelDraft.Sentence], record: AutoReelRecord) -> Set<Int> {
         let usedWords = Set((record.drafts ?? []).flatMap { $0.pieces.flatMap { $0.sentences.flatMap { $0.words.map(\.id) } } })
@@ -129,12 +141,9 @@ enum ReelGenerator {
                     sentences: sentences.map { ($0.start, $0.end, $0.text) },
                     targetDuration: st.targetDuration, topic: st.topic.isEmpty ? nil : st.topic,
                     avoid: used, reelNumber: (record.drafts?.count ?? 0) + n + 1,
+                    otherTitles: (record.drafts ?? []).map(\.title) + out.map(\.title),
                     provider: st.provider, apiKey: key)
-                var ranges = plan.ranges
-                func total(_ rs: [ClosedRange<Int>]) -> Double {
-                    rs.reduce(0) { $0 + (sentences[$1.upperBound].end - sentences[$1.lowerBound].start) }
-                }
-                while ranges.count > 1 && total(ranges) > st.targetDuration * 1.3 { ranges.removeLast() }
+                let ranges = fit(plan.ranges, to: st.targetDuration, sentences: sentences)
                 used.formUnion(ranges.flatMap { Array($0) })
                 let title = plan.title.isEmpty ? "Reel \((record.drafts?.count ?? 0) + n + 1)" : plan.title
                 out.append(draft(title: title, clips: clips(for: ranges, in: sentences, source: source), source: source, settings: st))
@@ -175,9 +184,46 @@ enum ReelGenerator {
             targetDuration: target, topic: st.topic.isEmpty ? nil : st.topic,
             provider: st.provider, apiKey: key)
         var d = draft(title: "🔥 " + (plan.title.isEmpty ? "Fire Short" : plan.title),
-                      clips: clips(for: plan.ranges, in: sentences, source: source), source: source, settings: st)
+                      clips: clips(for: fit(plan.ranges, to: target, sentences: sentences), in: sentences, source: source),
+                      source: source, settings: st)
         d.seo = .init(title: plan.title, description: plan.description, hashtags: plan.hashtags, hookText: plan.hookText)
         return d
+    }
+
+    private static func aiContext(_ record: AutoReelRecord, progress: @escaping (String) -> Void)
+        async throws -> (source: String, st: Settings, key: String, sentences: [ReelDraft.Sentence]) {
+        guard let source = sourceVideoPath(for: record) else { throw err("Can't find this reel's source video.") }
+        let st = settings(for: record)
+        guard let key = await LLMClipService.shared.loadAPIKey(for: st.provider), !key.isEmpty else {
+            throw err("This needs AI — add an API key for \(st.provider.rawValue) in Auto Reels → AI settings.")
+        }
+        let words = try await TranscriptCache.transcript(for: source, progress: progress)
+        return (source, st, key, ReelDraft.sentences(from: words))
+    }
+
+    /// A short about whatever the user asked for ("a short about forgiveness").
+    static func requestedShort(_ request: String, for record: AutoReelRecord,
+                               progress: @escaping (String) -> Void) async throws -> ReelDraft {
+        let c = try await aiContext(record, progress: progress)
+        progress("AI is building your short…")
+        let plan = try await LLMClipService.shared.composeRequested(
+            request, sentences: c.sentences.map { ($0.start, $0.end, $0.text) },
+            targetDuration: c.st.targetDuration, provider: c.st.provider, apiKey: c.key)
+        // A length named in the request ("a 30-second short") wins over the default target
+        let asked = request.range(of: #"(\d{2,3})\s*(-|\s)?\s*(s|sec|second)"#, options: .regularExpression)
+            .flatMap { Double(request[$0].prefix { $0.isNumber }) }
+        return draft(title: plan.title.isEmpty ? request : plan.title,
+                     clips: clips(for: fit(plan.ranges, to: asked ?? c.st.targetDuration, sentences: c.sentences),
+                                  in: c.sentences, source: c.source),
+                     source: c.source, settings: c.st)
+    }
+
+    /// Topics the talk covers, as one-click requests.
+    static func topics(for record: AutoReelRecord, progress: @escaping (String) -> Void) async throws -> [String] {
+        let c = try await aiContext(record, progress: progress)
+        progress("AI is reading the talk…")
+        return try await LLMClipService.shared.listTopics(
+            sentences: c.sentences.map { ($0.start, $0.end, $0.text) }, provider: c.st.provider, apiKey: c.key)
     }
 
     private static func err(_ m: String) -> NSError {

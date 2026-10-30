@@ -213,7 +213,13 @@ Respond with ONLY valid JSON — no markdown fences, no explanation:
     /// `avoid` holds sentence indices already used by other reels from the same video.
     func composeStory(sentences: [(start: Double, end: Double, text: String)],
                       targetDuration: Double, topic: String?, avoid: Set<Int>,
-                      reelNumber: Int, provider: AIProvider, apiKey: String) async throws -> StoryPlan {
+                      reelNumber: Int, otherTitles: [String] = [],
+                      provider: AIProvider, apiKey: String) async throws -> StoryPlan {
+        let othersLine = otherTitles.isEmpty ? "" : """
+
+Other reels from this talk ALREADY cover these ideas — pick a clearly DIFFERENT main idea, and write a title with different wording (don't reuse their key phrases):
+\(otherTitles.map { "- " + $0 }.joined(separator: "\n"))
+"""
         let lines = sentences.enumerated().map { i, s -> String in
             let m = Int(s.start) / 60, sec = Int(s.start) % 60
             let used = avoid.contains(i) ? " (USED)" : ""
@@ -238,7 +244,7 @@ Rules:
 - Each run starts where a thought starts — never with a line that depends on what came before ("And so that's why…", "This is…", "He said…" without who).
 - Keep runs in their original order after the hook. Prefer fewer, longer runs (2–5) over many tiny jumps.
 - Skip greetings, announcements, housekeeping, "turn to page…", jokes that need context, and anything referring to visuals the viewer can't see.
-- Never use sentences marked (USED) — they belong to other reels. This is reel #\(reelNumber); pick a different idea from the other reels.
+- Never use sentences marked (USED) — they belong to other reels. This is reel #\(reelNumber); pick a different idea from the other reels.\(othersLine)
 - Count the seconds: the sum of the chosen sentences' lengths must be within the range above.
 
 Transcript:
@@ -259,6 +265,80 @@ Respond with ONLY valid JSON, no markdown:
             catch { lastError = error }
         }
         throw lastError
+    }
+
+    // MARK: - Chat: a short about what the user asks for
+
+    private func numbered(_ sentences: [(start: Double, end: Double, text: String)]) -> String {
+        sentences.enumerated().map { i, s -> String in
+            let m = Int(s.start) / 60, sec = Int(s.start) % 60
+            return "[\(i)] \(m):\(String(format: "%02d", sec)) \(Int((s.end - s.start).rounded()))s: \(s.text)"
+        }.joined(separator: "\n")
+    }
+
+    private func ask(_ prompt: String, provider: AIProvider, apiKey: String) async throws -> String {
+        switch provider {
+        case .anthropic: return try await callAnthropic(prompt: prompt, apiKey: apiKey)
+        case .openai:    return try await callOpenAI(prompt: prompt, apiKey: apiKey)
+        case .google:    return try await callGoogle(prompt: prompt, apiKey: apiKey)
+        }
+    }
+
+    /// Builds one short that fulfils `request` ("a short about forgiveness") using only what
+    /// the talk says. Throws with the model's explanation if the talk doesn't cover it.
+    func composeRequested(_ request: String, sentences: [(start: Double, end: Double, text: String)],
+                          targetDuration: Double, provider: AIProvider, apiKey: String) async throws -> StoryPlan {
+        let target = Int(targetDuration)
+        let prompt = """
+You are an expert short-form video editor. Below is the full transcript of a talk, one numbered sentence per line with timestamp and length.
+
+The creator asks: "\(request)"
+
+Build ONE coherent short of about \(target) seconds (acceptable \(Int(Double(target) * 0.8))–\(Int(Double(target) * 1.15))s) that does exactly what they asked, using ONLY what is said in this talk, from runs of CONSECUTIVE sentences.
+- Open with a strong hook related to the request, then build to a clear, conclusive ending.
+- Every run must make sense on its own; skip greetings, announcements and visual references.
+- Keep runs in their original order after the hook. Prefer 2–6 runs.
+- If the request asks for a different length (e.g. "30 seconds"), use that length instead.
+- If the talk does not really cover what they asked, do NOT force it: respond {"error":"<one friendly sentence saying what the talk does cover that is closest>"}.
+
+Transcript:
+\(numbered(sentences))
+
+Respond with ONLY valid JSON, no markdown:
+{"title":"short catchy title (max 8 words)","segments":[{"from":12,"to":15},{"from":40,"to":47}]}
+"""
+        var lastError: Error = llmError("AI returned nothing")
+        for _ in 1...2 {
+            let text = try await ask(prompt, provider: provider, apiKey: apiKey)
+            if let a = text.firstIndex(of: "{"), let b = text.lastIndex(of: "}"),
+               let obj = try? JSONSerialization.jsonObject(with: Data(String(text[a...b]).utf8)) as? [String: Any],
+               let msg = obj["error"] as? String, obj["segments"] == nil {
+                throw llmError(msg)   // talk doesn't cover it — surface the model's explanation
+            }
+            do { return try parseStory(text, sentenceCount: sentences.count, avoid: []) }
+            catch { lastError = error }
+        }
+        throw lastError
+    }
+
+    /// The main topics / stories in the talk, phrased as short requests the user can click.
+    func listTopics(sentences: [(start: Double, end: Double, text: String)],
+                    provider: AIProvider, apiKey: String) async throws -> [String] {
+        let prompt = """
+Below is the transcript of a talk. List the 6–10 most compelling topics, stories or moments it covers that would each make a great short video. Phrase each as a short request of 3–8 words, e.g. "the story about his daughter", "why forgiveness frees you".
+
+Transcript:
+\(numbered(sentences))
+
+Respond with ONLY valid JSON: {"topics":["...","..."]}
+"""
+        let text = try await ask(prompt, provider: provider, apiKey: apiKey)
+        guard let a = text.firstIndex(of: "{"), let b = text.lastIndex(of: "}"),
+              let obj = try? JSONSerialization.jsonObject(with: Data(String(text[a...b]).utf8)) as? [String: Any],
+              let topics = obj["topics"] as? [String], !topics.isEmpty else {
+            throw llmError("AI didn't return a topic list.")
+        }
+        return topics
     }
 
     // MARK: - 🔥 Fire Short — a teaser cut built to make people click through

@@ -10,6 +10,9 @@ struct ReelDraftsView: View {
     let recordID: UUID
     let gold: Color
     var onDelete: () -> Void
+    /// In the reel window, clicking a row previews that reel on the right
+    var previewingID: UUID? = nil
+    var onPreview: ((UUID) -> Void)? = nil
 
     @ObservedObject private var store = AutoReelsStore.shared
     @Environment(\.dismiss) private var dismiss
@@ -20,6 +23,8 @@ struct ReelDraftsView: View {
     @State private var moreCount = 3
     @State private var genStatus: String?
     @State private var genError: String?
+    @State private var request = ""
+    @State private var topics: [String] = []
 
     private var record: AutoReelRecord? { store.reels.first { $0.id == recordID } }
     private var drafts: [ReelDraft] { record?.drafts ?? [] }
@@ -90,6 +95,36 @@ struct ReelDraftsView: View {
                 .buttonStyle(.plain).foregroundColor(.white).disabled(genStatus != nil)
                 .help("One SEO-rich teaser built as a hook rollercoaster that ends on a cliffhanger")
             }
+            // Chat: ask for a short about something the talk covers
+            HStack(spacing: 8) {
+                Image(systemName: "bubble.left.and.text.bubble.right").foregroundColor(gold).font(.system(size: 12))
+                TextField("Ask for a short… e.g. \"a 60-second short about forgiveness\"", text: $request)
+                    .textFieldStyle(.plain).font(.system(size: 12)).foregroundColor(.white)
+                    .onSubmit { askForShort(request) }
+                Button("Create") { askForShort(request) }
+                    .buttonStyle(.plain).font(.system(size: 12, weight: .semibold)).foregroundColor(.black)
+                    .padding(.horizontal, 10).padding(.vertical, 4)
+                    .background(request.trimmingCharacters(in: .whitespaces).isEmpty ? Color.white.opacity(0.15) : gold).cornerRadius(6)
+                    .disabled(request.trimmingCharacters(in: .whitespaces).isEmpty || genStatus != nil)
+            }
+            .padding(8).background(Color.white.opacity(0.06)).cornerRadius(8)
+            if topics.isEmpty {
+                Button("What does this talk cover?") { suggestTopics() }
+                    .buttonStyle(.plain).font(.system(size: 11)).foregroundColor(Color.white.opacity(0.55))
+                    .disabled(genStatus != nil)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(topics, id: \.self) { t in
+                            Button(t) { request = t; askForShort(t) }
+                                .buttonStyle(.plain).font(.system(size: 11)).foregroundColor(.white)
+                                .padding(.horizontal, 9).padding(.vertical, 4)
+                                .background(Color.white.opacity(0.08)).cornerRadius(12)
+                                .disabled(genStatus != nil)
+                        }
+                    }
+                }
+            }
             if let st = genStatus {
                 HStack(spacing: 6) { ProgressView().scaleEffect(0.5); Text(st).font(.system(size: 11)).foregroundColor(Color.white.opacity(0.6)) }
             } else if let e = genError {
@@ -110,6 +145,35 @@ struct ReelDraftsView: View {
                     Task { @MainActor in genStatus = msg }
                 }
                 append(new)
+            } catch { genError = error.localizedDescription }
+            genStatus = nil
+        }
+    }
+
+    private func askForShort(_ text: String) {
+        let req = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !req.isEmpty, let rec = record else { return }
+        genError = nil; genStatus = "Starting…"
+        Task {
+            do {
+                let d = try await ReelGenerator.requestedShort(req, for: rec) { msg in
+                    Task { @MainActor in genStatus = msg }
+                }
+                append([d], atTop: true)
+                request = ""
+            } catch { genError = error.localizedDescription }
+            genStatus = nil
+        }
+    }
+
+    private func suggestTopics() {
+        guard let rec = record else { return }
+        genError = nil; genStatus = "Starting…"
+        Task {
+            do {
+                topics = try await ReelGenerator.topics(for: rec) { msg in
+                    Task { @MainActor in genStatus = msg }
+                }
             } catch { genError = error.localizedDescription }
             genStatus = nil
         }
@@ -223,8 +287,11 @@ struct ReelDraftsView: View {
             .disabled(exporting[d.id] != nil)
         }
         .padding(12)
-        .background(Color.white.opacity(isSel ? 0.07 : 0.04))
+        .background(previewingID == d.id ? gold.opacity(0.12) : Color.white.opacity(isSel ? 0.07 : 0.04))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(previewingID == d.id ? gold.opacity(0.6) : .clear, lineWidth: 1))
         .cornerRadius(10)
+        .contentShape(Rectangle())
+        .onTapGesture { onPreview?(d.id) }
     }
 
     @ViewBuilder private func statusPill(_ d: ReelDraft) -> some View {
@@ -515,34 +582,7 @@ struct ReelEditorView: View {
 
     /// Draws the caption for the current moment with the reel's look (same drawing code as export).
     private func captionOverlay() -> NSImage? {
-        let look = self.look
-        let phrases = CaptionLook.phrases(reelWords, maxWords: look.wordsPerCaption,
-                                          text: { $0.word }, start: { $0.startTime }, end: { $0.endTime })
-        guard let pi = phrases.firstIndex(where: { p in
-            guard let s = p.first?.startTime, let e = p.last?.endTime else { return false }
-            return time >= s && time <= e + 0.15
-        }) else { return nil }
-        let phrase = phrases[pi]
-        let active = phrase.lastIndex(where: { $0.startTime <= time }) ?? 0
-        let size = CGSize(width: 540, height: 540 / previewAspect)
-        return NSImage(size: size, flipped: true) { _ in
-            let fs = look.fontSize(forRenderWidth: size.width)  // preview width stands in for the export width
-            let maxW = size.width * 0.86
-            let texts = phrase.map(\.word)
-            let str = look.attributedPhrase(texts, active: active, fontSize: fs)
-            let m = look.measure(look.attributedPhrase(texts, active: nil, fontSize: fs), maxWidth: maxW)
-            let cy = size.height * CGFloat(look.position)
-            if look.bgEnabled {
-                let px = fs * 0.35, py = fs * 0.18
-                look.bgColor.nsColor.withAlphaComponent(CGFloat(look.bgOpacity)).setFill()
-                NSBezierPath(roundedRect: CGRect(x: (size.width - m.width) / 2 - px, y: cy - m.height / 2 - py,
-                                                 width: m.width + px * 2, height: m.height + py * 2),
-                             xRadius: fs * 0.25, yRadius: fs * 0.25).fill()
-            }
-            str.draw(with: CGRect(x: (size.width - maxW) / 2, y: cy - m.height / 2, width: maxW, height: m.height + 4),
-                     options: [.usesLineFragmentOrigin, .usesFontLeading])
-            return true
-        }
+        look.overlayImage(words: reelWords, time: time, size: CGSize(width: 540, height: 540 / previewAspect))
     }
 
     // MARK: Captions
@@ -785,7 +825,7 @@ struct ReelEditorView: View {
 }
 
 /// AVPlayerLayer that fills its frame (center crop), like the exported vertical reel.
-private struct FillPlayerView: NSViewRepresentable {
+struct FillPlayerView: NSViewRepresentable {
     let player: AVPlayer
     func makeNSView(context: Context) -> NSView {
         let v = NSView()

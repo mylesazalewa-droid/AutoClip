@@ -133,4 +133,35 @@ struct CaptionLook: Codable, Equatable {
         if !cur.isEmpty { out.append(cur) }
         return out
     }
+
+    /// The caption frame for `time` in a reel whose (reel-timeline) words are `words`,
+    /// drawn exactly like the export. Used by the editor and the reel window previews.
+    func overlayImage(words: [Word], time: Double, size: CGSize) -> NSImage? {
+        let phrases = CaptionLook.phrases(words, maxWords: wordsPerCaption,
+                                          text: { $0.word }, start: { $0.startTime }, end: { $0.endTime })
+        guard let phrase = phrases.first(where: { p in
+            guard let s = p.first?.startTime, let e = p.last?.endTime else { return false }
+            return time >= s && time <= e + 0.15
+        }) else { return nil }
+        let active = phrase.lastIndex(where: { $0.startTime <= time }) ?? 0
+        let look = self
+        return NSImage(size: size, flipped: true) { _ in
+            let fs = look.fontSize(forRenderWidth: size.width)
+            let maxW = size.width * 0.86
+            let texts = phrase.map(\.word)
+            let str = look.attributedPhrase(texts, active: active, fontSize: fs)
+            let m = look.measure(look.attributedPhrase(texts, active: nil, fontSize: fs), maxWidth: maxW)
+            let cy = size.height * CGFloat(look.position)
+            if look.bgEnabled {
+                let px = fs * 0.35, py = fs * 0.18
+                look.bgColor.nsColor.withAlphaComponent(CGFloat(look.bgOpacity)).setFill()
+                NSBezierPath(roundedRect: CGRect(x: (size.width - m.width) / 2 - px, y: cy - m.height / 2 - py,
+                                                 width: m.width + px * 2, height: m.height + py * 2),
+                             xRadius: fs * 0.25, yRadius: fs * 0.25).fill()
+            }
+            str.draw(with: CGRect(x: (size.width - maxW) / 2, y: cy - m.height / 2, width: maxW, height: m.height + 4),
+                     options: [.usesLineFragmentOrigin, .usesFontLeading])
+            return true
+        }
+    }
 }
