@@ -210,6 +210,18 @@ struct ReelEditorView: View {
     @State private var reloadToken = 0
     /// After a nudge, play across that cut once the preview has rebuilt
     @State private var auditionAt: Double?
+    /// Reel-timeline position of every kept sentence (rebuilt with the preview)
+    @State private var timeline: [ReelDraft.TimedSentence] = []
+    @State private var editingSentence: UUID?
+    @State private var editText = ""
+    @State private var lastWordClick: (sentence: UUID, index: Int)?
+
+    /// The sentence being spoken at the playhead, and which of its words.
+    private var playing: (id: UUID, word: Int)? {
+        guard let ts = timeline.last(where: { $0.start <= time + 0.05 }), time <= ts.end + 0.4 else { return nil }
+        let w = ts.wordStarts.lastIndex(where: { $0 <= time + 0.05 }) ?? 0
+        return (ts.id, w)
+    }
 
     private var look: CaptionLook { draft.look ?? CaptionLook.load() ?? CaptionLook(preset: CaptionStyle.all[0]) }
     private var previewAspect: CGFloat {
@@ -233,14 +245,21 @@ struct ReelEditorView: View {
 
             HStack(alignment: .top, spacing: 16) {
                 previewColumn.frame(width: 260)
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 14) {
-                        captionsSection
-                        Text("CLIPS — click a sentence to cut it out")
-                            .font(.system(size: 10, weight: .semibold)).foregroundColor(Color.white.opacity(0.35)).tracking(1)
-                        ForEach(Array(draft.pieces.enumerated()), id: \.element.id) { i, _ in pieceCard(i) }
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 14) {
+                            captionsSection
+                            Text("CLIPS — click words to cut them (shift-click a range) · ▶ plays · ✏️ fixes caption text")
+                                .font(.system(size: 10, weight: .semibold)).foregroundColor(Color.white.opacity(0.35)).tracking(1)
+                            ForEach(Array(draft.pieces.enumerated()), id: \.element.id) { i, _ in pieceCard(i) }
+                        }
+                        .padding(.trailing, 6)
                     }
-                    .padding(.trailing, 6)
+                    // Follow along while playing (not while paused, so manual scrolling isn't fought)
+                    .onChange(of: playing?.id) { id in
+                        guard isPlaying, let id else { return }
+                        withAnimation(.easeInOut(duration: 0.25)) { proxy.scrollTo(id, anchor: .center) }
+                    }
                 }
             }
             .padding(16)
@@ -316,6 +335,7 @@ struct ReelEditorView: View {
         if let o = observer { player.removeTimeObserver(o); observer = nil }
         player.replaceCurrentItem(with: item)
         reelWords = words
+        timeline = draft.sentenceTimeline
         total = max(0.1, draft.duration)
         let seekTo = auditionAt.map { max(0, min($0, total - 0.2)) } ?? min(resumeAt, total)
         await player.seek(to: CMTime(seconds: seekTo, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
@@ -411,20 +431,43 @@ struct ReelEditorView: View {
                 let startsRun = s.included && (j == 0 || !piece.sentences[j - 1].included)
                 let endsRun = s.included && (j == piece.sentences.count - 1 || !piece.sentences[j + 1].included)
                 if startsRun { nudgeRow(piece: i, sentence: j, isStart: true) }
-                Button { draft.pieces[i].sentences[j].included.toggle() } label: {
-                    HStack(alignment: .top, spacing: 8) {
+                let now = playing?.id == s.id ? playing : nil
+                HStack(alignment: .top, spacing: 8) {
+                    Button { draft.pieces[i].sentences[j].included.toggle() } label: {
                         Image(systemName: s.included ? "checkmark.square.fill" : "square")
                             .foregroundColor(s.included ? gold : Color.white.opacity(0.3))
-                        Text(s.text)
-                            .font(.system(size: 12))
-                            .foregroundColor(s.included ? Color.white.opacity(0.9) : Color.white.opacity(0.3))
-                            .strikethrough(!s.included)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .multilineTextAlignment(.leading)
                     }
-                    .contentShape(Rectangle())
+                    .buttonStyle(.plain)
+                    .help(s.included ? "Cut this sentence out" : "Put this sentence back")
+                    if editingSentence == s.id {
+                        TextField("Caption text", text: $editText, axis: .vertical)
+                            .textFieldStyle(.plain).font(.system(size: 12)).foregroundColor(.white)
+                            .padding(4).background(Color.white.opacity(0.08)).cornerRadius(4)
+                            .onSubmit { commitEdit(i, j) }
+                        Button("Done") { commitEdit(i, j) }.buttonStyle(.plain)
+                            .font(.system(size: 11, weight: .semibold)).foregroundColor(gold)
+                        Button("Cancel") { editingSentence = nil }.buttonStyle(.plain)
+                            .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.5))
+                    } else {
+                        wordFlow(i, j, activeWord: now?.word)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        if s.included {
+                            Button { play(from: s.id) } label: { Image(systemName: "play.fill") }
+                                .buttonStyle(.plain).font(.system(size: 9)).foregroundColor(Color.white.opacity(0.45))
+                                .help("Play from this sentence")
+                        }
+                        Button { editText = s.text; editingSentence = s.id } label: { Image(systemName: "pencil") }
+                            .buttonStyle(.plain).font(.system(size: 10)).foregroundColor(Color.white.opacity(0.45))
+                            .help("Fix the caption text for this sentence")
+                    }
                 }
-                .buttonStyle(.plain)
+                .padding(.vertical, 2).padding(.horizontal, 4)
+                .background(now != nil ? gold.opacity(0.14) : Color.clear)
+                .overlay(alignment: .leading) {
+                    if now != nil { Rectangle().fill(gold).frame(width: 2) }
+                }
+                .cornerRadius(4)
+                .id(s.id)
                 if endsRun { nudgeRow(piece: i, sentence: j, isStart: false) }
             }
         }
@@ -432,6 +475,62 @@ struct ReelEditorView: View {
         .background(Color.white.opacity(0.04))
         .cornerRadius(10)
         .opacity(kept.isEmpty ? 0.5 : 1)
+    }
+
+    /// The sentence as clickable words. Click a word to cut it (click again to restore);
+    /// shift-click to cut/restore everything from the last clicked word. While playing,
+    /// the spoken word lights up in gold.
+    private func wordFlow(_ i: Int, _ j: Int, activeWord: Int?) -> some View {
+        let s = draft.pieces[i].sentences[j]
+        return WordFlowLayout(spacing: 4, lineSpacing: 2) {
+            ForEach(Array(s.words.enumerated()), id: \.element.id) { k, w in
+                let cut = s.isCut(w)
+                let isActive = activeWord == k && !cut
+                Text(w.word)
+                    .font(.system(size: 12, weight: isActive ? .bold : .regular))
+                    .foregroundColor(!s.included ? Color.white.opacity(0.3)
+                                     : cut ? Color(red: 1, green: 0.45, blue: 0.45).opacity(0.7)
+                                     : isActive ? gold
+                                     : (activeWord.map { k < $0 } ?? false) ? .white : Color.white.opacity(0.85))
+                    .strikethrough(!s.included || cut, color: cut ? Color(red: 1, green: 0.45, blue: 0.45) : nil)
+                    .padding(.horizontal, 1)
+                    .background(cut ? Color(red: 1, green: 0.3, blue: 0.3).opacity(0.12) : Color.clear)
+                    .cornerRadius(2)
+                    .contentShape(Rectangle())
+                    .onTapGesture { toggleWord(i, j, k) }
+                    .help(cut ? "Put this word back" : "Cut this word out")
+            }
+        }
+    }
+
+    private func toggleWord(_ i: Int, _ j: Int, _ k: Int) {
+        var s = draft.pieces[i].sentences[j]
+        guard s.included else { return }
+        var cut = Set(s.cutWordIDs ?? [])
+        let w = s.words[k]
+        let makeCut = !cut.contains(w.id)
+        var range = k...k
+        if NSEvent.modifierFlags.contains(.shift), let last = lastWordClick, last.sentence == s.id {
+            range = min(last.index, k)...max(last.index, k)
+        }
+        for idx in range { if makeCut { cut.insert(s.words[idx].id) } else { cut.remove(s.words[idx].id) } }
+        s.cutWordIDs = cut.isEmpty ? nil : Array(cut)
+        draft.pieces[i].sentences[j] = s
+        lastWordClick = (s.id, k)
+    }
+
+    private func commitEdit(_ i: Int, _ j: Int) {
+        let text = editText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !text.isEmpty { draft.setText(text, piece: i, sentence: j) }
+        editingSentence = nil
+    }
+
+    /// Jump the preview to a sentence (excluded sentences aren't in the reel, so they just toggle back on hint).
+    private func play(from sentenceID: UUID) {
+        guard let ts = timeline.first(where: { $0.id == sentenceID }) else { return }
+        time = ts.start
+        player.seek(to: CMTime(seconds: ts.start, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+        player.play(); isPlaying = true
     }
 
     // MARK: Micro-adjust cuts
@@ -534,5 +633,36 @@ private struct FillPlayerView: NSViewRepresentable {
     }
     func updateNSView(_ nsView: NSView, context: Context) {
         (nsView.layer as? AVPlayerLayer)?.player = player
+    }
+}
+
+/// Wraps children onto lines like text (used for clickable words).
+private struct WordFlowLayout: Layout {
+    var spacing: CGFloat = 4
+    var lineSpacing: CGFloat = 2
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        arrange(width: proposal.width ?? .infinity, subviews: subviews).size
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let r = arrange(width: bounds.width, subviews: subviews)
+        for (i, p) in r.positions.enumerated() {
+            subviews[i].place(at: CGPoint(x: bounds.minX + p.x, y: bounds.minY + p.y), proposal: .unspecified)
+        }
+    }
+
+    private func arrange(width: CGFloat, subviews: Subviews) -> (positions: [CGPoint], size: CGSize) {
+        var positions: [CGPoint] = []
+        var x: CGFloat = 0, y: CGFloat = 0, lineH: CGFloat = 0, maxX: CGFloat = 0
+        for v in subviews {
+            let sz = v.sizeThatFits(.unspecified)
+            if x > 0 && x + sz.width > width { x = 0; y += lineH + lineSpacing; lineH = 0 }
+            positions.append(CGPoint(x: x, y: y))
+            x += sz.width + spacing
+            lineH = max(lineH, sz.height)
+            maxX = max(maxX, x - spacing)
+        }
+        return (positions, CGSize(width: min(maxX, width), height: y + lineH))
     }
 }
