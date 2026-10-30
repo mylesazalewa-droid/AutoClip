@@ -41,6 +41,18 @@ struct ReelDraft: Identifiable, Codable, Equatable {
     var topicKeywords: [String]
     var exportedPath: String?
     var editedSinceExport = false
+    /// SEO copy for Fire Shorts (title, description, hashtags, on-screen hook)
+    struct SEO: Codable, Equatable {
+        var title: String
+        var description: String
+        var hashtags: [String]
+        var hookText: String
+        var asText: String {
+            [title, "", description, "", hashtags.joined(separator: " "), "", "On-screen hook: \(hookText)"]
+                .joined(separator: "\n")
+        }
+    }
+    var seo: SEO?
 
     // MARK: Building
 
@@ -246,6 +258,11 @@ struct ReelDraft: Identifiable, Codable, Equatable {
         try await VideoExportService.shared.createHighlightReel(
             clips: clips, sourceVideoURL: URL(fileURLWithPath: first.sourceVideoPath),
             outputURL: url, options: exportOptions, progress: progress)
+        // Fire Shorts: save the SEO title/description/hashtags next to the video
+        if let seo {
+            try? seo.asText.write(to: url.deletingPathExtension().appendingPathExtension("txt"),
+                                  atomically: true, encoding: .utf8)
+        }
     }
 
     /// Instant, un-rendered preview of the current edit (no captions burned in).

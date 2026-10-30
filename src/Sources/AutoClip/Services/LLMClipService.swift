@@ -261,6 +261,78 @@ Respond with ONLY valid JSON, no markdown:
         throw lastError
     }
 
+    // MARK: - 🔥 Fire Short — a teaser cut built to make people click through
+
+    struct FirePlan {
+        var ranges: [ClosedRange<Int>]
+        var title: String          // SEO title
+        var description: String    // SEO description
+        var hashtags: [String]
+        var hookText: String       // on-screen text for the first seconds
+    }
+
+    func composeFireShort(sentences: [(start: Double, end: Double, text: String)],
+                          targetDuration: Double, topic: String?,
+                          provider: AIProvider, apiKey: String) async throws -> FirePlan {
+        let lines = sentences.enumerated().map { i, s -> String in
+            let m = Int(s.start) / 60, sec = Int(s.start) % 60
+            return "[\(i)] \(m):\(String(format: "%02d", sec)) \(Int((s.end - s.start).rounded()))s: \(s.text)"
+        }.joined(separator: "\n")
+        let topicLine = (topic?.trimmingCharacters(in: .whitespaces).isEmpty == false)
+            ? "\nTHEME / KEYWORDS to target: \"\(topic!)\"\n" : ""
+        let target = Int(targetDuration)
+        let prompt = """
+You are a world-class short-form editor and YouTube/TikTok SEO strategist. Below is the full transcript of a talk, one numbered sentence per line with timestamp and length.
+\(topicLine)
+Create the "FIRE SHORT": a \(target)-second (acceptable \(Int(Double(target) * 0.8))–\(Int(Double(target) * 1.15))s) teaser cutdown whose only job is to make viewers desperate to watch the full message.
+
+Build a HOOK ROLLERCOASTER from runs of consecutive sentences (the runs may come from anywhere and in any order):
+1. HOOK (0–3s): the single most arresting line — a bold claim, a shocking statement or a burning question.
+2. TENSION: raise the stakes or show the problem/pain.
+3. MINI-PAYOFF: a quick satisfying insight… then immediately
+4. RE-HOOK: a "but"/twist/new question that pulls them deeper.
+5. PEAK: the most emotional or powerful moment in the whole talk.
+6. CLIFFHANGER: end on an open loop — a setup or question whose answer is NOT given, so they must go watch the full message. Never end on a full resolution.
+
+Rules:
+- Every run must make sense on its own; never start on a line that depends on missing context.
+- Prefer 4–7 short punchy runs; cut slow setup, greetings, announcements and anything visual-dependent.
+- Count seconds: sum of chosen sentences must fit the range above.
+
+SEO:
+- "title": searchable, curiosity-driven, max 60 characters, includes the main keyword.
+- "description": 2–3 sentences, keyword-rich, teases the answer without giving it, ends with a call to watch the full message.
+- "hashtags": 6–10 relevant hashtags (with #), mix of broad and niche.
+- "hookText": 3–6 words of on-screen text for the opening seconds.
+
+Transcript:
+\(lines)
+
+Respond with ONLY valid JSON, no markdown:
+{"title":"...","description":"...","hashtags":["#..."],"hookText":"...","segments":[{"from":12,"to":13},{"from":88,"to":90}]}
+"""
+        var lastError: Error = llmError("AI returned no Fire Short")
+        for _ in 1...2 {
+            let text: String
+            switch provider {
+            case .anthropic: text = try await callAnthropic(prompt: prompt, apiKey: apiKey)
+            case .openai:    text = try await callOpenAI(prompt: prompt, apiKey: apiKey)
+            case .google:    text = try await callGoogle(prompt: prompt, apiKey: apiKey)
+            }
+            do {
+                let story = try parseStory(text, sentenceCount: sentences.count, avoid: [])
+                guard let start = text.firstIndex(of: "{"), let end = text.lastIndex(of: "}"),
+                      let obj = try? JSONSerialization.jsonObject(with: Data(String(text[start...end]).utf8)) as? [String: Any]
+                else { throw llmError("Fire Short wasn't valid JSON") }
+                return FirePlan(ranges: story.ranges, title: story.title,
+                                description: obj["description"] as? String ?? "",
+                                hashtags: obj["hashtags"] as? [String] ?? [],
+                                hookText: obj["hookText"] as? String ?? "")
+            } catch { lastError = error }
+        }
+        throw lastError
+    }
+
     private func parseStory(_ text: String, sentenceCount: Int, avoid: Set<Int>) throws -> StoryPlan {
         guard let start = text.firstIndex(of: "{"), let end = text.lastIndex(of: "}"),
               let obj = try? JSONSerialization.jsonObject(with: Data(String(text[start...end]).utf8)) as? [String: Any],

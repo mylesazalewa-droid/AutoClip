@@ -17,6 +17,9 @@ struct ReelDraftsView: View {
     @State private var editingID: UUID?
     @State private var exporting: [UUID: Double] = [:]
     @State private var exportErrors: [UUID: String] = [:]
+    @State private var moreCount = 3
+    @State private var genStatus: String?
+    @State private var genError: String?
 
     private var record: AutoReelRecord? { store.reels.first { $0.id == recordID } }
     private var drafts: [ReelDraft] { record?.drafts ?? [] }
@@ -24,6 +27,7 @@ struct ReelDraftsView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
+            generateBar
             Divider().background(Color.white.opacity(0.08))
             ScrollView {
                 VStack(spacing: 8) {
@@ -64,7 +68,113 @@ struct ReelDraftsView: View {
         .padding(16)
     }
 
+    // MARK: Generate
+
+    private var generateBar: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 10) {
+                Button { generateMore() } label: {
+                    Label("Generate more", systemImage: "plus.square.on.square").font(.system(size: 12, weight: .semibold))
+                        .padding(.horizontal, 10).padding(.vertical, 6)
+                        .background(Color.white.opacity(0.08)).cornerRadius(7)
+                }.buttonStyle(.plain).foregroundColor(.white).disabled(genStatus != nil)
+                Stepper("\(moreCount)", value: $moreCount, in: 1...5).font(.system(size: 12)).fixedSize()
+                Spacer()
+                Button { generateFire() } label: {
+                    Text("🔥 Fire Short").font(.system(size: 12, weight: .bold))
+                        .padding(.horizontal, 12).padding(.vertical, 6)
+                        .background(LinearGradient(colors: [Color(red: 1, green: 0.35, blue: 0.1), Color(red: 1, green: 0.65, blue: 0.0)],
+                                                   startPoint: .leading, endPoint: .trailing))
+                        .cornerRadius(7)
+                }
+                .buttonStyle(.plain).foregroundColor(.white).disabled(genStatus != nil)
+                .help("One SEO-rich teaser built as a hook rollercoaster that ends on a cliffhanger")
+            }
+            if let st = genStatus {
+                HStack(spacing: 6) { ProgressView().scaleEffect(0.5); Text(st).font(.system(size: 11)).foregroundColor(Color.white.opacity(0.6)) }
+            } else if let e = genError {
+                Text(e).font(.system(size: 11)).foregroundColor(Color(red: 1, green: 0.45, blue: 0.45))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.horizontal, 16).padding(.bottom, 12)
+    }
+
+    private func generateMore() {
+        guard let rec = record else { return }
+        genError = nil; genStatus = "Starting…"
+        let n = moreCount
+        Task {
+            do {
+                let new = try await ReelGenerator.moreDrafts(for: rec, count: n) { msg in
+                    Task { @MainActor in genStatus = msg }
+                }
+                append(new)
+            } catch { genError = error.localizedDescription }
+            genStatus = nil
+        }
+    }
+
+    private func generateFire() {
+        guard let rec = record else { return }
+        genError = nil; genStatus = "Starting…"
+        Task {
+            do {
+                let d = try await ReelGenerator.fireShort(for: rec) { msg in
+                    Task { @MainActor in genStatus = msg }
+                }
+                append([d], atTop: true)
+            } catch { genError = error.localizedDescription }
+            genStatus = nil
+        }
+    }
+
+    private func append(_ new: [ReelDraft], atTop: Bool = false) {
+        guard var rec = record else { return }
+        var ds = rec.drafts ?? []
+        ds = atTop ? new + ds : ds + new
+        rec.drafts = ds
+        rec.reelTitles = ds.map(\.title)
+        store.update(rec)
+    }
+
+    private func copy(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
+
+    @ViewBuilder private func seoBlock(_ seo: ReelDraft.SEO) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            seoLine("Title", seo.title)
+            seoLine("Description", seo.description)
+            seoLine("Hashtags", seo.hashtags.joined(separator: " "))
+            seoLine("On-screen hook", seo.hookText)
+            Button("Copy all") { copy(seo.asText) }.buttonStyle(.plain)
+                .font(.system(size: 11, weight: .semibold)).foregroundColor(.orange)
+        }
+        .padding(10)
+        .background(Color.orange.opacity(0.08)).cornerRadius(8)
+    }
+
+    private func seoLine(_ label: String, _ text: String) -> some View {
+        HStack(alignment: .top, spacing: 6) {
+            Text(label).font(.system(size: 10, weight: .semibold)).foregroundColor(Color.white.opacity(0.45))
+                .frame(width: 84, alignment: .leading)
+            Text(text).font(.system(size: 11)).foregroundColor(.white).textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Button { copy(text) } label: { Image(systemName: "doc.on.doc") }
+                .buttonStyle(.plain).font(.system(size: 10)).foregroundColor(Color.white.opacity(0.45)).help("Copy")
+        }
+    }
+
     private func row(_ i: Int, _ d: ReelDraft) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            rowMain(i, d)
+            if let seo = d.seo { seoBlock(seo) }
+        }
+    }
+
+    private func rowMain(_ i: Int, _ d: ReelDraft) -> some View {
         let isSel = selected.contains(d.id)
         return HStack(spacing: 12) {
             Button { if isSel { selected.remove(d.id) } else { selected.insert(d.id) } } label: {

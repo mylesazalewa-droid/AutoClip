@@ -37,6 +37,9 @@ struct AutoReelRecord: Identifiable, Codable {
     var reelTitles: [String] = [] // unique per-reel title derived from hook clip
     /// Editable reels (2.61+). nil for older records, which were rendered straight to files.
     var drafts: [ReelDraft]? = nil
+    /// Settings + source used to build these reels, for "Generate more" / 🔥 Fire Short
+    var genParams: AutoReelJobParams? = nil
+    var sourceVideoPath: String? = nil
 
     init(id: UUID, title: String, path: String, paths: [String] = [],
          format: String, duration: Double, clipCount: Int, dateCreated: Double,
@@ -2336,9 +2339,16 @@ private extension AutoReelsTab {
                 Task { await upd(0.10, msg) }
             }
 
-            await upd(0.12, "Transcribing audio…")
-            let words = try await whisper.transcribe(audioURL: workingURL) { p in
-                Task { await upd(0.12 + p * 0.33, "Transcribing: \(Int(p * 100))%") }
+            let words: [Word]
+            if let cached = TranscriptCache.load(for: workingURL.path) {
+                await upd(0.44, "Using saved transcript…")
+                words = cached
+            } else {
+                await upd(0.12, "Transcribing audio…")
+                words = try await whisper.transcribe(audioURL: workingURL) { p in
+                    Task { await upd(0.12 + p * 0.33, "Transcribing: \(Int(p * 100))%") }
+                }
+                TranscriptCache.save(words, for: workingURL.path)
             }
             guard !words.isEmpty else {
                 throw NSError(domain: "AutoClip", code: 3, userInfo: [NSLocalizedDescriptionKey: "No speech detected in video."])
@@ -2480,8 +2490,12 @@ private extension AutoReelsTab {
                                         dateCreated: Date().timeIntervalSince1970,
                                         transcript: transcriptText, reelTitles: perReelTitles,
                                         drafts: drafts)
+            var rec = record
+            rec.genParams = retryParams
+            rec.sourceVideoPath = workingURL.path
+            let finalRecord = rec
             await MainActor.run {
-                AutoReelsStore.shared.add(record)
+                AutoReelsStore.shared.add(finalRecord)
                 store.updateJob(AutoReelJob(id: jobID, title: finalReelTitle, progress: 1.0,
                                            statusMsg: "\(drafts.count) reel\(drafts.count == 1 ? "" : "s") ready — open to review & export",
                                            isFinished: true, error: nil))
