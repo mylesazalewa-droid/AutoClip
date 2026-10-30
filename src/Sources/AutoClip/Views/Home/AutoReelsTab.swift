@@ -2550,6 +2550,7 @@ private extension AutoReelsTab {
         switch f {
         case .vertical9x16: return "9:16"
         case .square1x1:    return "1:1"
+        case .portrait4x5:  return "4:5"
         case .original:     return "Original"
         case .horizontal16x9: return "16:9"
         }

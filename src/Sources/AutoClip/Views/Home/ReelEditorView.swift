@@ -211,6 +211,16 @@ struct ReelDraftsView: View {
                     .padding(.horizontal, 10).padding(.vertical, 5)
                     .background(gold).cornerRadius(6)
             }.buttonStyle(.plain).foregroundColor(.black).disabled(exporting[d.id] != nil)
+            Menu {
+                Section("Also export as") {
+                    ForEach(ReelEditorView.sizes.filter { $0.0.rawValue != d.formatRaw }, id: \.0) { f, label in
+                        Button(label) { exportSize(d, f) }
+                    }
+                }
+            } label: { Image(systemName: "aspectratio") }
+            .menuStyle(.borderlessButton).fixedSize()
+            .help("Export a copy in another size (4:5, 1:1, original…)")
+            .disabled(exporting[d.id] != nil)
         }
         .padding(12)
         .background(Color.white.opacity(isSel ? 0.07 : 0.04))
@@ -297,6 +307,26 @@ struct ReelDraftsView: View {
         }
     }
 
+    /// Render a copy of the reel in another size, next to its main export (or a folder you pick).
+    private func exportSize(_ d: ReelDraft, _ format: VideoExportService.ExportFormat) {
+        let label = ReelEditorView.sizes.first { $0.0 == format }?.1 ?? format.rawValue
+        let folder: URL
+        if let p = d.exportedPath { folder = URL(fileURLWithPath: p).deletingLastPathComponent() }
+        else if let f = ReelExportLocation.pick(title: "Choose where to save the \(label) version") { folder = f }
+        else { return }
+        var copy = d
+        copy.formatRaw = format.rawValue
+        let url = ReelExportLocation.fileURL(in: folder, title: "\(d.title) (\(label.replacingOccurrences(of: ":", with: "x")))")
+        exporting[d.id] = 0.01; exportErrors[d.id] = nil
+        Task {
+            do {
+                try await copy.render(to: url) { p, _ in exporting[d.id] = max(0.01, p) }
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+            } catch { exportErrors[d.id] = error.localizedDescription }
+            exporting[d.id] = nil
+        }
+    }
+
     private func formatDur(_ s: Double) -> String {
         let i = Int(s.rounded()); return String(format: "%d:%02d", i / 60, i % 60)
     }
@@ -318,6 +348,7 @@ struct ReelEditorView: View {
     @State private var isPlaying = false
     @State private var observer: Any?
     @State private var reloadToken = 0
+    @State private var sourceAspect: CGFloat = 16.0 / 9.0
     /// After a nudge, play across that cut once the preview has rebuilt
     @State private var auditionAt: Double?
     /// Reel-timeline position of every kept sentence (rebuilt with the preview)
@@ -337,9 +368,27 @@ struct ReelEditorView: View {
     private var previewAspect: CGFloat {
         switch VideoExportService.ExportFormat(rawValue: draft.formatRaw) ?? .vertical9x16 {
         case .vertical9x16: return 9.0 / 16.0
+        case .portrait4x5: return 4.0 / 5.0
         case .square1x1: return 1
-        default: return 16.0 / 9.0
+        default: return sourceAspect
         }
+    }
+
+    /// Sizes a reel can be previewed / exported in
+    static let sizes: [(VideoExportService.ExportFormat, String)] = [
+        (.vertical9x16, "9:16"), (.portrait4x5, "4:5"), (.square1x1, "1:1"), (.original, "Original")
+    ]
+
+    private var sizeSection: some View {
+        HStack {
+            Text("SIZE").font(.system(size: 10, weight: .semibold)).foregroundColor(Color.white.opacity(0.35)).tracking(1)
+            Spacer()
+            Picker("", selection: $draft.formatRaw) {
+                ForEach(Self.sizes, id: \.0) { f, label in Text(label).tag(f.rawValue) }
+            }
+            .pickerStyle(.segmented).labelsHidden().frame(width: 260)
+        }
+        .padding(12).background(Color.white.opacity(0.04)).cornerRadius(10)
     }
 
     var body: some View {
@@ -358,6 +407,7 @@ struct ReelEditorView: View {
                 ScrollViewReader { proxy in
                     ScrollView {
                         VStack(alignment: .leading, spacing: 14) {
+                            sizeSection
                             captionsSection
                             Text("CLIPS — click words to cut them (shift-click a range) · ▶ plays · ✏️ fixes caption text")
                                 .font(.system(size: 10, weight: .semibold)).foregroundColor(Color.white.opacity(0.35)).tracking(1)
@@ -446,6 +496,11 @@ struct ReelEditorView: View {
         player.replaceCurrentItem(with: item)
         reelWords = words
         timeline = draft.sentenceTimeline
+        if let track = try? await item.asset.loadTracks(withMediaType: .video).first,
+           let size = try? await track.load(.naturalSize), let t = try? await track.load(.preferredTransform) {
+            let r = size.applying(t)
+            if abs(r.height) > 0 { sourceAspect = abs(r.width) / abs(r.height) }
+        }
         total = max(0.1, draft.duration)
         let seekTo = auditionAt.map { max(0, min($0, total - 0.2)) } ?? min(resumeAt, total)
         await player.seek(to: CMTime(seconds: seekTo, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)

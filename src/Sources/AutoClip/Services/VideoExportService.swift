@@ -21,6 +21,7 @@ class VideoExportService {
     enum ExportFormat: String, CaseIterable {
         case original = "Original"
         case vertical9x16 = "9:16 Vertical"
+        case portrait4x5 = "4:5 Portrait"
         case square1x1 = "1:1 Square"
         case horizontal16x9 = "16:9 Horizontal"
 
@@ -28,6 +29,7 @@ class VideoExportService {
             switch self {
             case .original: return "film"
             case .vertical9x16: return "iphone"
+            case .portrait4x5: return "rectangle.portrait"
             case .square1x1: return "square"
             case .horizontal16x9: return "rectangle"
             }
@@ -36,6 +38,7 @@ class VideoExportService {
             switch self {
             case .original: return "Keep source dimensions"
             case .vertical9x16: return "Portrait with face tracking"
+            case .portrait4x5: return "Instagram / Facebook feed"
             case .square1x1: return "Perfect square"
             case .horizontal16x9: return "Widescreen landscape"
             }
@@ -109,7 +112,7 @@ class VideoExportService {
 
         // Detect face positions only when we're cropping to a different aspect ratio
         var faceSamples: [(time: Double, centerX: Double)] = []
-        let needsFaceTracking = options.format == .vertical9x16 || options.format == .square1x1
+        let needsFaceTracking = options.format == .vertical9x16 || options.format == .portrait4x5 || options.format == .square1x1
         if needsFaceTracking && videoSize.width > videoSize.height {
             faceSamples = await detectFaces(in: asset, clipRange: clipTimeRange, videoSize: videoSize)
         }
@@ -229,6 +232,12 @@ class VideoExportService {
             let w = videoSize.width > videoSize.height ? round(videoSize.height * 9 / 16) : videoSize.width
             if w < 1080 { return CGSize(width: 1080, height: 1920) }
             return videoSize.width > videoSize.height ? CGSize(width: w, height: videoSize.height) : videoSize
+        case .portrait4x5:
+            // 4:5 crop, exported at least 1080x1350
+            let h = videoSize.height
+            let w = round(min(videoSize.width, h * 4 / 5))
+            let hh = round(w * 5 / 4)
+            return w < 1080 ? CGSize(width: 1080, height: 1350) : CGSize(width: w, height: hh)
         case .square1x1:
             let side = min(videoSize.width, videoSize.height)
             let out = max(side, 1080)
@@ -1241,7 +1250,7 @@ class VideoExportService {
             vc.frameDuration = CMTime(value: 1, timescale: fps)
             vc.renderSize    = renderSize
 
-            let needsFace = options.format == .vertical9x16 || options.format == .square1x1
+            let needsFace = options.format == .vertical9x16 || options.format == .portrait4x5 || options.format == .square1x1
 
             var instructions = [AVMutableVideoCompositionInstruction]()
 
