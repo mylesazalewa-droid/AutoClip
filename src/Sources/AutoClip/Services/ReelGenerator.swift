@@ -190,7 +190,9 @@ enum ReelGenerator {
                 let ranges = fit(plan.ranges, to: st.targetDuration, sentences: sentences)
                 used.formUnion(ranges.flatMap { Array($0) })
                 let title = plan.title.isEmpty ? "Reel \((record.drafts?.count ?? 0) + n + 1)" : plan.title
-                out.append(draft(title: title, clips: clips(for: ranges, in: sentences, source: source), source: source, settings: st))
+                var d = draft(title: title, clips: clips(for: ranges, in: sentences, source: source), source: source, settings: st)
+                if !plan.hook.isEmpty { d.hookText = plan.hook }
+                out.append(d)
             } else if st.singleClip {
                 let segs = VideoExportService.shared.autoSegmentsFromWords(words, sourceVideoPath: source)
                 guard let r = singleWindow(sentences, segments: segs, target: st.targetDuration, avoid: used) else { break }
@@ -263,10 +265,12 @@ enum ReelGenerator {
         // A length named in the request ("a 30-second short") wins over the default target
         let asked = request.range(of: #"(\d{2,3})\s*(-|\s)?\s*(s|sec|second)"#, options: .regularExpression)
             .flatMap { Double(request[$0].prefix { $0.isNumber }) }
-        return draft(title: plan.title.isEmpty ? request : plan.title,
-                     clips: clips(for: fit(plan.ranges, to: asked ?? c.st.targetDuration, sentences: c.sentences),
-                                  in: c.sentences, source: c.source),
-                     source: c.source, settings: c.st)
+        var d = draft(title: plan.title.isEmpty ? request : plan.title,
+                      clips: clips(for: fit(plan.ranges, to: asked ?? c.st.targetDuration, sentences: c.sentences),
+                                   in: c.sentences, source: c.source),
+                      source: c.source, settings: c.st)
+        if !plan.hook.isEmpty { d.hookText = plan.hook }
+        return d
     }
 
     /// Topics the talk covers, as one-click requests.

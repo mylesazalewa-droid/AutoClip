@@ -60,6 +60,7 @@ struct DraftPreviewPane: View {
     @State private var observer: Any?
     @State private var sourceAspect: CGFloat = 16.0 / 9.0
     @State private var following = false
+    @State private var overlayItems: [ReelOverlays.Placed] = []
     @State private var followTask: Task<Void, Never>?
 
     private var aspect: CGFloat {
@@ -78,6 +79,9 @@ struct DraftPreviewPane: View {
             ZStack {
                 Color.black
                 FillPlayerView(player: player)
+                if let img = ReelOverlays.previewImage(overlayItems, time: time, size: CGSize(width: 720, height: 720 / aspect)) {
+                    Image(nsImage: img).resizable().allowsHitTesting(false)
+                }
                 if draft.captions,
                    let img = look.overlayImage(words: words, time: time, size: CGSize(width: 720, height: 720 / aspect)) {
                     Image(nsImage: img).resizable().allowsHitTesting(false)
@@ -125,6 +129,9 @@ struct DraftPreviewPane: View {
         player.replaceCurrentItem(with: item)
         followSpeaker(item)
         words = ws
+        overlayItems = ReelOverlays.layout(hook: draft.hook, verses: draft.showVerses ? VerseDetector.find(in: ws) : [],
+                                           look: look, size: CGSize(width: 720, height: 720 / aspect),
+                                           duration: max(0.1, draft.duration))
         total = max(0.1, draft.duration)
         time = 0; isPlaying = false
         if let track = try? await item.asset.loadTracks(withMediaType: .video).first,

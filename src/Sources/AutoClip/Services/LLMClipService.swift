@@ -206,6 +206,7 @@ Respond with ONLY valid JSON — no markdown fences, no explanation:
     struct StoryPlan {
         var title: String
         var ranges: [ClosedRange<Int>]   // sentence index ranges, in playback order
+        var hook: String = ""            // on-screen text for the first seconds
     }
 
     /// Sends the full numbered transcript and asks the model to build ONE self-contained
@@ -245,7 +246,7 @@ Transcript:
 \(lines)
 
 Respond with ONLY valid JSON, no markdown:
-{"title":"short catchy title (max 8 words)","segments":[{"from":40,"to":52}]}
+{"title":"short catchy title (max 8 words)","hook":"3–7 word on-screen hook for the first 3 seconds that makes people stop scrolling (not the same as the title)","segments":[{"from":40,"to":52}]}
 """
         let prompt = single ? singlePrompt : """
 You are an expert short-form video editor (Reels, TikTok, Shorts). Below is the full transcript of a talk, one numbered sentence per line with its timestamp and length.
@@ -269,7 +270,7 @@ Transcript:
 \(lines)
 
 Respond with ONLY valid JSON, no markdown:
-{"title":"short catchy title (max 8 words)","segments":[{"from":12,"to":15},{"from":40,"to":47}]}
+{"title":"short catchy title (max 8 words)","hook":"3–7 word on-screen hook for the first 3 seconds that makes people stop scrolling (not the same as the title)","segments":[{"from":12,"to":15},{"from":40,"to":47}]}
 """
         var lastError: Error = llmError("AI returned no story")
         for _ in 1...2 {
@@ -331,7 +332,7 @@ Transcript:
 \(numbered(sentences))
 
 Respond with ONLY valid JSON, no markdown:
-{"title":"short catchy title (max 8 words)","segments":[{"from":12,"to":15},{"from":40,"to":47}]}
+{"title":"short catchy title (max 8 words)","hook":"3–7 word on-screen hook for the first 3 seconds that makes people stop scrolling (not the same as the title)","segments":[{"from":12,"to":15},{"from":40,"to":47}]}
 """
         var lastError: Error = llmError("AI returned nothing")
         for _ in 1...2 {
@@ -365,6 +366,27 @@ Respond with ONLY valid JSON: {"topics":["...","..."]}
             throw llmError("AI didn't return a topic list.")
         }
         return topics
+    }
+
+    // MARK: - Hook text
+
+    /// 3–7 words of on-screen text for the opening seconds of a reel.
+    func writeHook(transcript: String, title: String, provider: AIProvider, apiKey: String) async throws -> String {
+        let prompt = """
+You write on-screen hook text for short vertical videos (Reels, TikTok, Shorts) from church messages.
+Write ONE hook of 3–7 words shown in the first 3 seconds. It must create curiosity or tension and make people stop scrolling. It should fit what is actually said. No hashtags, no emojis, no quotation marks.
+
+Reel title: \(title)
+What is said in the reel:
+\(transcript.prefix(4000))
+
+Respond with ONLY valid JSON: {"hook":"..."}
+"""
+        let text = try await ask(prompt, provider: provider, apiKey: apiKey)
+        guard let a = text.firstIndex(of: "{"), let b = text.lastIndex(of: "}"),
+              let obj = try? JSONSerialization.jsonObject(with: Data(String(text[a...b]).utf8)) as? [String: Any],
+              let hook = obj["hook"] as? String, !hook.isEmpty else { throw llmError("AI didn't return a hook") }
+        return hook.trimmingCharacters(in: CharacterSet(charactersIn: "\"“”' ").union(.whitespacesAndNewlines))
     }
 
     // MARK: - Social graphics (quote cards, carousel, thumbnail)
@@ -509,7 +531,7 @@ Respond with ONLY valid JSON, no markdown:
             ranges.append(r); taken.formUnion(r)
         }
         guard !ranges.isEmpty else { throw llmError("AI story had no usable segments.") }
-        return StoryPlan(title: (obj["title"] as? String) ?? "", ranges: ranges)
+        return StoryPlan(title: (obj["title"] as? String) ?? "", ranges: ranges, hook: (obj["hook"] as? String) ?? "")
     }
 
     // MARK: - Anthropic

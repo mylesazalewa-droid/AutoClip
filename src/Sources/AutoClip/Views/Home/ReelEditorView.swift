@@ -437,6 +437,9 @@ struct ReelEditorView: View {
     @State private var lastWordClick: (sentence: UUID, index: Int)?
     @State private var following = false
     @State private var followTask: Task<Void, Never>?
+    @State private var overlayItems: [ReelOverlays.Placed] = []
+    @State private var hookStatus: String?
+    @State private var fillerNote: String?
 
     /// The sentence being spoken at the playhead, and which of its words.
     private var playing: (id: UUID, word: Int)? {
@@ -489,6 +492,7 @@ struct ReelEditorView: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 14) {
                             sizeSection
+                            polishSection
                             captionsSection
                             audioSection
                             Text("CLIPS — click words to cut them (shift-click a range) · ▶ plays · ✏️ fixes caption text")
@@ -528,6 +532,11 @@ struct ReelEditorView: View {
         .preferredColorScheme(.dark)
         .task(id: reloadToken) { await reloadPreview() }
         .onChange(of: draft.pieces) { _ in reloadToken += 1 }
+        .onChange(of: draft.tightenPauses) { _ in reloadToken += 1 }
+        .onChange(of: draft.hookText) { _ in rebuildOverlays() }
+        .onChange(of: draft.verseCards) { _ in rebuildOverlays() }
+        .onChange(of: draft.look) { _ in rebuildOverlays() }
+        .onChange(of: draft.formatRaw) { _ in rebuildOverlays() }
         .onDisappear {
             if let o = observer { player.removeTimeObserver(o) }
             player.pause()
@@ -541,6 +550,9 @@ struct ReelEditorView: View {
             ZStack {
                 Color.black
                 FillPlayerView(player: player)
+                if let img = ReelOverlays.previewImage(overlayItems, time: time, size: overlaySize) {
+                    Image(nsImage: img).resizable().allowsHitTesting(false)
+                }
                 if draft.captions, let img = captionOverlay() {
                     Image(nsImage: img).resizable().allowsHitTesting(false)
                 }
@@ -591,6 +603,7 @@ struct ReelEditorView: View {
         player.replaceCurrentItem(with: item)
         followSpeaker(item)
         reelWords = words
+        rebuildOverlays()
         timeline = draft.sentenceTimeline
         if let track = try? await item.asset.loadTracks(withMediaType: .video).first,
            let size = try? await track.load(.naturalSize), let t = try? await track.load(.preferredTransform) {
@@ -615,6 +628,107 @@ struct ReelEditorView: View {
     }
 
     // MARK: Captions
+
+    // MARK: Polish (hook, verses, pauses, fillers)
+
+    private var overlaySize: CGSize { CGSize(width: 540, height: 540 / previewAspect) }
+
+    private func rebuildOverlays() {
+        let verses = draft.showVerses ? VerseDetector.find(in: reelWords) : []
+        overlayItems = ReelOverlays.layout(hook: draft.hook, verses: verses, look: look,
+                                           size: overlaySize, duration: max(total, draft.duration))
+    }
+
+    private var detectedVerses: [String] {
+        var seen: [String] = []
+        for v in VerseDetector.find(in: reelWords) where !seen.contains(v.text) { seen.append(v.text) }
+        return seen
+    }
+
+    private var polishSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("POLISH").font(.system(size: 10, weight: .semibold)).foregroundColor(Color.white.opacity(0.35)).tracking(1)
+
+            // Hook text
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Hook text (first 3 seconds)").font(.system(size: 12)).foregroundColor(.white)
+                HStack(spacing: 6) {
+                    TextField("e.g. \"You\'re carrying something you were never meant to\"",
+                              text: Binding(get: { draft.hookText ?? draft.seo?.hookText ?? "" },
+                                            set: { draft.hookText = $0 }))
+                        .textFieldStyle(.plain).font(.system(size: 12)).foregroundColor(.white)
+                        .padding(6).background(Color.white.opacity(0.06)).cornerRadius(5)
+                    Button { writeHook() } label: { Text("✨ Write") }
+                        .controlSize(.small).disabled(hookStatus != nil)
+                        .help("Have AI write a hook from what's said in this reel")
+                    if draft.hook != nil {
+                        Button { draft.hookText = "" } label: { Image(systemName: "xmark.circle") }
+                            .buttonStyle(.plain).foregroundColor(Color.white.opacity(0.5)).help("No hook")
+                    }
+                }
+                if let hookStatus {
+                    Text(hookStatus).font(.system(size: 10)).foregroundColor(Color.white.opacity(0.45))
+                }
+            }
+
+            Divider().background(Color.white.opacity(0.06))
+
+            Toggle(isOn: Binding(get: { draft.showVerses }, set: { draft.verseCards = $0 })) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Bible verse cards").font(.system(size: 12)).foregroundColor(.white)
+                    let found = detectedVerses
+                    Text(found.isEmpty ? "Shows the reference when Scripture is quoted — none spoken in this reel"
+                                       : "Found: " + found.joined(separator: ", "))
+                        .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.4)).lineLimit(2)
+                }
+            }.toggleStyle(.switch).tint(gold)
+
+            Toggle(isOn: Binding(get: { draft.pausesTight }, set: { draft.tightenPauses = $0 })) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Shorten long pauses").font(.system(size: 12)).foregroundColor(.white)
+                    Text("Trims silences longer than half a second for a faster pace")
+                        .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.4))
+                }
+            }.toggleStyle(.switch).tint(gold)
+
+            HStack {
+                let n = draft.fillerWordIDs.count
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Filler words").font(.system(size: 12)).foregroundColor(.white)
+                    Text(fillerNote ?? (n == 0 ? "No ums, uhs or stutters left" : "\(n) um/uh/stutter\(n == 1 ? "" : "s") found"))
+                        .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.4))
+                }
+                Spacer()
+                Button("Remove all") {
+                    let removed = draft.cutFillers()
+                    fillerNote = "Removed \(removed) — click a word to bring one back"
+                }
+                .controlSize(.small).disabled(n == 0)
+            }
+        }
+        .padding(12).background(Color.white.opacity(0.04)).cornerRadius(10)
+    }
+
+    private func writeHook() {
+        hookStatus = "Writing a hook…"
+        let transcript = reelWords.map(\.word).joined(separator: " ")
+        let title = draft.title
+        Task {
+            do {
+                let provider = LLMClipService.AIProvider(rawValue: UserDefaults.standard.string(forKey: "ar_provider") ?? "") ?? .google
+                guard let key = await LLMClipService.shared.loadAPIKey(for: provider), !key.isEmpty else {
+                    hookStatus = "Add an API key in Auto Reels → AI settings to write hooks with AI."
+                    return
+                }
+                let hook = try await LLMClipService.shared.writeHook(transcript: transcript, title: title,
+                                                                    provider: provider, apiKey: key)
+                draft.hookText = hook
+                hookStatus = nil
+            } catch {
+                hookStatus = error.localizedDescription
+            }
+        }
+    }
 
     // MARK: Audio
 

@@ -56,6 +56,63 @@ struct ReelDraft: Identifiable, Codable, Equatable {
     /// Voice clean-up / music for this reel (nil = the user's default settings)
     var audio: AudioSettings?
     var audioSettings: AudioSettings { audio ?? AudioSettings.load() ?? AudioSettings() }
+    /// Shorten pauses longer than ~0.45s inside kept speech (nil = on)
+    var tightenPauses: Bool?
+    var pausesTight: Bool { tightenPauses ?? true }
+    /// Show a card when a Bible reference is spoken (nil = on)
+    var verseCards: Bool?
+    var showVerses: Bool { verseCards ?? true }
+    /// On-screen hook for the first seconds. nil = use the Fire Short's hook if any; "" = none
+    var hookText: String?
+    var hook: String? {
+        let h = (hookText ?? seo?.hookText ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return h.isEmpty ? nil : h
+    }
+
+    // MARK: Filler words
+
+    private static let fillers: Set<String> = ["um", "umm", "uh", "uhh", "uhm", "erm", "er", "hmm", "mm", "mhm", "ah"]
+
+    private static func clean(_ w: Word) -> String {
+        w.word.lowercased().trimmingCharacters(in: .punctuationCharacters.union(.whitespaces))
+    }
+
+    /// Words that would be cut by `cutFillers()`: ums/uhs and stutters ("I I", "the the").
+    var fillerWordIDs: [UUID] {
+        var ids: [UUID] = []
+        for p in pieces {
+            for s in p.sentences where s.included {
+                let kept = s.words.filter { !s.isCut($0) }
+                for (k, w) in kept.enumerated() {
+                    let c = Self.clean(w)
+                    if Self.fillers.contains(c) { ids.append(w.id); continue }
+                    // Stutter: same word again right away — drop the first one
+                    // ("No, no, no" with punctuation is emphasis, not a stutter)
+                    let punctuated = w.word.trimmingCharacters(in: .whitespaces).last.map { ",.!?;:".contains($0) } ?? false
+                    if !punctuated, k + 1 < kept.count, !c.isEmpty, Self.clean(kept[k + 1]) == c,
+                       kept[k + 1].startTime - w.endTime < 0.6 { ids.append(w.id) }
+                }
+            }
+        }
+        return ids
+    }
+
+    /// Cuts every filler word and stutter. Returns how many were removed.
+    @discardableResult
+    mutating func cutFillers() -> Int {
+        let ids = Set(fillerWordIDs)
+        guard !ids.isEmpty else { return 0 }
+        for i in pieces.indices {
+            for j in pieces[i].sentences.indices {
+                let hits = pieces[i].sentences[j].words.map(\.id).filter { ids.contains($0) }
+                guard !hits.isEmpty else { continue }
+                // Never cut a sentence down to nothing
+                guard hits.count < pieces[i].sentences[j].words.count else { continue }
+                pieces[i].sentences[j].cutWordIDs = (pieces[i].sentences[j].cutWordIDs ?? []) + hits
+            }
+        }
+        return ids.count
+    }
 
     // MARK: Building
 
@@ -126,20 +183,27 @@ struct ReelDraft: Identifiable, Codable, Equatable {
     var renderRuns: [Run] {
         enum Token { case word(Word, sentence: Sentence, firstInSentence: Bool, lastInSentence: Bool)
                      case sentenceBreak
-                     case wordCut(Word) }
+                     case wordCut(Word)
+                     case pause }
+        let pauseLimit = 0.45
         var runs: [Run] = []
         for piece in pieces {
             var tokens: [Token] = []
             for s in piece.sentences {
                 guard s.included else { tokens.append(.sentenceBreak); continue }
                 for (k, w) in s.words.enumerated() {
-                    if s.isCut(w) { tokens.append(.wordCut(w)) }
-                    else { tokens.append(.word(w, sentence: s, firstInSentence: k == 0, lastInSentence: k == s.words.count - 1)) }
+                    if s.isCut(w) { tokens.append(.wordCut(w)); continue }
+                    // A long silence before this word (and nothing cut in between): trim it
+                    if pausesTight, case let .word(prev, _, _, _)? = tokens.last, w.startTime - prev.endTime > pauseLimit {
+                        tokens.append(.pause)
+                    }
+                    tokens.append(.word(w, sentence: s, firstInSentence: k == 0, lastInSentence: k == s.words.count - 1))
                 }
             }
             var cur: [(Word, Sentence, Bool, Bool)] = []
             var cutBefore: Word?        // last cut word right before this run
-            func flush(cutAfter: Word?) {
+            var pauseBefore = false     // this run starts after a trimmed pause
+            func flush(cutAfter: Word?, pauseAfter: Bool = false) {
                 defer { cur = [] }
                 guard let (first, firstS, firstIsSentStart, _) = cur.first,
                       let (last, lastS, _, lastIsSentEnd) = cur.last else { return }
@@ -147,10 +211,12 @@ struct ReelDraft: Identifiable, Codable, Equatable {
                 let endsAtSentence = cutAfter == nil
                 var start: Double
                 if let cut = cutBefore { start = max(first.startTime - 0.03, cut.endTime) }
-                else { start = first.startTime - 0.1 + (firstIsSentStart ? (firstS.startNudge ?? 0) : 0) }
+                else {
+                    start = first.startTime - (pauseBefore ? 0.08 : 0.1) + (firstIsSentStart ? (firstS.startNudge ?? 0) : 0)
+                }
                 var end: Double
                 if let cut = cutAfter { end = min(last.endTime + 0.05, cut.startTime) }
-                else { end = last.endTime + 0.25 + (lastIsSentEnd ? (lastS.endNudge ?? 0) : 0) }
+                else { end = last.endTime + (pauseAfter ? 0.14 : 0.25) + (lastIsSentEnd ? (lastS.endNudge ?? 0) : 0) }
                 start = max(0, start); end = max(start + 0.15, end)
                 let words = cur.map(\.0)
                 var c = Clip(id: UUID(), title: words.prefix(8).map(\.word).joined(separator: " "),
@@ -167,10 +233,12 @@ struct ReelDraft: Identifiable, Codable, Equatable {
                 case let .word(w, s, f, l):
                     cur.append((w, s, f, l))
                 case .sentenceBreak:
-                    flush(cutAfter: nil); cutBefore = nil
+                    flush(cutAfter: nil); cutBefore = nil; pauseBefore = false
                 case let .wordCut(w):
                     if !cur.isEmpty { flush(cutAfter: w) }
-                    cutBefore = w
+                    cutBefore = w; pauseBefore = false
+                case .pause:
+                    flush(cutAfter: nil, pauseAfter: true); cutBefore = nil; pauseBefore = true
                 }
             }
             flush(cutAfter: nil)
@@ -251,6 +319,9 @@ struct ReelDraft: Identifiable, Codable, Equatable {
         o.emojiOverlays = emojiOverlays
         o.topicKeywords = topicKeywords
         o.audio = audioSettings
+        o.hookText = hook
+        o.verseCards = showVerses
+        o.overlayLook = look ?? CaptionLook.load() ?? CaptionLook(preset: CaptionStyle.all[0])
         return o
     }
 

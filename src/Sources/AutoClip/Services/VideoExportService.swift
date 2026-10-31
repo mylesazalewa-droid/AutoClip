@@ -59,6 +59,10 @@ class VideoExportService {
         var captionLook: CaptionLook? = nil
         /// Voice clean-up, levelling and background music (reels)
         var audio: AudioSettings? = nil
+        /// On-screen hook for the first seconds, and Bible reference cards (reels)
+        var hookText: String? = nil
+        var verseCards: Bool = false
+        var overlayLook: CaptionLook? = nil
     }
 
     enum ExportError: LocalizedError {
@@ -1433,7 +1437,14 @@ class VideoExportService {
         }
 
         let reelDuration = reelOffset
-        let needsEncode  = options.format != .original || (options.burnCaptions && !remappedWords.isEmpty)
+        // Hook text + verse cards, laid out for the final frame size
+        let verses = options.verseCards ? VerseDetector.find(in: remappedWords) : []
+        let overlays = (options.hookText != nil || !verses.isEmpty)
+            ? ReelOverlays.layout(hook: options.hookText, verses: verses,
+                                  look: options.overlayLook ?? options.captionLook ?? CaptionLook(preset: options.captionStyle),
+                                  size: renderSize, duration: reelDuration)
+            : []
+        let needsEncode  = options.format != .original || (options.burnCaptions && !remappedWords.isEmpty) || !overlays.isEmpty
 
         // ── Pass 2: per-segment face tracking + build video composition ───────
         var videoComposition: AVMutableVideoComposition? = nil
@@ -1527,19 +1538,25 @@ class VideoExportService {
 
             vc.instructions = instructions
 
-            if options.burnCaptions && !remappedWords.isEmpty {
+            let burn = options.burnCaptions && !remappedWords.isEmpty
+            if burn || !overlays.isEmpty {
                 let parent = CALayer(); parent.frame = CGRect(origin: .zero, size: renderSize); parent.isGeometryFlipped = true
                 let vl = CALayer(); vl.frame = CGRect(origin: .zero, size: renderSize); parent.addSublayer(vl)
-                var reelClip = clips[0]
-                reelClip.startTime = 0; reelClip.endTime = reelDuration; reelClip.words = remappedWords
-                let keywordSet = Set(options.topicKeywords.map { $0.lowercased() })
-                let captionLayer = buildCaptionLayer(clip: reelClip, style: options.captionStyle, renderSize: renderSize,
-                                                     bgEnabled: options.captionBgEnabled, bgOpacity: options.captionBgOpacity,
-                                                     bgColor: options.captionBgColor,
-                                                     keywords: keywordSet, emojiOverlays: options.emojiOverlays,
-                                                     look: options.captionLook)
-                parent.addSublayer(captionLayer)
+                if !overlays.isEmpty {
+                    parent.addSublayer(ReelOverlays.layer(for: overlays, size: renderSize, duration: reelDuration))
+                }
                 vc.animationTool = AVVideoCompositionCoreAnimationTool(postProcessingAsVideoLayer: vl, in: parent)
+                if burn {
+                    var reelClip = clips[0]
+                    reelClip.startTime = 0; reelClip.endTime = reelDuration; reelClip.words = remappedWords
+                    let keywordSet = Set(options.topicKeywords.map { $0.lowercased() })
+                    let captionLayer = buildCaptionLayer(clip: reelClip, style: options.captionStyle, renderSize: renderSize,
+                                                         bgEnabled: options.captionBgEnabled, bgOpacity: options.captionBgOpacity,
+                                                         bgColor: options.captionBgColor,
+                                                         keywords: keywordSet, emojiOverlays: options.emojiOverlays,
+                                                         look: options.captionLook)
+                    parent.addSublayer(captionLayer)
+                }
             }
 
             videoComposition = vc

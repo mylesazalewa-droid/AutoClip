@@ -2416,6 +2416,7 @@ private extension AutoReelsTab {
             let baseVariation = await MainActor.run { store.rerollVariation }
             var reelGroups: [[Clip]] = []
             var aiTitles: [String] = []
+            var aiHooks: [String] = []
             // Story mode works on the full transcript, one sentence per line
             let storySentences = ReelDraft.sentences(from: words)
             var usedSentences = Set<Int>()
@@ -2447,6 +2448,7 @@ private extension AutoReelsTab {
                                         notes: "", thumbnailData: nil)
                         }
                         aiTitles.append(plan.title)
+                        aiHooks.append(plan.hook)
                         await upd(0.40 + Double(i) / Double(autoReels) * 0.10,
                                   "AI built reel \(i + 1) ✓")
                     } catch {
@@ -2502,10 +2504,12 @@ private extension AutoReelsTab {
             }
             let look = captions ? (opts.captionLook ?? CaptionLook.load()) : nil
             let drafts = reelGroups.enumerated().map { i, group in
-                ReelDraft(title: perReelTitles[i], clips: group, sourceVideoPath: workingURL.path,
-                          formatRaw: format.rawValue, captions: captions, look: look,
-                          crossDissolve: crossDissolve, emojiOverlays: emojiOverlays,
-                          topicKeywords: opts.topicKeywords)
+                var d = ReelDraft(title: perReelTitles[i], clips: group, sourceVideoPath: workingURL.path,
+                                  formatRaw: format.rawValue, captions: captions, look: look,
+                                  crossDissolve: crossDissolve, emojiOverlays: emojiOverlays,
+                                  topicKeywords: opts.topicKeywords)
+                if aiHooks.count == reelGroups.count, !aiHooks[i].isEmpty { d.hookText = aiHooks[i] }
+                return d
             }
             let firstReelDur = drafts.first?.duration ?? 0
             let transcriptText = reelGroups.flatMap { $0.flatMap { $0.words.map(\.word) } }.joined(separator: " ")
