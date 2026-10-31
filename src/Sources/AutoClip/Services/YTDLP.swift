@@ -66,4 +66,73 @@ enum YTDLP {
         for (a, b) in swaps { t = t.replacingOccurrences(of: a, with: b) }
         return t.trimmingCharacters(in: .whitespaces)
     }
+
+    /// Where YouTube downloads are saved (shared by Auto Reels and Assess).
+    static var videosDir: URL {
+        URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Documents/AutoClip/Videos")
+    }
+
+    /// The yt-dlp to run: bundled copy first, then Homebrew / PATH.
+    static func executablePath() -> String? {
+        if let b = Bundle.main.path(forResource: "yt-dlp", ofType: nil), FileManager.default.fileExists(atPath: b) { return b }
+        for p in ["/opt/homebrew/bin/yt-dlp", "/usr/local/bin/yt-dlp", "/opt/homebrew/opt/yt-dlp/bin/yt-dlp"]
+        where FileManager.default.fileExists(atPath: p) { return p }
+        return nil
+    }
+
+    struct Failure: LocalizedError {
+        let message: String
+        var errorDescription: String? { message }
+    }
+
+    /// Downloads a YouTube video into `videosDir` and returns the merged file.
+    /// `progress` gets 0…1 and a status line.
+    static func download(_ url: String, progress: @escaping (Double, String) -> Void) async throws -> URL {
+        guard let ytdlp = executablePath() else {
+            throw Failure(message: "yt-dlp not found. Install with: brew install yt-dlp")
+        }
+        let dir = videosDir
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: ytdlp)
+        process.arguments = arguments(url: url, outTemplate: dir.appendingPathComponent("%(title)s.%(ext)s").path)
+        process.environment = environment
+        process.currentDirectoryURL = dir
+        let outPipe = Pipe(), errPipe = Pipe()
+        process.standardOutput = outPipe; process.standardError = errPipe
+        let errLog = ErrLog()
+        errPipe.fileHandleForReading.readabilityHandler = { h in
+            guard let line = String(data: h.availableData, encoding: .utf8), !line.isEmpty else { return }
+            errLog.append(line)
+            if line.contains("%"),
+               let n = line.split(separator: "%").first?.split(separator: " ").compactMap({ Double($0) }).last {
+                progress(min(0.95, n / 100), "Downloading: \(Int(n))%")
+            } else if line.contains("Merger") {
+                progress(0.97, "Combining video and audio…")
+            }
+        }
+        try await withTaskCancellationHandler {
+            try process.run(); process.waitUntilExit()
+        } onCancel: { process.terminate() }
+        errPipe.fileHandleForReading.readabilityHandler = nil
+        guard process.terminationStatus == 0 else {
+            let detail = errLog.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            throw Failure(message: detail.isEmpty ? "Download failed (exit \(process.terminationStatus))" : String(detail.suffix(250)))
+        }
+        let printed = String(data: outPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let path = printed.split(separator: "\n").last.map(String.init) ?? printed
+        guard !path.isEmpty, FileManager.default.fileExists(atPath: path), !isPartialStream(URL(fileURLWithPath: path)) else {
+            throw Failure(message: "Download finished but the video and audio couldn't be combined. Make sure ffmpeg is installed (brew install ffmpeg).")
+        }
+        progress(1, "Downloaded")
+        return URL(fileURLWithPath: path)
+    }
+
+    private final class ErrLog: @unchecked Sendable {
+        private let lock = NSLock()
+        private var buf = ""
+        func append(_ s: String) { lock.withLock { buf += s } }
+        var text: String { lock.withLock { buf } }
+    }
 }

@@ -15,7 +15,15 @@ struct AssessTab: View {
     @State private var hidden: Set<String> = []
     @State private var hovered: FillerReport.Hit?
     @State private var player = AVPlayer()
-    @State private var extraVideos: [String] = []
+    /// Files picked with "Choose…" and videos removed from the list (both remembered)
+    @AppStorage("assess_extra") private var extraRaw = ""
+    @AppStorage("assess_hidden") private var hiddenRaw = ""
+    @State private var ytURL = ""
+    @State private var ytStatus: String?
+    @State private var ytError: String?
+    @State private var pendingDelete: String?
+    private var extraVideos: [String] { extraRaw.split(separator: "\n").map(String.init) }
+    private var hiddenVideos: Set<String> { Set(hiddenRaw.split(separator: "\n").map(String.init)) }
 
     private let gold = Color(red: 1.0, green: 0.75, blue: 0.0)
 
@@ -34,13 +42,19 @@ struct AssessTab: View {
         for r in reelsStore.reels {
             if let p = ReelGenerator.sourceVideoPath(for: r), fm.fileExists(atPath: p), !out.contains(p) { out.append(p) }
         }
-        let dir = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Documents/AutoClip/Videos")
+        let dir = YTDLP.videosDir
         let files = (try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? []
         for f in files.sorted(by: { $0.lastPathComponent < $1.lastPathComponent })
         where ["mp4", "mov", "m4v", "webm", "mkv"].contains(f.pathExtension.lowercased()) && !YTDLP.isPartialStream(f) {
             if !out.contains(f.path) { out.append(f.path) }
         }
-        return extraVideos.filter { !out.contains($0) } + out
+        let hidden = hiddenVideos
+        return (extraVideos.filter { !out.contains($0) && fm.fileExists(atPath: $0) } + out).filter { !hidden.contains($0) }
+    }
+
+    /// Auto Reels projects made from this video (its file must stay)
+    private func reelsUsing(_ path: String) -> Int {
+        reelsStore.reels.filter { ReelGenerator.sourceVideoPath(for: $0) == path }.count
     }
 
     private var shown: [FillerReport.Hit] { hits.filter { !hidden.contains($0.kind) } }
@@ -85,7 +99,28 @@ struct AssessTab: View {
                 Spacer()
                 Button("Choose…") { chooseVideo() }.controlSize(.small)
             }
-            .padding(12)
+            .padding(.horizontal, 12).padding(.top, 12).padding(.bottom, 6)
+            // Import from YouTube
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Image(systemName: "link").font(.system(size: 11)).foregroundColor(gold)
+                    TextField("Paste a YouTube link", text: $ytURL)
+                        .textFieldStyle(.plain).font(.system(size: 11)).foregroundColor(.white)
+                        .onSubmit { importYouTube() }
+                    Button("Import") { importYouTube() }
+                        .controlSize(.small)
+                        .disabled(ytURL.trimmingCharacters(in: .whitespaces).isEmpty || ytStatus != nil)
+                }
+                .padding(7).background(Color.white.opacity(0.06)).cornerRadius(7)
+                if let ytStatus {
+                    HStack(spacing: 5) { ProgressView().scaleEffect(0.45).frame(width: 12, height: 12)
+                        Text(ytStatus).font(.system(size: 10)).foregroundColor(Color.white.opacity(0.55)) }
+                } else if let ytError {
+                    Text(ytError).font(.system(size: 10)).foregroundColor(Color(red: 1, green: 0.45, blue: 0.45))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(.horizontal, 12).padding(.bottom, 8)
             ScrollView {
                 VStack(alignment: .leading, spacing: 2) {
                     ForEach(videos, id: \.self) { path in
@@ -103,6 +138,10 @@ struct AssessTab: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .contextMenu {
+                            Button("Delete…") { pendingDelete = path }
+                            Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)]) }
+                        }
                     }
                     if videos.isEmpty {
                         Text("No videos yet. Choose one, or import from YouTube in Auto Reels.")
@@ -113,6 +152,59 @@ struct AssessTab: View {
             }
         }
         .background(Color(red: 0.09, green: 0.10, blue: 0.15))
+        .confirmationDialog(deleteTitle, isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
+                            titleVisibility: .visible) {
+            if let path = pendingDelete {
+                if reelsUsing(path) == 0 {
+                    Button("Move Video to Trash", role: .destructive) { trash(path) }
+                }
+                Button("Remove from This List") { hide(path) }
+                Button("Cancel", role: .cancel) { pendingDelete = nil }
+            }
+        } message: {
+            if let path = pendingDelete {
+                let n = reelsUsing(path)
+                Text(n > 0 ? "\(n) Auto Reels project\(n == 1 ? " uses" : "s use") this video, so the file stays on your Mac."
+                           : "Moving it to the Trash removes the video file. You can put it back from the Trash.")
+            }
+        }
+    }
+
+    private var deleteTitle: String {
+        "Delete “\(YTDLP.title(fromFile: URL(fileURLWithPath: pendingDelete ?? "")))”?"
+    }
+
+    private func hide(_ path: String) {
+        var h = hiddenVideos; h.insert(path)
+        hiddenRaw = h.joined(separator: "\n")
+        extraRaw = extraVideos.filter { $0 != path }.joined(separator: "\n")
+        if selected == path { selected = nil; player.replaceCurrentItem(with: nil) }
+        pendingDelete = nil
+    }
+
+    private func trash(_ path: String) {
+        if selected == path { selected = nil; player.replaceCurrentItem(with: nil) }
+        try? FileManager.default.trashItem(at: URL(fileURLWithPath: path), resultingItemURL: nil)
+        extraRaw = extraVideos.filter { $0 != path }.joined(separator: "\n")
+        pendingDelete = nil
+    }
+
+    private func importYouTube() {
+        let link = ytURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !link.isEmpty else { return }
+        ytError = nil; ytStatus = "Starting download…"
+        Task {
+            do {
+                let file = try await YTDLP.download(link) { _, msg in Task { @MainActor in ytStatus = msg } }
+                ytStatus = nil; ytURL = ""
+                // A video removed earlier but downloaded again comes back
+                hiddenRaw = hiddenVideos.subtracting([file.path]).joined(separator: "\n")
+                select(file.path)
+            } catch {
+                ytStatus = nil
+                ytError = error.localizedDescription
+            }
+        }
     }
 
     private func chooseVideo() {
@@ -120,7 +212,8 @@ struct AssessTab: View {
         panel.allowedContentTypes = [.movie, .video, .mpeg4Movie, .quickTimeMovie]
         panel.canChooseDirectories = false
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        if !extraVideos.contains(url.path) { extraVideos.insert(url.path, at: 0) }
+        if !extraVideos.contains(url.path) { extraRaw = ([url.path] + extraVideos).joined(separator: "\n") }
+        hiddenRaw = hiddenVideos.subtracting([url.path]).joined(separator: "\n")
         select(url.path)
     }
 
@@ -151,8 +244,13 @@ struct AssessTab: View {
     private var report: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                Text(YTDLP.title(fromFile: URL(fileURLWithPath: selected ?? "")))
-                    .font(.system(size: 17, weight: .semibold)).foregroundColor(.white)
+                HStack {
+                    Text(YTDLP.title(fromFile: URL(fileURLWithPath: selected ?? "")))
+                        .font(.system(size: 17, weight: .semibold)).foregroundColor(.white)
+                    Spacer()
+                    Button { pendingDelete = selected } label: { Label("Delete", systemImage: "trash") }
+                        .controlSize(.small)
+                }
 
                 HStack(alignment: .top, spacing: 16) {
                     VideoPlayer(player: player)
