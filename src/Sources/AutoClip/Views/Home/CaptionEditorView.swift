@@ -24,6 +24,7 @@ struct CaptionEditorView: View {
                 sliderRow("Position", value: $look.position, range: 0.1...0.92,
                           label: look.position < 0.35 ? "Top" : look.position < 0.65 ? "Middle" : "Bottom")
                 wordsRow
+                motionRow
                 colorRow
                 outlineRow
                 backgroundRow
@@ -34,9 +35,8 @@ struct CaptionEditorView: View {
     // MARK: Preview
 
     private var preview: some View {
-        TimelineView(.periodic(from: .now, by: 0.45)) { ctx in
-            let step = Int(ctx.date.timeIntervalSinceReferenceDate / 0.45)
-            Image(nsImage: previewImage(step: step))
+        TimelineView(.periodic(from: .now, by: 1.0 / 30)) { ctx in
+            Image(nsImage: previewImage(time: ctx.date.timeIntervalSinceReferenceDate))
                 .resizable()
                 .frame(width: 135, height: 240)
                 .cornerRadius(8)
@@ -44,14 +44,17 @@ struct CaptionEditorView: View {
         }
     }
 
-    /// Draws one frame of the caption animation at 2× for a crisp 135×240 preview.
-    private func previewImage(step: Int) -> NSImage {
+    /// Draws one frame of the caption animation at 2× for a crisp 135×240 preview,
+    /// a new word every 0.45s.
+    private func previewImage(time: Double) -> NSImage {
         let size = CGSize(width: 270, height: 480)
+        let step = Int(time / 0.45)
         let n = max(1, look.wordsPerCaption)
         let phraseCount = Int((Double(sampleWords.count) / Double(n)).rounded(.up))
         let phraseIdx = (step / n) % phraseCount
         let phrase = Array(sampleWords[(phraseIdx * n)..<min(sampleWords.count, phraseIdx * n + n)])
         let active = step % n < phrase.count ? step % n : phrase.count - 1
+        let age = time - Double(step - step % n) * 0.45
         let look = self.look
 
         return NSImage(size: size, flipped: true) { rect in
@@ -61,21 +64,7 @@ struct CaptionEditorView: View {
             NSColor(white: 0.45, alpha: 1).setFill()
             NSBezierPath(ovalIn: CGRect(x: 105, y: 120, width: 60, height: 70)).fill()
             NSBezierPath(roundedRect: CGRect(x: 75, y: 195, width: 120, height: 200), xRadius: 30, yRadius: 30).fill()
-
-            let fontSize = look.fontSize(forRenderWidth: size.width)
-            let maxW = size.width * 0.86
-            let str = look.attributedPhrase(phrase, active: active, fontSize: fontSize)
-            let m = look.measure(look.attributedPhrase(phrase, active: nil, fontSize: fontSize), maxWidth: maxW)
-            let centerY = size.height * CGFloat(look.position)
-            if look.bgEnabled {
-                let padX = fontSize * 0.35, padY = fontSize * 0.18
-                look.bgColor.nsColor.withAlphaComponent(CGFloat(look.bgOpacity)).setFill()
-                NSBezierPath(roundedRect: CGRect(x: (size.width - m.width) / 2 - padX, y: centerY - m.height / 2 - padY,
-                                                 width: m.width + padX * 2, height: m.height + padY * 2),
-                             xRadius: fontSize * 0.25, yRadius: fontSize * 0.25).fill()
-            }
-            str.draw(with: CGRect(x: (size.width - maxW) / 2, y: centerY - m.height / 2, width: maxW, height: m.height + 4),
-                     options: [.usesLineFragmentOrigin, .usesFontLeading])
+            look.draw(phrase, active: active, age: age, in: size)
             return true
         }
     }
@@ -121,6 +110,18 @@ struct CaptionEditorView: View {
             }
             .pickerStyle(.segmented)
             .frame(width: 130)
+        }
+    }
+
+    private var motionRow: some View {
+        HStack {
+            label("Motion")
+            Spacer()
+            Picker("", selection: $look.motion) {
+                ForEach(CaptionLook.Motion.allCases) { Text($0.label).tag($0) }
+            }
+            .labelsHidden()
+            .fixedSize()
         }
     }
 

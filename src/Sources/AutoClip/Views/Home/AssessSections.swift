@@ -1,5 +1,7 @@
 import SwiftUI
+import AppKit
 import Charts
+import UniformTypeIdentifiers
 
 // Sections of the Assess tab beyond filler words: delivery, AI coach, stage presence, progress.
 // Each takes the saved SpeakerReport plus a `play` closure that jumps the video to a moment.
@@ -417,7 +419,7 @@ struct StageSection: View {
             AssessCard(title: "Stage presence") {
                 HStack(spacing: 8) {
                     if status != nil { ProgressView().controlSize(.small) }
-                    Text(status ?? "Not available — no face found in this video.")
+                    Text(status ?? "Not available — no face found in this video (or it was recorded as sound only).")
                         .font(.system(size: 12)).foregroundColor(Color.white.opacity(0.7))
                 }
             }
@@ -523,5 +525,202 @@ struct SpeakerProgressSection: View {
                 .frame(height: 110)
             }
         }
+    }
+}
+
+// MARK: - Sermon notes
+
+struct NotesSection: View {
+    let report: SpeakerReport
+    let status: String?
+    let error: String?
+    let run: () -> Void
+    let play: (Double) -> Void
+    @State private var copied = false
+
+    var body: some View {
+        if let n = report.notes {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 8) {
+                    Button { copy(n) } label: { Label(copied ? "Copied" : "Copy text", systemImage: copied ? "checkmark" : "doc.on.doc") }
+                    Button { saveWord(n) } label: { Label("Save as Word…", systemImage: "doc.richtext") }
+                    Spacer()
+                    if let status {
+                        ProgressView().controlSize(.small)
+                        Text(status).font(.system(size: 11)).foregroundColor(Color.white.opacity(0.6))
+                    } else {
+                        Button("Write again") { run() }.help("Ask the AI for a fresh set of notes")
+                    }
+                }
+                .controlSize(.small)
+                if let error { Text(error).font(.system(size: 11)).foregroundColor(warn) }
+
+                AssessCard(title: n.title) {
+                    Text(n.bigIdea).font(.system(size: 14, weight: .semibold)).foregroundColor(gold)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(n.summary).font(.system(size: 12)).foregroundColor(Color.white.opacity(0.85))
+                        .fixedSize(horizontal: false, vertical: true)
+                    if !n.verses.isEmpty {
+                        Text("Scripture: " + n.verses.joined(separator: "; ")).font(.system(size: 11)).foregroundColor(Color.white.opacity(0.55))
+                    }
+                }
+                AssessCard(title: "Outline") {
+                    ForEach(Array(n.points.enumerated()), id: \.offset) { i, p in
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                Text("\(i + 1).").font(.system(size: 13, weight: .bold)).foregroundColor(gold)
+                                Text(p.title).font(.system(size: 13, weight: .semibold)).foregroundColor(.white)
+                                Spacer()
+                                if let t = p.time { TimeLink(time: t, play: play) }
+                            }
+                            Text(p.summary).font(.system(size: 12)).foregroundColor(Color.white.opacity(0.8))
+                                .fixedSize(horizontal: false, vertical: true).padding(.leading, 22)
+                            if !p.verses.isEmpty {
+                                Text(p.verses.joined(separator: "; ")).font(.system(size: 11)).foregroundColor(Color.white.opacity(0.5)).padding(.leading, 22)
+                            }
+                        }
+                        .padding(.bottom, 4)
+                    }
+                }
+                if !n.quotes.isEmpty { list("Key quotes", n.quotes.map { "“\($0)”" }, numbered: false) }
+                if !n.questions.isEmpty { list("Discussion questions", n.questions, numbered: true) }
+                if !n.application.isEmpty { list("This week", n.application, numbered: false) }
+                if !n.prayer.isEmpty {
+                    AssessCard(title: "Prayer") {
+                        Text(n.prayer).font(.system(size: 12)).italic().foregroundColor(Color.white.opacity(0.85))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+        } else {
+            AssessCard(title: "Sermon notes", subtitle: "For small groups, the church website or anyone who missed it") {
+                Text("The AI reads the message and writes a title, the big idea, a summary, the outline with Scripture, key quotes, five discussion questions, things to try this week and a closing prayer. Copy it or save it as a Word document. Costs about a cent with Claude.")
+                    .font(.system(size: 12)).foregroundColor(Color.white.opacity(0.7)).fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 8) {
+                    if let status {
+                        ProgressView().controlSize(.small)
+                        Text(status).font(.system(size: 12)).foregroundColor(Color.white.opacity(0.7))
+                    } else {
+                        Button { run() } label: { Label("Write sermon notes", systemImage: "sparkles") }
+                            .buttonStyle(.borderedProminent).tint(gold)
+                    }
+                }
+                if let error { Text(error).font(.system(size: 11)).foregroundColor(warn).fixedSize(horizontal: false, vertical: true) }
+            }
+        }
+    }
+
+    private func list(_ title: String, _ items: [String], numbered: Bool) -> some View {
+        AssessCard(title: title) {
+            ForEach(Array(items.enumerated()), id: \.offset) { i, s in
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(numbered ? "\(i + 1)." : "•").font(.system(size: 12, weight: .semibold)).foregroundColor(gold).frame(width: 16, alignment: .leading)
+                    Text(s).font(.system(size: 12)).foregroundColor(Color.white.opacity(0.85)).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+
+    private func copy(_ n: SpeakerReport.Notes) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(n.plainText, forType: .string)
+        copied = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { copied = false }
+    }
+
+    private func saveWord(_ n: SpeakerReport.Notes) {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.init(filenameExtension: "docx")!]
+        panel.nameFieldStringValue = n.title.replacingOccurrences(of: "/", with: "-") + " – Notes.docx"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let doc = SermonNotesDocument.attributed(n)
+        if let data = try? doc.data(from: NSRange(location: 0, length: doc.length),
+                                    documentAttributes: [.documentType: NSAttributedString.DocumentType.officeOpenXML]) {
+            try? data.write(to: url)
+            NSWorkspace.shared.activateFileViewerSelecting([url])
+        }
+    }
+}
+
+/// Sermon notes as a formatted document (Word export).
+enum SermonNotesDocument {
+    static func attributed(_ n: SpeakerReport.Notes) -> NSAttributedString {
+        let out = NSMutableAttributedString()
+        let accent = NSColor(srgbRed: 0.72, green: 0.42, blue: 0.0, alpha: 1)
+        func add(_ s: String, size: CGFloat, bold: Bool = false, italic: Bool = false, color: NSColor = .black,
+                 before: CGFloat = 0, after: CGFloat = 6, indent: CGFloat = 0) {
+            var font = bold ? NSFont.boldSystemFont(ofSize: size) : NSFont.systemFont(ofSize: size)
+            if italic { font = NSFontManager.shared.convert(font, toHaveTrait: .italicFontMask) }
+            let para = NSMutableParagraphStyle()
+            para.paragraphSpacingBefore = before; para.paragraphSpacing = after
+            para.headIndent = indent; para.firstLineHeadIndent = indent > 0 ? indent - 14 : 0
+            out.append(NSAttributedString(string: s + "\n", attributes: [.font: font, .foregroundColor: color, .paragraphStyle: para]))
+        }
+        func heading(_ s: String) { add(s.uppercased(), size: 11, bold: true, color: accent, before: 14, after: 6) }
+
+        add(n.title, size: 22, bold: true, after: 8)
+        add(n.bigIdea, size: 13, bold: true, color: accent, after: 8)
+        add(n.summary, size: 11, after: 6)
+        if !n.verses.isEmpty { add("Scripture: " + n.verses.joined(separator: "; "), size: 10, italic: true, color: .darkGray) }
+        heading("Outline")
+        for (i, p) in n.points.enumerated() {
+            add("\(i + 1).  \(p.title)", size: 12, bold: true, before: 4, after: 2)
+            add(p.summary, size: 11, after: 2, indent: 20)
+            if !p.verses.isEmpty { add(p.verses.joined(separator: "; "), size: 10, italic: true, color: .darkGray, indent: 20) }
+        }
+        if !n.quotes.isEmpty { heading("Key quotes"); n.quotes.forEach { add("“\($0)”", size: 11, italic: true, indent: 14) } }
+        if !n.questions.isEmpty {
+            heading("Discussion questions")
+            for (i, q) in n.questions.enumerated() { add("\(i + 1).  \(q)", size: 11, indent: 20) }
+        }
+        if !n.application.isEmpty { heading("This week"); n.application.forEach { add("•  \($0)", size: 11, indent: 14) } }
+        if !n.prayer.isEmpty { heading("Prayer"); add(n.prayer, size: 11, italic: true) }
+        return out
+    }
+}
+
+// MARK: - Practice vs sermons
+
+/// For a practice recording: how it compares with the speaker's real sermons.
+struct PracticeCompareCard: View {
+    let report: SpeakerReport
+    let sermons: [SpeakerReport]
+
+    var body: some View {
+        AssessCard(title: "Practice run", subtitle: sermons.isEmpty ? "Assess a sermon too and this compares the two"
+                                                                     : "Compared with your average across \(sermons.count) sermon\(sermons.count == 1 ? "" : "s")") {
+            if sermons.isEmpty {
+                Text("This is a practice recording, so it isn't included in your progress charts.")
+                    .font(.system(size: 12)).foregroundColor(Color.white.opacity(0.7))
+            } else {
+                HStack(spacing: 10) {
+                    cell("Filler words / min", report.fillersPerMin, avg { $0.fillersPerMin }, "%.1f", lowerIsBetter: true)
+                    cell("Words / min", report.delivery?.averageWPM, avg { $0.delivery?.averageWPM }, "%.0f", lowerIsBetter: nil)
+                    cell("Pauses / min", report.delivery.map { Double($0.naturalPauses) / max(1, report.speakingMinutes) },
+                         avg { r in r.delivery.map { Double($0.naturalPauses) / max(1, r.speakingMinutes) } }, "%.1f", lowerIsBetter: false)
+                    cell("Pitch variety", report.delivery?.pitchRangeSemitones, avg { $0.delivery?.pitchRangeSemitones }, "%.1f", lowerIsBetter: false)
+                }
+            }
+        }
+    }
+
+    private func avg(_ f: (SpeakerReport) -> Double?) -> Double? {
+        let v = sermons.compactMap(f)
+        return v.isEmpty ? nil : v.reduce(0, +) / Double(v.count)
+    }
+
+    private func cell(_ title: String, _ value: Double?, _ average: Double?, _ fmt: String, lowerIsBetter: Bool?) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(value.map { String(format: fmt, $0) } ?? "–").font(.system(size: 20, weight: .bold, design: .rounded)).foregroundColor(gold)
+            Text(title).font(.system(size: 10)).foregroundColor(Color.white.opacity(0.5))
+            if let value, let average {
+                let better = lowerIsBetter.map { $0 ? value < average * 0.95 : value > average * 1.05 }
+                let worse = lowerIsBetter.map { $0 ? value > average * 1.05 : value < average * 0.95 }
+                Text("Sermons: " + String(format: fmt, average))
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(better == true ? good : worse == true ? warn : Color.white.opacity(0.5))
+            }
+        }
+        .padding(10).frame(maxWidth: .infinity, alignment: .leading).background(Color.white.opacity(0.04)).cornerRadius(8)
     }
 }

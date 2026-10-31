@@ -36,6 +36,23 @@ struct CaptionLook: Codable, Equatable {
     var position: Double = 0.78          // 0 = top, 1 = bottom
     var wordsPerCaption: Int = 1         // 1 – 4
     var uppercase: Bool = false
+    var motion: Motion = .highlight
+
+    /// How captions move: the spoken word changes colour, the phrase pops or slides in,
+    /// words appear as they're said, or a box sits behind the spoken word.
+    enum Motion: String, Codable, CaseIterable, Identifiable {
+        case highlight, pop, slide, reveal, box
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .highlight: return "Highlight"
+            case .pop: return "Pop"
+            case .slide: return "Slide up"
+            case .reveal: return "Word by word"
+            case .box: return "Box"
+            }
+        }
+    }
 
     // MARK: Presets
 
@@ -94,7 +111,7 @@ struct CaptionLook: Codable, Equatable {
             let text = (uppercase ? w.uppercased() : w) + (i < words.count - 1 ? " " : "")
             var attrs: [NSAttributedString.Key: Any] = [
                 .font: f,
-                .foregroundColor: (i == active ? highlightColor : textColor).nsColor,
+                .foregroundColor: (i == active ? activeTextColor : textColor).nsColor,
                 .paragraphStyle: para
             ]
             if strokeWidth > 0 {
@@ -102,9 +119,100 @@ struct CaptionLook: Codable, Equatable {
                 attrs[.strokeWidth] = -strokeWidth
                 attrs[.strokeColor] = strokeColor.nsColor
             }
+            // Word by word: words not yet spoken keep their space but aren't drawn
+            if motion == .reveal, let active, i > active {
+                attrs[.foregroundColor] = NSColor.clear
+                attrs[.strokeColor] = NSColor.clear
+            }
             out.append(NSAttributedString(string: text, attributes: attrs))
         }
         return out
+    }
+
+    /// Colour of the spoken word's text. On a bright box it turns dark so it stays readable.
+    var activeTextColor: RGBA {
+        guard motion == .box else { return highlightColor }
+        let lum = 0.299 * highlightColor.r + 0.587 * highlightColor.g + 0.114 * highlightColor.b
+        return lum > 0.6 ? .black : .white
+    }
+
+    /// Where each word sits inside the text box (top-left origin, `maxWidth` wide, centred
+    /// lines), for the box drawn behind the spoken word.
+    func wordRects(_ words: [String], fontSize: CGFloat, maxWidth: CGFloat) -> [CGRect] {
+        let storage = NSTextStorage(attributedString: attributedPhrase(words, active: nil, fontSize: fontSize))
+        let lm = NSLayoutManager()
+        let tc = NSTextContainer(size: CGSize(width: maxWidth, height: .greatestFiniteMagnitude))
+        tc.lineFragmentPadding = 0
+        lm.addTextContainer(tc)
+        storage.addLayoutManager(lm)
+        lm.ensureLayout(for: tc)
+        var out: [CGRect] = []
+        var loc = 0
+        for (i, w) in words.enumerated() {
+            let len = ((uppercase ? w.uppercased() : w) as NSString).length
+            let glyphs = lm.glyphRange(forCharacterRange: NSRange(location: loc, length: len), actualCharacterRange: nil)
+            out.append(lm.boundingRect(forGlyphRange: glyphs, in: tc))
+            loc += len + (i < words.count - 1 ? 1 : 0)
+        }
+        return out
+    }
+
+    /// Pop and Slide entrances last this long (seconds).
+    static let entryDuration = 0.18
+
+    /// The entrance `age` seconds after a phrase appears: scale, downward offset (in font
+    /// sizes) and opacity. The exporter animates the same curve with Core Animation.
+    func entry(age: Double) -> (scale: CGFloat, dy: CGFloat, alpha: CGFloat) {
+        let t = CGFloat(min(1, max(0, age / Self.entryDuration)))
+        switch motion {
+        case .pop:
+            return (t < 0.6 ? 0.7 + 0.38 * t / 0.6 : 1.08 - 0.08 * (t - 0.6) / 0.4, 0, 1)
+        case .slide:
+            let e = 1 - (1 - t) * (1 - t)
+            return (1, 0.45 * (1 - e), e)
+        default:
+            return (1, 0, 1)
+        }
+    }
+
+    /// Draws one caption frame into the current flipped graphics context. Shared by the
+    /// caption editor and the reel previews.
+    func draw(_ texts: [String], active: Int, age: Double, in size: CGSize) {
+        let fs = fontSize(forRenderWidth: size.width)
+        let maxW = size.width * 0.86
+        let m = measure(attributedPhrase(texts, active: nil, fontSize: fs), maxWidth: maxW)
+        let cy = size.height * CGFloat(position)
+        let top = cy - m.height / 2
+        let e = entry(age: age)
+        guard let ctx = NSGraphicsContext.current else { return }
+        ctx.saveGraphicsState(); defer { ctx.restoreGraphicsState() }
+        let t = NSAffineTransform()
+        t.translateX(by: size.width / 2, yBy: cy + e.dy * fs)
+        t.scale(by: e.scale)
+        t.translateX(by: -size.width / 2, yBy: -cy)
+        t.concat()
+        ctx.cgContext.setAlpha(e.alpha)
+        if bgEnabled {
+            let px = fs * 0.35, py = fs * 0.18
+            bgColor.nsColor.withAlphaComponent(CGFloat(bgOpacity)).setFill()
+            NSBezierPath(roundedRect: CGRect(x: (size.width - m.width) / 2 - px, y: top - py,
+                                             width: m.width + px * 2, height: m.height + py * 2),
+                         xRadius: fs * 0.25, yRadius: fs * 0.25).fill()
+        }
+        if motion == .box, active < texts.count {
+            let r = wordRects(texts, fontSize: fs, maxWidth: maxW)[active]
+            highlightColor.nsColor.setFill()
+            NSBezierPath(roundedRect: boxRect(r, fontSize: fs).offsetBy(dx: (size.width - maxW) / 2, dy: top),
+                         xRadius: fs * 0.18, yRadius: fs * 0.18).fill()
+        }
+        attributedPhrase(texts, active: active, fontSize: fs)
+            .draw(with: CGRect(x: (size.width - maxW) / 2, y: top, width: maxW, height: m.height + 4),
+                  options: [.usesLineFragmentOrigin, .usesFontLeading])
+    }
+
+    /// The box behind a word, padded a little around its text.
+    func boxRect(_ word: CGRect, fontSize fs: CGFloat) -> CGRect {
+        word.insetBy(dx: -fs * 0.1, dy: -fs * 0.02)
     }
 
     /// Size the phrase occupies when wrapped to `maxWidth`.
@@ -144,24 +252,32 @@ struct CaptionLook: Codable, Equatable {
             return time >= s && time <= e + 0.15
         }) else { return nil }
         let active = phrase.lastIndex(where: { $0.startTime <= time }) ?? 0
+        let age = time - (phrase.first?.startTime ?? time)
         let look = self
         return NSImage(size: size, flipped: true) { _ in
-            let fs = look.fontSize(forRenderWidth: size.width)
-            let maxW = size.width * 0.86
-            let texts = phrase.map(\.word)
-            let str = look.attributedPhrase(texts, active: active, fontSize: fs)
-            let m = look.measure(look.attributedPhrase(texts, active: nil, fontSize: fs), maxWidth: maxW)
-            let cy = size.height * CGFloat(look.position)
-            if look.bgEnabled {
-                let px = fs * 0.35, py = fs * 0.18
-                look.bgColor.nsColor.withAlphaComponent(CGFloat(look.bgOpacity)).setFill()
-                NSBezierPath(roundedRect: CGRect(x: (size.width - m.width) / 2 - px, y: cy - m.height / 2 - py,
-                                                 width: m.width + px * 2, height: m.height + py * 2),
-                             xRadius: fs * 0.25, yRadius: fs * 0.25).fill()
-            }
-            str.draw(with: CGRect(x: (size.width - maxW) / 2, y: cy - m.height / 2, width: maxW, height: m.height + 4),
-                     options: [.usesLineFragmentOrigin, .usesFontLeading])
+            look.draw(phrase.map(\.word), active: active, age: age, in: size)
             return true
         }
+    }
+}
+
+extension CaptionLook {
+    /// Looks saved before a setting existed still load, with that setting's default.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init()
+        fontName = try c.decodeIfPresent(String.self, forKey: .fontName) ?? fontName
+        sizeScale = try c.decodeIfPresent(Double.self, forKey: .sizeScale) ?? sizeScale
+        textColor = try c.decodeIfPresent(RGBA.self, forKey: .textColor) ?? textColor
+        highlightColor = try c.decodeIfPresent(RGBA.self, forKey: .highlightColor) ?? highlightColor
+        strokeColor = try c.decodeIfPresent(RGBA.self, forKey: .strokeColor) ?? strokeColor
+        strokeWidth = try c.decodeIfPresent(Double.self, forKey: .strokeWidth) ?? strokeWidth
+        bgEnabled = try c.decodeIfPresent(Bool.self, forKey: .bgEnabled) ?? bgEnabled
+        bgColor = try c.decodeIfPresent(RGBA.self, forKey: .bgColor) ?? bgColor
+        bgOpacity = try c.decodeIfPresent(Double.self, forKey: .bgOpacity) ?? bgOpacity
+        position = try c.decodeIfPresent(Double.self, forKey: .position) ?? position
+        wordsPerCaption = try c.decodeIfPresent(Int.self, forKey: .wordsPerCaption) ?? wordsPerCaption
+        uppercase = try c.decodeIfPresent(Bool.self, forKey: .uppercase) ?? uppercase
+        motion = (try? c.decodeIfPresent(Motion.self, forKey: .motion)) ?? .highlight
     }
 }

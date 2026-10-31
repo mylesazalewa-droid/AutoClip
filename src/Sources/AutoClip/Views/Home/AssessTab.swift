@@ -23,7 +23,7 @@ struct AssessTab: View {
     @State private var ytStatus: String?
     @State private var ytError: String?
     @State private var pendingDelete: String?
-    enum Mode: String, CaseIterable { case fillers = "Filler words", delivery = "Delivery", coach = "AI Coach", stage = "Stage", progress = "Progress" }
+    enum Mode: String, CaseIterable { case fillers = "Filler words", delivery = "Delivery", coach = "AI Coach", notes = "Notes", stage = "Stage", progress = "Progress" }
     @State private var mode: Mode = .fillers
     @State private var report: SpeakerReport?
     @State private var deliveryStatus: String?
@@ -31,6 +31,11 @@ struct AssessTab: View {
     @State private var coachStatus: String?
     @State private var coachError: String?
     @State private var allReports: [SpeakerReport] = []
+    @State private var notesStatus: String?
+    @State private var notesError: String?
+    @State private var showPractice = false
+    /// Real sermons only: practice runs stay out of the progress charts
+    private var sermonReports: [SpeakerReport] { allReports.filter { !$0.isPractice } }
     private var extraVideos: [String] { extraRaw.split(separator: "\n").map(String.init) }
     private var hiddenVideos: Set<String> { Set(hiddenRaw.split(separator: "\n").map(String.init)) }
 
@@ -44,11 +49,21 @@ struct AssessTab: View {
     ]
     private func color(_ k: String) -> Color { Self.colors[k] ?? .white }
 
-    /// Videos already in AutoClip (Auto Reels sources + YouTube downloads) plus any picked here.
-    private var videos: [String] {
+    /// Videos already in AutoClip (practice runs, Auto Reels sources, YouTube downloads) plus any picked here.
+    private var videos: [String] { Self.knownVideos(reels: reelsStore.reels, extra: extraVideos, hidden: hiddenVideos) }
+
+    /// The same list for other tabs (Search), read from saved settings.
+    static func knownVideos(reels: [AutoReelRecord]) -> [String] {
+        let d = UserDefaults.standard
+        return knownVideos(reels: reels,
+                           extra: (d.string(forKey: "assess_extra") ?? "").split(separator: "\n").map(String.init),
+                           hidden: Set((d.string(forKey: "assess_hidden") ?? "").split(separator: "\n").map(String.init)))
+    }
+
+    private static func knownVideos(reels: [AutoReelRecord], extra: [String], hidden: Set<String>) -> [String] {
         var out: [String] = []
         let fm = FileManager.default
-        for r in reelsStore.reels {
+        for r in reels {
             if let p = ReelGenerator.sourceVideoPath(for: r), fm.fileExists(atPath: p), !out.contains(p) { out.append(p) }
         }
         let dir = YTDLP.videosDir
@@ -57,8 +72,13 @@ struct AssessTab: View {
         where ["mp4", "mov", "m4v", "webm", "mkv"].contains(f.pathExtension.lowercased()) && !YTDLP.isPartialStream(f) {
             if !out.contains(f.path) { out.append(f.path) }
         }
-        let hidden = hiddenVideos
-        return (extraVideos.filter { !out.contains($0) && fm.fileExists(atPath: $0) } + out).filter { !hidden.contains($0) }
+        let practice = ((try? fm.contentsOfDirectory(at: PracticeRecorder.dir, includingPropertiesForKeys: [.creationDateKey])) ?? [])
+            .filter { ["mov", "m4a", "mp4"].contains($0.pathExtension.lowercased()) }
+            .sorted { ((try? $0.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? .distantPast)
+                    > ((try? $1.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? .distantPast) }
+            .map(\.path)
+        out = practice + out.filter { !practice.contains($0) }
+        return (extra.filter { !out.contains($0) && fm.fileExists(atPath: $0) } + out).filter { !hidden.contains($0) }
     }
 
     /// Auto Reels projects made from this video (its file must stay)
@@ -77,16 +97,20 @@ struct AssessTab: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 14) {
                             Text("Your progress").font(.system(size: 17, weight: .semibold)).foregroundColor(.white)
-                            SpeakerProgressSection(reports: allReports, open: { select($0) })
+                            SpeakerProgressSection(reports: sermonReports, open: { select($0) })
                         }.padding(20)
                     }
                 } else if selected == nil {
                     VStack(spacing: 14) {
                         placeholder("Pick a video to assess", "AutoClip transcribes it (or reuses the saved transcript), then measures filler words, pace, pauses, voice and stage presence. The AI coach adds strengths, things to work on and a sermon map.")
                             .frame(maxHeight: 260)
-                        if !allReports.isEmpty {
-                            Button("📈 See your progress across \(allReports.count) message\(allReports.count == 1 ? "" : "s")") { mode = .progress }
-                                .buttonStyle(.borderedProminent).tint(gold)
+                        HStack(spacing: 10) {
+                            Button { showPractice = true } label: { Label("Record a practice run", systemImage: "mic.fill") }
+                                .buttonStyle(.bordered)
+                            if !sermonReports.isEmpty {
+                                Button("📈 See your progress across \(sermonReports.count) message\(sermonReports.count == 1 ? "" : "s")") { mode = .progress }
+                                    .buttonStyle(.borderedProminent).tint(gold)
+                            }
                         }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -103,6 +127,13 @@ struct AssessTab: View {
         }
         .background(Color(red: 0.07, green: 0.08, blue: 0.12))
         .onAppear { allReports = SpeakerReportStore.all() }
+        .sheet(isPresented: $showPractice) {
+            PracticeSheet { url in
+                hiddenRaw = hiddenVideos.subtracting([url.path]).joined(separator: "\n")
+                mode = .delivery
+                select(url.path)
+            }
+        }
     }
 
     private func placeholder(_ title: String, _ sub: String) -> some View {
@@ -122,6 +153,8 @@ struct AssessTab: View {
             HStack {
                 Text("VIDEOS").font(.system(size: 10, weight: .semibold)).foregroundColor(Color.white.opacity(0.35)).tracking(1)
                 Spacer()
+                Button { showPractice = true } label: { Image(systemName: "mic.fill") }
+                    .controlSize(.small).help("Record a practice run")
                 Button("Choose…") { chooseVideo() }.controlSize(.small)
             }
             .padding(.horizontal, 12).padding(.top, 12).padding(.bottom, 6)
@@ -151,7 +184,8 @@ struct AssessTab: View {
                     ForEach(videos, id: \.self) { path in
                         Button { select(path) } label: {
                             HStack(spacing: 8) {
-                                Image(systemName: TranscriptCache.load(for: path) != nil ? "text.bubble.fill" : "film")
+                                Image(systemName: PracticeRecorder.isPractice(path) ? "mic.fill"
+                                      : TranscriptCache.load(for: path) != nil ? "text.bubble.fill" : "film")
                                     .font(.system(size: 11)).foregroundColor(selected == path ? .black : gold.opacity(0.8))
                                 Text(YTDLP.title(fromFile: URL(fileURLWithPath: path)))
                                     .font(.system(size: 12)).lineLimit(2).multilineTextAlignment(.leading)
@@ -234,7 +268,7 @@ struct AssessTab: View {
 
     private func chooseVideo() {
         let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.movie, .video, .mpeg4Movie, .quickTimeMovie]
+        panel.allowedContentTypes = [.movie, .video, .mpeg4Movie, .quickTimeMovie, .audio]
         panel.canChooseDirectories = false
         guard panel.runModal() == .OK, let url = panel.url else { return }
         if !extraVideos.contains(url.path) { extraRaw = ([url.path] + extraVideos).joined(separator: "\n") }
@@ -246,6 +280,7 @@ struct AssessTab: View {
         selected = path
         error = nil; hits = []; words = []; hidden = []; hovered = nil
         report = nil; deliveryStatus = nil; stageStatus = nil; coachStatus = nil; coachError = nil
+        notesStatus = nil; notesError = nil
         if mode == .progress { mode = .fillers }
         player.replaceCurrentItem(with: AVPlayerItem(url: URL(fileURLWithPath: path)))
         status = "Reading the transcript…"
@@ -349,6 +384,35 @@ struct AssessTab: View {
         }
     }
 
+    private func runNotes() {
+        guard let path = selected, let r = report else { return }
+        notesError = nil; notesStatus = "Writing sermon notes…"
+        let sentences = ReelDraft.sentences(from: words)
+        var verses: [String] = []
+        for v in VerseDetector.find(in: words) where !verses.contains(v.text) { verses.append(v.text) }
+        Task {
+            do {
+                let provider = LLMClipService.AIProvider(rawValue: UserDefaults.standard.string(forKey: "ar_provider") ?? "") ?? .google
+                guard let key = await LLMClipService.shared.loadAPIKey(for: provider), !key.isEmpty else {
+                    notesStatus = nil
+                    notesError = "Add an API key in Auto Reels → AI settings to write sermon notes."
+                    return
+                }
+                let n = try await LLMClipService.shared.sermonNotes(
+                    sentences: sentences.map { ($0.start, $0.end, $0.text) }, title: r.title, verses: verses,
+                    provider: provider, apiKey: key)
+                guard selected == path else { return }
+                report?.notes = n
+                if let r = report { SpeakerReportStore.save(r) }
+                notesStatus = nil
+            } catch {
+                guard selected == path else { return }
+                notesStatus = nil
+                notesError = error.localizedDescription
+            }
+        }
+    }
+
     private func play(at t: Double) {
         player.seek(to: CMTime(seconds: max(0, t - 1), preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
         player.play()
@@ -373,6 +437,10 @@ struct AssessTab: View {
                     summary
                 }
 
+                if let r = report, r.isPractice {
+                    PracticeCompareCard(report: r, sermons: sermonReports)
+                }
+
                 Picker("", selection: $mode) {
                     ForEach(Mode.allCases, id: \.self) { m in Text(m.rawValue).tag(m) }
                 }
@@ -394,10 +462,12 @@ struct AssessTab: View {
                     }
                 case .coach:
                     if let r = report { CoachSection(report: r, status: coachStatus, error: coachError, run: runCoach, play: play(at:)) }
+                case .notes:
+                    if let r = report { NotesSection(report: r, status: notesStatus, error: notesError, run: runNotes, play: play(at:)) }
                 case .stage:
                     if let r = report { StageSection(report: r, status: stageStatus, play: play(at:)) }
                 case .progress:
-                    SpeakerProgressSection(reports: allReports, open: { select($0) })
+                    SpeakerProgressSection(reports: sermonReports, open: { select($0) })
                 }
             }
             .padding(20)

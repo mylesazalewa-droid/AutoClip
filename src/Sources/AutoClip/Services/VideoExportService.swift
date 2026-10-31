@@ -736,22 +736,40 @@ class VideoExportService {
             let textH = measured.height + fontSize * 0.1
             let textRect = CGRect(x: (renderSize.width - maxW) / 2, y: centerY - textH / 2, width: maxW, height: textH)
 
+            // Each phrase lives in its own group so Pop / Slide can animate it as one piece
+            let group = CALayer()
+            group.frame = textRect.insetBy(dx: 0, dy: -fontSize * 0.5)
+            let local = { (r: CGRect) in r.offsetBy(dx: -group.frame.minX, dy: -group.frame.minY) }
+            container.addSublayer(group)
+            addEntrance(to: group, look: look, at: phraseStart, fontSize: fontSize)
+
             if look.bgEnabled {
                 let padX = fontSize * 0.35, padY = fontSize * 0.18
                 let bg = CALayer()
                 bg.backgroundColor = look.bgColor.nsColor.withAlphaComponent(CGFloat(look.bgOpacity)).cgColor
                 bg.cornerRadius = fontSize * 0.25
-                bg.frame = CGRect(x: (renderSize.width - measured.width) / 2 - padX, y: textRect.minY - padY,
-                                  width: measured.width + padX * 2, height: textH + padY * 2)
+                bg.frame = local(CGRect(x: (renderSize.width - measured.width) / 2 - padX, y: textRect.minY - padY,
+                                        width: measured.width + padX * 2, height: textH + padY * 2))
                 bg.opacity = 0
                 bg.add(wordAnim(start: phraseStart, end: phraseEnd, total: clipDur), forKey: "opacity")
-                container.addSublayer(bg)
+                group.addSublayer(bg)
             }
+            let wordBoxes = look.motion == .box ? look.wordRects(texts, fontSize: fontSize, maxWidth: maxW) : []
 
             for (j, w) in phrase.enumerated() {
                 let start = j == 0 ? phraseStart : w.start
                 let end = j + 1 < phrase.count ? phrase[j + 1].start : phraseEnd
                 guard end > start else { continue }
+
+                if j < wordBoxes.count {
+                    let box = CALayer()
+                    box.backgroundColor = look.highlightColor.nsColor.cgColor
+                    box.cornerRadius = fontSize * 0.18
+                    box.frame = local(look.boxRect(wordBoxes[j], fontSize: fontSize).offsetBy(dx: textRect.minX, dy: textRect.minY))
+                    box.opacity = 0
+                    box.add(wordAnim(start: start, end: end, total: clipDur), forKey: "opacity")
+                    group.addSublayer(box)
+                }
 
                 let tl = CATextLayer()
                 tl.string = look.attributedPhrase(texts, active: j, fontSize: fontSize)
@@ -760,15 +778,15 @@ class VideoExportService {
                 tl.truncationMode = .none
                 tl.contentsScale = 1.0
                 tl.shadowColor = NSColor.black.cgColor
-                tl.shadowOpacity = look.bgEnabled ? 0 : 0.8
+                tl.shadowOpacity = look.bgEnabled || look.motion == .box ? 0 : 0.8
                 tl.shadowRadius = 4
                 tl.shadowOffset = CGSize(width: 0, height: -1)
-                tl.frame = textRect
+                tl.frame = local(textRect)
                 tl.opacity = 0
                 tl.add(wordAnim(start: start, end: end, total: clipDur), forKey: "opacity")
                 // Off-screen layers are never drawn by the export renderer unless forced
                 tl.setNeedsDisplay(); tl.displayIfNeeded()
-                container.addSublayer(tl)
+                group.addSublayer(tl)
 
                 let lower = w.text.lowercased().trimmingCharacters(in: .punctuationCharacters)
                 if emojiOverlays, let emoji = wordEmoji[lower] {
@@ -788,6 +806,34 @@ class VideoExportService {
             }
         }
         return container
+    }
+
+    /// Pop: the phrase grows in with a small overshoot. Slide up: it rises and fades in.
+    /// Same curves as `CaptionLook.entry`, which the previews draw.
+    private func addEntrance(to group: CALayer, look: CaptionLook, at start: Double, fontSize: CGFloat) {
+        let begin = AVCoreAnimationBeginTimeAtZero + max(0.001, start)
+        switch look.motion {
+        case .pop:
+            let a = CAKeyframeAnimation(keyPath: "transform.scale")
+            a.values = [0.7, 1.08, 1.0]
+            a.keyTimes = [0, 0.6, 1]
+            a.beginTime = begin; a.duration = CaptionLook.entryDuration
+            a.fillMode = .both; a.isRemovedOnCompletion = false
+            group.add(a, forKey: "pop")
+        case .slide:
+            let move = CABasicAnimation(keyPath: "transform.translation.y")
+            move.fromValue = fontSize * 0.45; move.toValue = 0
+            let fade = CABasicAnimation(keyPath: "opacity")
+            fade.fromValue = 0; fade.toValue = 1
+            for (a, key) in [(move, "slide"), (fade, "fade")] {
+                a.beginTime = begin; a.duration = CaptionLook.entryDuration
+                a.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                a.fillMode = .both; a.isRemovedOnCompletion = false
+                group.add(a, forKey: key)
+            }
+        default:
+            break
+        }
     }
 
     private func wordAnim(start: Double, end: Double, total: Double) -> CAKeyframeAnimation {

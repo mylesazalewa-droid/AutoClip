@@ -11,6 +11,12 @@ mkdir -p "$APP/Contents/MacOS"
 
 cp .build/release/AutoClip "$APP/Contents/MacOS/AutoClip"
 
+# Practice mode records with the camera and microphone (added to existing bundles too)
+set_usage() {
+    /usr/libexec/PlistBuddy -c "Set :$1 $2" "$APP/Contents/Info.plist" 2>/dev/null \
+        || /usr/libexec/PlistBuddy -c "Add :$1 string $2" "$APP/Contents/Info.plist" 2>/dev/null || true
+}
+
 if [ ! -f "$APP/Contents/Info.plist" ]; then
 cat > "$APP/Contents/Info.plist" << 'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -43,6 +49,10 @@ cat > "$APP/Contents/Info.plist" << 'PLIST'
     <false/>
     <key>NSSupportsAutomaticTermination</key>
     <false/>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>AutoClip records your practice runs so it can assess your delivery.</string>
+    <key>NSCameraUsageDescription</key>
+    <string>AutoClip records your practice runs on camera so it can assess your stage presence.</string>
     <key>CFBundleSupportedPlatforms</key>
     <array>
         <string>MacOSX</string>
@@ -51,6 +61,8 @@ cat > "$APP/Contents/Info.plist" << 'PLIST'
 </plist>
 PLIST
 fi
+set_usage NSMicrophoneUsageDescription "AutoClip records your practice runs so it can assess your delivery."
+set_usage NSCameraUsageDescription "AutoClip records your practice runs on camera so it can assess your stage presence."
 
 echo "Relaunching..."
 pkill -f "AutoClip.app" 2>/dev/null || true

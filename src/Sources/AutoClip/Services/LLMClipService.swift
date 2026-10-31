@@ -445,6 +445,62 @@ Respond with ONLY valid JSON, no markdown:
         throw lastError
     }
 
+    // MARK: - Sermon notes
+
+    /// Small-group / website notes for a sermon. `verses` are the references found in the
+    /// transcript, so the AI doesn't have to guess them from garbled speech.
+    func sermonNotes(sentences: [(start: Double, end: Double, text: String)], title: String, verses: [String],
+                     provider: AIProvider, apiKey: String) async throws -> SpeakerReport.Notes {
+        let lines = sentences.enumerated().map { i, s -> String in
+            let m = Int(s.start) / 60, sec = Int(s.start) % 60
+            return "[\(i)] \(m):\(String(format: "%02d", sec)) \(s.text)"
+        }.joined(separator: "\n")
+        let prompt = """
+You write sermon notes for a church's small groups and website. Below is the transcript of a sermon (numbered sentences with timestamps). The video is titled "\(title)". Scripture references detected in the audio: \(verses.isEmpty ? "none" : verses.joined(separator: "; ")).
+
+Write notes that someone who missed the sermon could follow, in the preacher's own ideas and tone. Don't invent points the preacher didn't make. Fix obvious transcription errors in Bible references.
+
+Return:
+- "title": a clear sermon title (use the video title if it fits).
+- "bigIdea": the one main idea, one sentence.
+- "summary": 3–4 sentences.
+- "points": the main points in order (usually 3–5): {title (max 8 words), summary (2–3 sentences), sentence (where the point starts), verses (references used for this point)}.
+- "verses": every Scripture passage referenced, in order.
+- "quotes": 3–5 memorable lines, verbatim or lightly cleaned up, max 25 words each.
+- "questions": 5 small-group discussion questions, from easy/personal to deeper/application.
+- "application": 2–3 concrete things to try this week.
+- "prayer": a short closing prayer (2–3 sentences) based on the message.
+
+Transcript:
+\(lines)
+
+Respond with ONLY valid JSON, no markdown:
+{"title":"...","bigIdea":"...","summary":"...","points":[{"title":"...","summary":"...","sentence":12,"verses":["Romans 8:28"]}],"verses":["..."],"quotes":["..."],"questions":["..."],"application":["..."],"prayer":"..."}
+"""
+        var lastError: Error = llmError("The AI didn't return sermon notes")
+        for _ in 1...2 {
+            let text = try await ask(prompt, provider: provider, apiKey: apiKey)
+            guard let a = text.firstIndex(of: "{"), let b = text.lastIndex(of: "}"),
+                  let o = try? JSONSerialization.jsonObject(with: Data(String(text[a...b]).utf8)) as? [String: Any] else {
+                lastError = llmError("The sermon notes weren't valid JSON — try again"); continue
+            }
+            let points: [SpeakerReport.Notes.Point] = (o["points"] as? [[String: Any]] ?? []).compactMap { p in
+                guard let t = p["title"] as? String else { return nil }
+                let i = (p["sentence"] as? Int) ?? (p["sentence"] as? Double).map { Int($0) }
+                return .init(title: t, summary: p["summary"] as? String ?? "",
+                             time: i.flatMap { sentences.indices.contains($0) ? sentences[$0].start : nil },
+                             verses: p["verses"] as? [String] ?? [])
+            }
+            guard !points.isEmpty else { lastError = llmError("The sermon notes came back empty — try again"); continue }
+            return .init(title: o["title"] as? String ?? title, bigIdea: o["bigIdea"] as? String ?? "",
+                         summary: o["summary"] as? String ?? "", points: points,
+                         verses: o["verses"] as? [String] ?? verses, quotes: o["quotes"] as? [String] ?? [],
+                         questions: o["questions"] as? [String] ?? [], application: o["application"] as? [String] ?? [],
+                         prayer: o["prayer"] as? String ?? "")
+        }
+        throw lastError
+    }
+
     // MARK: - Hopeful ending
 
     /// A short run from the talk (about 6–20s) that resolves `reelText` with hope — the

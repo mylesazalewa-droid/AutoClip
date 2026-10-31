@@ -17,7 +17,9 @@ struct SpeakerReport: Codable, Equatable {
     var delivery: Delivery?
     var stage: Stage?
     var coach: Coach?
+    var notes: Notes?
 
+    var isPractice: Bool { PracticeRecorder.isPractice(videoPath) }
     var fillersPerMin: Double { Double(fillerCount) / max(1, speakingMinutes) }
 
     struct Span: Codable, Equatable { var start: Double; var end: Double }
@@ -83,6 +85,41 @@ struct SpeakerReport: Codable, Equatable {
         var best: [Moment]
         var weakest: [Moment]
         var jargon: [String]
+    }
+
+    /// Sermon notes for small groups or the church website, written from the transcript.
+    struct Notes: Codable, Equatable {
+        struct Point: Codable, Equatable, Identifiable {
+            var id: String { title }
+            var title: String; var summary: String; var time: Double?; var verses: [String]
+        }
+        var title: String
+        var bigIdea: String
+        var summary: String
+        var points: [Point]
+        var verses: [String]
+        var quotes: [String]
+        var questions: [String]
+        var application: [String]
+        var prayer: String
+
+        /// Plain text with simple headings, for copying into an email or a website.
+        var plainText: String {
+            var t = "\(title)\n\nBig idea: \(bigIdea)\n\n\(summary)\n"
+            if !verses.isEmpty { t += "\nScripture: \(verses.joined(separator: "; "))\n" }
+            t += "\nOUTLINE\n"
+            for (i, p) in points.enumerated() {
+                t += "\n\(i + 1). \(p.title)\n   \(p.summary)\n"
+                if !p.verses.isEmpty { t += "   (\(p.verses.joined(separator: "; ")))\n" }
+            }
+            if !quotes.isEmpty { t += "\nKEY QUOTES\n" + quotes.map { "• “\($0)”" }.joined(separator: "\n") + "\n" }
+            if !questions.isEmpty {
+                t += "\nDISCUSSION QUESTIONS\n" + questions.enumerated().map { "\($0 + 1). \($1)" }.joined(separator: "\n") + "\n"
+            }
+            if !application.isEmpty { t += "\nTHIS WEEK\n" + application.map { "• \($0)" }.joined(separator: "\n") + "\n" }
+            if !prayer.isEmpty { t += "\nPRAYER\n\(prayer)\n" }
+            return t
+        }
     }
 }
 
