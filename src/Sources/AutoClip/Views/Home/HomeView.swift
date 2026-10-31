@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
-enum HomeTab { case projects, autoClips, autoReels }
+enum HomeTab { case projects, autoClips, autoReels, assess }
 
 struct HomeView: View {
     @ObservedObject private var library = LibraryService.shared
@@ -45,6 +45,8 @@ struct HomeView: View {
                 switch activeTab {
                 case .autoReels:
                     AutoReelsTab()
+                case .assess:
+                    AssessTab()
                 case .autoClips:
                     if filteredProjects.isEmpty && searchText.isEmpty {
                         landingPage
@@ -79,6 +81,7 @@ struct HomeView: View {
         HStack(spacing: 0) {
             tabButton(title: "Projects", icon: "square.grid.2x2.fill", tab: .projects)
             tabButton(title: "Auto Reels", icon: "play.rectangle.on.rectangle.fill", tab: .autoReels)
+            tabButton(title: "Assess", icon: "waveform.badge.magnifyingglass", tab: .assess)
             Spacer()
         }
         .padding(.horizontal, 16)
