@@ -370,6 +370,81 @@ Respond with ONLY valid JSON: {"topics":["...","..."]}
         return topics
     }
 
+    // MARK: - Speaking coach
+
+    /// Coaching report for a whole talk. `stats` is a short plain-text summary of the measured
+    /// delivery (pace, pauses, fillers…) so the advice can reference real numbers.
+    func coachReport(sentences: [(start: Double, end: Double, text: String)], stats: String,
+                     provider: AIProvider, apiKey: String) async throws -> SpeakerReport.Coach {
+        let lines = sentences.enumerated().map { i, s -> String in
+            let m = Int(s.start) / 60, sec = Int(s.start) % 60
+            return "[\(i)] \(m):\(String(format: "%02d", sec)) \(s.text)"
+        }.joined(separator: "\n")
+        let prompt = """
+You are an experienced preaching and public-speaking coach. Below is the transcript of a sermon (numbered sentences with timestamps) and measurements of the speaker's delivery. Give honest, warm, specific coaching that helps this speaker grow. Reference sentence numbers so the speaker can jump to the moment.
+
+MEASURED DELIVERY:
+\(stats)
+
+Return:
+- "score": overall 1–10 for clarity and impact.
+- "summary": 2 sentences.
+- "strengths": 3 items {title (max 6 words), detail (1–2 sentences, specific), sentence}.
+- "improvements": 3 items {title, detail (what happened and why it matters), sentence, drill (one concrete practice exercise for this week)}. Use the measurements where relevant (e.g. pace, fillers, long runs without pausing).
+- "bigIdea": the one main idea a listener would take away, as one sentence; "clarity": 1–10 how clearly it came through; "mentions": sentence numbers where the big idea is stated or restated.
+- "sections": the sermon's structure in order, covering the whole talk: {kind: one of intro|point|story|scripture|application|close|other, title (max 6 words), from, to}.
+- "best": the 3 strongest moments {sentence, quote (max 15 words, verbatim), why}.
+- "weakest": the 3 weakest or most rambling moments {sentence, quote, why}.
+- "jargon": up to 8 church/insider words or phrases a newcomer might not understand (empty if none).
+
+Transcript:
+\(lines)
+
+Respond with ONLY valid JSON, no markdown:
+{"score":7,"summary":"...","strengths":[{"title":"...","detail":"...","sentence":12}],"improvements":[{"title":"...","detail":"...","sentence":40,"drill":"..."}],"bigIdea":"...","clarity":7,"mentions":[3,50],"sections":[{"kind":"intro","title":"...","from":0,"to":20}],"best":[{"sentence":88,"quote":"...","why":"..."}],"weakest":[{"sentence":120,"quote":"...","why":"..."}],"jargon":["..."]}
+"""
+        func time(_ any: Any?) -> Double? {
+            guard let i = (any as? Int) ?? (any as? Double).map({ Int($0) }), sentences.indices.contains(i) else { return nil }
+            return sentences[i].start
+        }
+        var lastError: Error = llmError("The AI coach didn't return a report")
+        for _ in 1...2 {
+            let text = try await ask(prompt, provider: provider, apiKey: apiKey)
+            guard let a = text.firstIndex(of: "{"), let b = text.lastIndex(of: "}"),
+                  let o = try? JSONSerialization.jsonObject(with: Data(String(text[a...b]).utf8)) as? [String: Any] else {
+                lastError = llmError("The AI coach's report wasn't valid JSON — try again"); continue
+            }
+            let notes = { (key: String) -> [SpeakerReport.Coach.Note] in
+                (o[key] as? [[String: Any]] ?? []).compactMap { n in
+                    guard let t = n["title"] as? String else { return nil }
+                    return .init(title: t, detail: n["detail"] as? String ?? "", time: time(n["sentence"]), drill: n["drill"] as? String)
+                }
+            }
+            let moments = { (key: String) -> [SpeakerReport.Coach.Moment] in
+                (o[key] as? [[String: Any]] ?? []).compactMap { m in
+                    guard let t = time(m["sentence"]) else { return nil }
+                    return .init(time: t, quote: m["quote"] as? String ?? "", why: m["why"] as? String ?? "")
+                }
+            }
+            let sections: [SpeakerReport.Coach.Section] = (o["sections"] as? [[String: Any]] ?? []).compactMap { sct in
+                guard let from = sct["from"] as? Int, let to = sct["to"] as? Int,
+                      sentences.indices.contains(from), sentences.indices.contains(max(from, to)) else { return nil }
+                return .init(kind: (sct["kind"] as? String ?? "other").lowercased(), title: sct["title"] as? String ?? "",
+                             start: sentences[from].start, end: sentences[max(from, to)].end)
+            }
+            let score = (o["score"] as? Int) ?? (o["score"] as? Double).map { Int($0) } ?? 0
+            guard score > 0 || !sections.isEmpty else { lastError = llmError("The AI coach's report was empty — try again"); continue }
+            return .init(score: max(1, min(10, score)), summary: o["summary"] as? String ?? "",
+                         strengths: notes("strengths"), improvements: notes("improvements"),
+                         bigIdea: o["bigIdea"] as? String ?? "",
+                         bigIdeaClarity: (o["clarity"] as? Int) ?? 0,
+                         bigIdeaMentions: (o["mentions"] as? [Any] ?? []).compactMap { time($0) },
+                         sections: sections, best: moments("best"), weakest: moments("weakest"),
+                         jargon: o["jargon"] as? [String] ?? [])
+        }
+        throw lastError
+    }
+
     // MARK: - Hopeful ending
 
     /// A short run from the talk (about 6–20s) that resolves `reelText` with hope — the
@@ -620,7 +695,7 @@ Respond with ONLY valid JSON, no markdown:
     private func callOpenAI(prompt: String, apiKey: String) async throws -> String {
         let body: [String: Any] = [
             "model": "gpt-4o-mini",
-            "max_tokens": 2048,
+            "max_tokens": 4096,
             "messages": [["role": "user", "content": prompt]]
         ]
         var req = URLRequest(url: URL(string: "https://api.openai.com/v1/chat/completions")!)

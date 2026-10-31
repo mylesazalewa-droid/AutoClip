@@ -2,8 +2,9 @@ import SwiftUI
 import AVKit
 import UniformTypeIdentifiers
 
-/// Assess a talk: how many filler words were said, which ones, and where — a dot on the
-/// timeline for each one. Click a dot (or a row) to hear it in context.
+/// Assess a talk as a speaker: filler words (a dot on the timeline for each), delivery (pace,
+/// pauses, voice, crutch phrases), an AI coach report, stage presence, and progress across
+/// messages. Click any dot, time or block to hear that moment.
 struct AssessTab: View {
     @ObservedObject private var reelsStore = AutoReelsStore.shared
     @State private var selected: String?
@@ -22,6 +23,14 @@ struct AssessTab: View {
     @State private var ytStatus: String?
     @State private var ytError: String?
     @State private var pendingDelete: String?
+    enum Mode: String, CaseIterable { case fillers = "Filler words", delivery = "Delivery", coach = "AI Coach", stage = "Stage", progress = "Progress" }
+    @State private var mode: Mode = .fillers
+    @State private var report: SpeakerReport?
+    @State private var deliveryStatus: String?
+    @State private var stageStatus: String?
+    @State private var coachStatus: String?
+    @State private var coachError: String?
+    @State private var allReports: [SpeakerReport] = []
     private var extraVideos: [String] { extraRaw.split(separator: "\n").map(String.init) }
     private var hiddenVideos: Set<String> { Set(hiddenRaw.split(separator: "\n").map(String.init)) }
 
@@ -64,20 +73,36 @@ struct AssessTab: View {
             videoList.frame(width: 260)
             Divider().background(Color.white.opacity(0.08))
             Group {
-                if selected == nil {
-                    placeholder("Pick a video to assess", "AutoClip transcribes it (or reuses the saved transcript) and shows every filler word.")
+                if selected == nil && mode == .progress {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 14) {
+                            Text("Your progress").font(.system(size: 17, weight: .semibold)).foregroundColor(.white)
+                            SpeakerProgressSection(reports: allReports, open: { select($0) })
+                        }.padding(20)
+                    }
+                } else if selected == nil {
+                    VStack(spacing: 14) {
+                        placeholder("Pick a video to assess", "AutoClip transcribes it (or reuses the saved transcript), then measures filler words, pace, pauses, voice and stage presence. The AI coach adds strengths, things to work on and a sermon map.")
+                            .frame(maxHeight: 260)
+                        if !allReports.isEmpty {
+                            Button("📈 See your progress across \(allReports.count) message\(allReports.count == 1 ? "" : "s")") { mode = .progress }
+                                .buttonStyle(.borderedProminent).tint(gold)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if let status {
                     VStack(spacing: 10) { ProgressView().controlSize(.small); Text(status).font(.system(size: 12)).foregroundColor(Color.white.opacity(0.6)) }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if let error {
                     placeholder("Couldn't assess this video", error)
                 } else {
-                    report
+                    report_
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(Color(red: 0.07, green: 0.08, blue: 0.12))
+        .onAppear { allReports = SpeakerReportStore.all() }
     }
 
     private func placeholder(_ title: String, _ sub: String) -> some View {
@@ -220,6 +245,8 @@ struct AssessTab: View {
     private func select(_ path: String) {
         selected = path
         error = nil; hits = []; words = []; hidden = []; hovered = nil
+        report = nil; deliveryStatus = nil; stageStatus = nil; coachStatus = nil; coachError = nil
+        if mode == .progress { mode = .fillers }
         player.replaceCurrentItem(with: AVPlayerItem(url: URL(fileURLWithPath: path)))
         status = "Reading the transcript…"
         Task {
@@ -231,6 +258,7 @@ struct AssessTab: View {
                 hits = FillerReport.find(in: ws)
                 duration = max(1, dur.isFinite && dur > 0 ? dur : (ws.last?.endTime ?? 1))
                 status = nil
+                startAnalysis(path: path, words: ws, duration: duration)
             } catch {
                 guard selected == path else { return }
                 self.error = error.localizedDescription
@@ -239,9 +267,96 @@ struct AssessTab: View {
         }
     }
 
+    // MARK: Analysis
+
+    /// Loads the saved report (or starts one) and fills in whatever is missing: delivery
+    /// first (seconds), then stage presence (about a minute). The AI coach runs on request.
+    private func startAnalysis(path: String, words ws: [Word], duration: Double) {
+        var r = SpeakerReportStore.load(for: path) ?? SpeakerAnalysis.newReport(videoPath: path, words: ws, duration: duration)
+        r.fillerCount = hits.count; r.wordCount = ws.count
+        report = r
+        SpeakerReportStore.save(r)
+        allReports = SpeakerReportStore.all()
+        Task {
+            if report?.delivery == nil {
+                deliveryStatus = "Listening to your voice…"
+                do {
+                    let d = try await Task.detached(priority: .userInitiated) {
+                        try await SpeakerAnalysis.delivery(videoPath: path, words: ws) { p in
+                            Task { @MainActor in if selected == path { deliveryStatus = "Listening to your voice… \(Int(p * 100))%" } }
+                        }
+                    }.value
+                    guard selected == path else { return }
+                    report?.delivery = d
+                    if let r = report { SpeakerReportStore.save(r) }
+                } catch {
+                    guard selected == path else { return }
+                    deliveryStatus = "Couldn't analyse the audio: \(error.localizedDescription)"
+                    return
+                }
+                deliveryStatus = nil
+            }
+            if report?.stage == nil {
+                stageStatus = "Watching the video…"
+                let st = await Task.detached(priority: .utility) {
+                    await SpeakerAnalysis.stage(videoPath: path) { p in
+                        Task { @MainActor in if selected == path { stageStatus = "Watching the video… \(Int(p * 100))%" } }
+                    }
+                }.value
+                guard selected == path else { return }
+                report?.stage = st
+                stageStatus = nil
+                if let r = report { SpeakerReportStore.save(r) }
+            }
+            allReports = SpeakerReportStore.all()
+        }
+    }
+
+    private func runCoach() {
+        guard let path = selected, let r = report else { return }
+        coachError = nil; coachStatus = "The AI coach is reading your message…"
+        let sentences = ReelDraft.sentences(from: words)
+        let fillersPerMin = Double(hits.count) / max(1, r.speakingMinutes)
+        var stats = String(format: "Length %.0f min. Filler words %.1f/min (%d total).", r.speakingMinutes, fillersPerMin, hits.count)
+        if let d = r.delivery {
+            stats += String(format: " Average pace %.0f wpm (%d fast stretches over 180 wpm). %d natural pauses, %d stretches of 30s+ without pausing. Pitch spread %.1f semitones, %d monotone stretches. %.0f%% of sentences trail off. Crutch phrases: %d. Pronouns: you %d, we %d, I %d. Questions asked: %d.",
+                             d.averageWPM, d.fastStretches.count, d.naturalPauses, d.breathlessRuns.count, d.pitchRangeSemitones,
+                             d.monotoneStretches.count, d.trailingOffPercent, d.crutches.count, d.youCount, d.weCount, d.iCount, d.questions)
+        }
+        if let st = r.stage {
+            stats += String(format: " Face visible %.0f%% of video, facing camera %.0f%%.", st.onScreenPercent, st.facingPercent)
+        }
+        Task {
+            do {
+                let provider = LLMClipService.AIProvider(rawValue: UserDefaults.standard.string(forKey: "ar_provider") ?? "") ?? .google
+                guard let key = await LLMClipService.shared.loadAPIKey(for: provider), !key.isEmpty else {
+                    coachStatus = nil
+                    coachError = "Add an API key in Auto Reels → AI settings to use the AI coach."
+                    return
+                }
+                let c = try await LLMClipService.shared.coachReport(
+                    sentences: sentences.map { ($0.start, $0.end, $0.text) }, stats: stats, provider: provider, apiKey: key)
+                guard selected == path else { return }
+                report?.coach = c
+                if let r = report { SpeakerReportStore.save(r) }
+                allReports = SpeakerReportStore.all()
+                coachStatus = nil
+            } catch {
+                guard selected == path else { return }
+                coachStatus = nil
+                coachError = error.localizedDescription
+            }
+        }
+    }
+
+    private func play(at t: Double) {
+        player.seek(to: CMTime(seconds: max(0, t - 1), preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+        player.play()
+    }
+
     // MARK: Report
 
-    private var report: some View {
+    private var report_: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 HStack {
@@ -258,11 +373,32 @@ struct AssessTab: View {
                     summary
                 }
 
-                timeline
+                Picker("", selection: $mode) {
+                    ForEach(Mode.allCases, id: \.self) { m in Text(m.rawValue).tag(m) }
+                }
+                .pickerStyle(.segmented).labelsHidden()
 
-                chips
-
-                occurrences
+                switch mode {
+                case .fillers:
+                    timeline
+                    chips
+                    occurrences
+                case .delivery:
+                    if let r = report, let d = r.delivery {
+                        DeliverySection(report: r, d: d, play: play(at:))
+                    } else {
+                        AssessCard(title: "Delivery") {
+                            HStack(spacing: 8) { ProgressView().controlSize(.small)
+                                Text(deliveryStatus ?? "Starting…").font(.system(size: 12)).foregroundColor(Color.white.opacity(0.7)) }
+                        }
+                    }
+                case .coach:
+                    if let r = report { CoachSection(report: r, status: coachStatus, error: coachError, run: runCoach, play: play(at:)) }
+                case .stage:
+                    if let r = report { StageSection(report: r, status: stageStatus, play: play(at:)) }
+                case .progress:
+                    SpeakerProgressSection(reports: allReports, open: { select($0) })
+                }
             }
             .padding(20)
         }
@@ -283,6 +419,26 @@ struct AssessTab: View {
                 .font(.system(size: 12, weight: .medium)).foregroundColor(.white)
             Text(perMin < 2 ? "Very clean delivery" : perMin < 4 ? "Typical for live preaching" : "Noticeable — worth working on")
                 .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.45))
+            if report != nil {
+                DatePicker("Preached on", selection: Binding(get: { report?.videoDate ?? Date() },
+                                                             set: { report?.videoDate = $0
+                                                                    if let r = report { SpeakerReportStore.save(r); allReports = SpeakerReportStore.all() } }),
+                           displayedComponents: .date)
+                    .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.6)).fixedSize()
+                    .help("Used to chart your progress over time")
+            }
+            HStack(spacing: 14) {
+                if let d = report?.delivery {
+                    Text(String(format: "%.0f wpm", d.averageWPM)).font(.system(size: 12, weight: .semibold)).foregroundColor(.white)
+                }
+                if let c = report?.coach {
+                    Text("Coach \(c.score)/10").font(.system(size: 12, weight: .semibold)).foregroundColor(gold)
+                }
+                if deliveryStatus != nil || stageStatus != nil {
+                    HStack(spacing: 4) { ProgressView().scaleEffect(0.4).frame(width: 10, height: 10)
+                        Text(deliveryStatus ?? stageStatus ?? "").font(.system(size: 10)).foregroundColor(Color.white.opacity(0.5)) }
+                }
+            }
             Text("Transcription drops some \"um\"s and \"uh\"s, so those counts may be low.")
                 .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.35)).fixedSize(horizontal: false, vertical: true)
         }

@@ -40,6 +40,7 @@ enum YTDLP {
         }
         args += [
             "--force-overwrites",              // never reuse an old (possibly low-res) download
+            "--mtime",                         // file date = upload date (used to chart progress)
             "--concurrent-fragments", "4",
             "--output", outTemplate,
             "--print", "after_move:filepath",

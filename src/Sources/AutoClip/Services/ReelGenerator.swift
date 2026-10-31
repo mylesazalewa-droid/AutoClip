@@ -9,11 +9,16 @@ enum TranscriptCache {
         return d
     }
 
+    private static func baseName(_ videoPath: String) -> String {
+        String(URL(fileURLWithPath: videoPath).deletingPathExtension().lastPathComponent.prefix(60))
+    }
+
     private static func file(for videoPath: String) -> URL {
-        let name = URL(fileURLWithPath: videoPath).deletingPathExtension().lastPathComponent
-        // Path hash keeps two videos with the same name apart
-        let h = String(UInt(bitPattern: videoPath.hashValue) % 1_000_000_007)
-        return dir.appendingPathComponent("\(name.prefix(60))-\(h).json")
+        // Path hash keeps two videos with the same name apart. FNV-1a, because Swift's
+        // hashValue changes every launch (which made every saved transcript unfindable).
+        var h: UInt64 = 0xcbf29ce484222325
+        for b in videoPath.utf8 { h = (h ^ UInt64(b)) &* 0x100000001b3 }
+        return dir.appendingPathComponent("\(baseName(videoPath))-v2-\(h % 1_000_000_007).json")
     }
 
     static func save(_ words: [Word], for videoPath: String) {
@@ -22,13 +27,27 @@ enum TranscriptCache {
 
     /// Cached words, if the cache is newer than the video file.
     static func load(for videoPath: String) -> [Word]? {
-        let f = file(for: videoPath)
-        guard let data = try? Data(contentsOf: f),
-              let words = try? JSONDecoder().decode([Word].self, from: data), !words.isEmpty else { return nil }
-        let vAttr = try? FileManager.default.attributesOfItem(atPath: videoPath)
-        let tAttr = try? FileManager.default.attributesOfItem(atPath: f.path)
-        if let v = vAttr?[.modificationDate] as? Date, let t = tAttr?[.modificationDate] as? Date, v > t { return nil }
-        return words
+        let vDate = (try? FileManager.default.attributesOfItem(atPath: videoPath))?[.modificationDate] as? Date
+        func read(_ f: URL) -> [Word]? {
+            guard let data = try? Data(contentsOf: f),
+                  let words = try? JSONDecoder().decode([Word].self, from: data), !words.isEmpty else { return nil }
+            let t = (try? FileManager.default.attributesOfItem(atPath: f.path))?[.modificationDate] as? Date
+            if let vDate, let t, vDate > t { return nil }
+            return words
+        }
+        if let words = read(file(for: videoPath)) { return words }
+        // Transcripts saved before 2.75 used a per-launch hash: reuse the newest one with this
+        // video's name, and save it under the stable name from now on.
+        let prefix = baseName(videoPath) + "-"
+        let legacy = ((try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.contentModificationDateKey])) ?? [])
+            .filter { $0.lastPathComponent.hasPrefix(prefix) && !$0.lastPathComponent.contains("-v2-")
+                      && $0.lastPathComponent.dropFirst(prefix.count).dropLast(5).allSatisfy(\.isNumber) }
+            .sorted { ((try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast)
+                    > ((try? $1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast) }
+        for f in legacy {
+            if let words = read(f) { save(words, for: videoPath); return words }
+        }
+        return nil
     }
 
     static func transcript(for videoPath: String, progress: @escaping (String) -> Void) async throws -> [Word] {
