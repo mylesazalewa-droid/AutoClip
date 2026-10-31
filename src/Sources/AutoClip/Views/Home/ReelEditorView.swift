@@ -440,6 +440,7 @@ struct ReelEditorView: View {
     @State private var overlayItems: [ReelOverlays.Placed] = []
     @State private var hookStatus: String?
     @State private var fillerNote: String?
+    @State private var endingStatus: String?
 
     /// The sentence being spoken at the playhead, and which of its words.
     private var playing: (id: UUID, word: Int)? {
@@ -673,6 +674,20 @@ struct ReelEditorView: View {
 
             Divider().background(Color.white.opacity(0.06))
 
+            HStack {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Hopeful ending").font(.system(size: 12)).foregroundColor(.white)
+                    Text(endingStatus ?? "Ends on a downer? AI adds a \"But God…\" moment from this message as the last clip")
+                        .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.4))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer()
+                Button("✨ Add") { addHopefulEnding() }
+                    .controlSize(.small).disabled(endingStatus == "Finding the hope in this message…")
+            }
+
+            Divider().background(Color.white.opacity(0.06))
+
             Toggle(isOn: Binding(get: { draft.showVerses }, set: { draft.verseCards = $0 })) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Bible verse cards").font(.system(size: 12)).foregroundColor(.white)
@@ -707,6 +722,38 @@ struct ReelEditorView: View {
             }
         }
         .padding(12).background(Color.white.opacity(0.04)).cornerRadius(10)
+    }
+
+    /// Appends the talk's "But God…" moment (picked by AI) as a final clip.
+    private func addHopefulEnding() {
+        guard let source = draft.pieces.last?.sourceVideoPath ?? draft.pieces.first?.sourceVideoPath else { return }
+        endingStatus = "Finding the hope in this message…"
+        let reelText = draft.renderClips.flatMap(\.words).map(\.word).joined(separator: " ")
+        let inReelWords = Set(draft.pieces.flatMap { $0.sentences.filter(\.included).flatMap { $0.words.map(\.id) } })
+        Task {
+            do {
+                let provider = LLMClipService.AIProvider(rawValue: UserDefaults.standard.string(forKey: "ar_provider") ?? "") ?? .google
+                guard let key = await LLMClipService.shared.loadAPIKey(for: provider), !key.isEmpty else {
+                    endingStatus = "Add an API key in Auto Reels → AI settings to use this."
+                    return
+                }
+                guard let words = TranscriptCache.load(for: source) else {
+                    endingStatus = "Couldn't find this message's transcript."
+                    return
+                }
+                let sentences = ReelDraft.sentences(from: words)
+                var inReel = Set<Int>()
+                for (i, s) in sentences.enumerated() where s.words.contains(where: { inReelWords.contains($0.id) }) { inReel.insert(i) }
+                let r = try await LLMClipService.shared.findHopefulEnding(
+                    sentences: sentences.map { ($0.start, $0.end, $0.text) }, reelText: reelText,
+                    inReel: inReel, provider: provider, apiKey: key)
+                draft.pieces.append(ReelDraft.Piece(sourceVideoPath: source, sentences: Array(sentences[r])))
+                let added = sentences[r].map(\.text).joined(separator: " ")
+                endingStatus = "Added as the last clip: \"\(added.prefix(110))\(added.count > 110 ? "…" : "")\""
+            } catch {
+                endingStatus = error.localizedDescription
+            }
+        }
     }
 
     private func writeHook() {

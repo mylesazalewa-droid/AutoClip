@@ -100,14 +100,27 @@ enum ReelGenerator {
         }
     }
 
-    /// Keep an AI story near the target: drop trailing runs, then trim the last run sentence
-    /// by sentence (a single long passage can otherwise come back at several minutes).
+    /// Keep an AI story near the target without losing its shape: the opening hook and the
+    /// final run (where the hopeful resolution lands) stay; middle runs are dropped or trimmed
+    /// first. Only a single passage is trimmed at its end, and then only well over the target.
     static func fit(_ ranges: [ClosedRange<Int>], to target: Double, sentences: [ReelDraft.Sentence]) -> [ClosedRange<Int>] {
         var rs = ranges
         func total() -> Double { rs.reduce(0) { $0 + (sentences[$1.upperBound].end - sentences[$1.lowerBound].start) } }
-        while rs.count > 1 && total() > target * 1.3 { rs.removeLast() }
-        while total() > target * 1.2, let last = rs.last, last.upperBound > last.lowerBound {
-            rs[rs.count - 1] = last.lowerBound...(last.upperBound - 1)
+        // Trim sentence by sentence from the end of the longest middle run, so the middle
+        // shrinks evenly; whole middle runs only go once they're down to one sentence
+        while total() > target * 1.2 {
+            if let k = (1..<max(1, rs.count - 1)).filter({ rs[$0].count > 1 }).max(by: { rs[$0].count < rs[$1].count }) {
+                rs[k] = rs[k].lowerBound...(rs[k].upperBound - 1)
+            } else if rs.count > 2 {
+                rs.remove(at: rs.count - 2)
+            } else if rs.count == 2, rs[1].count > 1 {
+                // Hook + ending only: tighten the start of the ending run
+                rs[1] = (rs[1].lowerBound + 1)...rs[1].upperBound
+            } else if rs.count == 2, rs[0].count > 1 {
+                rs[0] = rs[0].lowerBound...(rs[0].upperBound - 1)
+            } else if rs.count == 1, rs[0].count > 1, total() > target * 1.35 {
+                rs[0] = rs[0].lowerBound...(rs[0].upperBound - 1)
+            } else { break }
         }
         return rs
     }

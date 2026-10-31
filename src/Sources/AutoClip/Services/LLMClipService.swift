@@ -238,6 +238,7 @@ Pick ONE single continuous passage (one run of CONSECUTIVE sentences, no jumps) 
 Rules:
 - It must START on a line that grabs attention and makes sense with no context — never on a line that depends on what came before ("And so…", "That's why…", "He said…").
 - It must END on a strong, conclusive line (a punchline, takeaway or challenge) — never mid-thought.
+- If it raises a struggle, sin, guilt, pain or a problem, it MUST turn to hope before it ends — a \"But God…\" moment: grace, forgiveness, a promise of God, what Jesus has done, or a hopeful challenge. Never end on the problem, condemnation or a downer; the final line should leave viewers encouraged.
 - Prefer a complete story, illustration or one powerful point.
 - Skip greetings, announcements, housekeeping and anything referring to visuals the viewer can't see.
 - Never use sentences marked (USED) — they belong to other reels. This is reel #\(reelNumber).\(othersLine)
@@ -257,7 +258,7 @@ Structure:
 1. HOOK (first 3–8s): the most curiosity-grabbing or bold line. It may come from anywhere in the talk.
 2. CONTEXT: just enough setup for the main idea to land.
 3. CORE: one main idea or story — stay on a single thread, no topic jumps.
-4. PAYOFF: end on a strong, conclusive line (a punchline, takeaway or challenge) — never mid-thought.
+4. RESOLUTION + PAYOFF: end on a strong, conclusive line (a punchline, takeaway or challenge) — never mid-thought. If it raises a struggle, sin, guilt, pain or a problem, it MUST turn to hope before it ends — a \"But God…\" moment: grace, forgiveness, a promise of God, what Jesus has done, or a hopeful challenge. Never end on the problem, condemnation or a downer; the final line should leave viewers encouraged. The hopeful turn may come from later in the talk.
 
 Rules:
 - Each run starts where a thought starts — never with a line that depends on what came before ("And so that's why…", "This is…", "He said…" without who).
@@ -323,6 +324,7 @@ The creator asks: "\(request)"
 
 Build ONE coherent short of about \(target) seconds (acceptable \(Int(Double(target) * 0.8))–\(Int(Double(target) * 1.15))s) that does exactly what they asked, using ONLY what is said in this talk, from runs of CONSECUTIVE sentences.
 - Open with a strong hook related to the request, then build to a clear, conclusive ending.
+- If it raises a struggle, sin, guilt, pain or a problem, it MUST turn to hope before it ends — a \"But God…\" moment: grace, forgiveness, a promise of God, what Jesus has done, or a hopeful challenge. Never end on the problem, condemnation or a downer; the final line should leave viewers encouraged.
 - Every run must make sense on its own; skip greetings, announcements and visual references.
 - Keep runs in their original order after the hook. Prefer 2–6 runs.
 - If the request asks for a different length (e.g. "30 seconds"), use that length instead.
@@ -366,6 +368,41 @@ Respond with ONLY valid JSON: {"topics":["...","..."]}
             throw llmError("AI didn't return a topic list.")
         }
         return topics
+    }
+
+    // MARK: - Hopeful ending
+
+    /// A short run from the talk (about 6–20s) that resolves `reelText` with hope — the
+    /// "But God…" turn — to add at the end of a reel that finishes on a downer.
+    func findHopefulEnding(sentences: [(start: Double, end: Double, text: String)], reelText: String,
+                           inReel: Set<Int>, provider: AIProvider, apiKey: String) async throws -> ClosedRange<Int> {
+        let lines = sentences.enumerated().map { i, s -> String in
+            "[\(i)] \(Int((s.end - s.start).rounded()))s\(inReel.contains(i) ? " (IN REEL)" : ""): \(s.text)"
+        }.joined(separator: "\n")
+        let prompt = """
+A short video was cut from a sermon. Here is what the short currently says:
+\"\"\"
+\(reelText.prefix(3000))
+\"\"\"
+
+It needs a hopeful resolution at the end so it doesn't finish on a downer — a "But God…" turn: grace, forgiveness, a promise of God, what Jesus has done, or a hopeful challenge that answers the struggle the short raises.
+
+From the full transcript below, choose ONE run of 1–4 CONSECUTIVE sentences (about 6–20 seconds) that delivers that resolution in the speaker's own words. It must make sense right after the short's last line and end on a complete, encouraging thought. Don't pick sentences marked (IN REEL).
+
+Transcript:
+\(lines)
+
+Respond with ONLY valid JSON: {"title":"","segments":[{"from":120,"to":122}]}
+"""
+        var lastError: Error = llmError("AI didn't find a hopeful ending")
+        for _ in 1...2 {
+            let text = try await ask(prompt, provider: provider, apiKey: apiKey)
+            do {
+                let plan = try parseStory(text, sentenceCount: sentences.count, avoid: inReel)
+                if let r = plan.ranges.first { return r.count > 5 ? r.lowerBound...(r.lowerBound + 4) : r }
+            } catch { lastError = error }
+        }
+        throw lastError
     }
 
     // MARK: - Hook text
@@ -471,7 +508,7 @@ Build a HOOK ROLLERCOASTER from runs of consecutive sentences (the runs may come
 3. MINI-PAYOFF: a quick satisfying insight… then immediately
 4. RE-HOOK: a "but"/twist/new question that pulls them deeper.
 5. PEAK: the most emotional or powerful moment in the whole talk.
-6. CLIFFHANGER: end on an open loop — a setup or question whose answer is NOT given, so they must go watch the full message. Never end on a full resolution.
+6. CLIFFHANGER: end on an open loop — a setup or question whose answer is NOT given, so they must go watch the full message. Never end on a full resolution, but never on hopelessness either: the open loop should point toward hope (\"But God…\", \"here's what changed everything\").
 
 Rules:
 - Every run must make sense on its own; never start on a line that depends on missing context.
