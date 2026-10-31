@@ -47,7 +47,7 @@ actor LLMClipService {
 
         var modelLabel: String {
             switch self {
-            case .anthropic: return "claude-haiku-4-5"
+            case .anthropic: return "claude-haiku-5-5"
             case .openai:    return "gpt-4o-mini"
             case .google:    return "Gemini (auto-select)"
             }
@@ -438,11 +438,24 @@ Respond with ONLY valid JSON, no markdown:
     // MARK: - Anthropic
 
     private func callAnthropic(prompt: String, apiKey: String) async throws -> String {
-        let body: [String: Any] = [
-            "model": "claude-haiku-4-5-20251001",
-            "max_tokens": 2048,
+        do {
+            return try await callAnthropic(prompt: prompt, apiKey: apiKey, model: "claude-haiku-5-5")
+        } catch {
+            // Keys/accounts that can't use Haiku 5.5 yet fall back to Haiku 4.5
+            let msg = error.localizedDescription.lowercased()
+            guard msg.contains("model") || msg.contains("not_found") || msg.contains("not found") else { throw error }
+            return try await callAnthropic(prompt: prompt, apiKey: apiKey, model: "claude-haiku-4-5")
+        }
+    }
+
+    private func callAnthropic(prompt: String, apiKey: String, model: String) async throws -> String {
+        var body: [String: Any] = [
+            "model": model,
+            "max_tokens": 8192,
             "messages": [["role": "user", "content": prompt]]
         ]
+        // Haiku 5.5 thinks by default; low effort keeps it fast and cheap for clip picking
+        if model == "claude-haiku-5-5" { body["output_config"] = ["effort": "low"] }
         var req = URLRequest(url: URL(string: "https://api.anthropic.com/v1/messages")!)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -452,9 +465,15 @@ Respond with ONLY valid JSON, no markdown:
         req.timeoutInterval = 120
         let (data, resp) = try await URLSession.shared.data(for: req)
         try checkHTTP(resp, data: data)
+        // Thinking blocks may come before the answer, so take the text blocks
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let content = (json["content"] as? [[String: Any]])?.first,
-              let text = content["text"] as? String else {
+              let blocks = json["content"] as? [[String: Any]] else {
+            throw llmError("Unexpected Anthropic response")
+        }
+        let text = blocks.filter { $0["type"] as? String == "text" }
+                         .compactMap { $0["text"] as? String }.joined()
+        guard !text.isEmpty else {
+            if json["stop_reason"] as? String == "refusal" { throw llmError("Claude declined this request.") }
             throw llmError("Unexpected Anthropic response")
         }
         return text
