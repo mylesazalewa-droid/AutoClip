@@ -75,6 +75,8 @@ struct AutoReelJobParams: Codable {
     var outputDir: URL
     /// One continuous moment per reel (the old Auto Clips) — optional so older records decode
     var singleClip: Bool? = nil
+    /// The YouTube video's title, used as the project card's name
+    var sourceTitle: String? = nil
 }
 
 // MARK: - Active job (lives in store, survives tab switches)
@@ -2228,11 +2230,13 @@ private extension AutoReelsTab {
                 }
                 let videoURL = URL(fileURLWithPath: printed)
 
-                let ytParams = AutoReelJobParams(videoURL: videoURL, formatRaw: fmt.rawValue,
+                var ytParams = AutoReelJobParams(videoURL: videoURL, formatRaw: fmt.rawValue,
                     captions: captions, captionStyleIndex: styleIdx, targetDuration: dur,
                     useAI: ai, providerRaw: prov.rawValue, desiredReelCount: reelCnt,
                     storylineModeRaw: sMode?.rawValue, topic: topic, crossDissolve: dissolve,
                     emojiOverlays: emojis, outputDir: outDir, singleClip: single)
+                // The file is saved as "%(title)s.ext", so its name is the YouTube title
+                ytParams.sourceTitle = YTDLP.title(fromFile: videoURL)
                 await self.startPipelineAsync(jobID: jobID, videoURL: videoURL, format: fmt, captions: captions,
                                               styleIdx: styleIdx, targetDur: dur,
                                               useAI: ai, provider: prov, apiKey: key,
@@ -2331,7 +2335,7 @@ private extension AutoReelsTab {
                                     emojiOverlays: Bool = false,
                                     outputDir: URL = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first!,
                                     retryParams: AutoReelJobParams? = nil) async {
-        let title = videoURL.deletingPathExtension().lastPathComponent
+        let title = retryParams?.sourceTitle ?? videoURL.deletingPathExtension().lastPathComponent
         let single = retryParams?.singleClip ?? false
 
         let srcPath = videoURL.path
@@ -2513,7 +2517,8 @@ private extension AutoReelsTab {
             }
             let firstReelDur = drafts.first?.duration ?? 0
             let transcriptText = reelGroups.flatMap { $0.flatMap { $0.words.map(\.word) } }.joined(separator: " ")
-            let reelLabel = reelGroups.count == 1 ? "\(finalReelTitle) – Reel" : "\(finalReelTitle) – \(reelGroups.count) Reels"
+            let reelLabel = retryParams?.sourceTitle
+                ?? (reelGroups.count == 1 ? "\(finalReelTitle) – Reel" : "\(finalReelTitle) – \(reelGroups.count) Reels")
             let record = AutoReelRecord(id: UUID(), title: reelLabel,
                                         path: workingURL.path, paths: [workingURL.path],
                                         format: fmtLabel(format), duration: firstReelDur,
@@ -2527,7 +2532,7 @@ private extension AutoReelsTab {
             let finalRecord = rec
             await MainActor.run {
                 AutoReelsStore.shared.add(finalRecord)
-                store.updateJob(AutoReelJob(id: jobID, title: finalReelTitle, progress: 1.0,
+                store.updateJob(AutoReelJob(id: jobID, title: retryParams?.sourceTitle ?? finalReelTitle, progress: 1.0,
                                            statusMsg: "\(drafts.count) reel\(drafts.count == 1 ? "" : "s") ready — open to review & export",
                                            isFinished: true, error: nil))
             }

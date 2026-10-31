@@ -55,4 +55,15 @@ enum YTDLP {
         url.deletingPathExtension().lastPathComponent
             .range(of: #"\.f\d+(-\d+)?$"#, options: .regularExpression) != nil
     }
+
+    /// The video title from a downloaded file's name. yt-dlp swaps characters that aren't allowed
+    /// in file names for look-alikes ("｜", "？", "⧸"…); this turns them back.
+    static func title(fromFile url: URL) -> String {
+        var t = url.deletingPathExtension().lastPathComponent
+        t = t.replacingOccurrences(of: #"\.f\d+(-\d+)?$"#, with: "", options: .regularExpression)
+        let swaps: [String: String] = ["｜": "|", "？": "?", "：": ":", "＂": "\"", "⧸": "/", "⧹": "\\",
+                                       "＊": "*", "＜": "<", "＞": ">", "＃": "#"]
+        for (a, b) in swaps { t = t.replacingOccurrences(of: a, with: b) }
+        return t.trimmingCharacters(in: .whitespaces)
+    }
 }
