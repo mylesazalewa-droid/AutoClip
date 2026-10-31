@@ -213,7 +213,7 @@ Respond with ONLY valid JSON — no markdown fences, no explanation:
     /// `avoid` holds sentence indices already used by other reels from the same video.
     func composeStory(sentences: [(start: Double, end: Double, text: String)],
                       targetDuration: Double, topic: String?, avoid: Set<Int>,
-                      reelNumber: Int, otherTitles: [String] = [],
+                      reelNumber: Int, otherTitles: [String] = [], single: Bool = false,
                       provider: AIProvider, apiKey: String) async throws -> StoryPlan {
         let othersLine = otherTitles.isEmpty ? "" : """
 
@@ -229,7 +229,25 @@ Other reels from this talk ALREADY cover these ideas — pick a clearly DIFFEREN
             ? "\nTHEME: build the story around \"\(topic!)\".\n" : ""
         let target = Int(targetDuration)
 
-        let prompt = """
+        let singlePrompt = """
+You are an expert short-form video editor (Reels, TikTok, Shorts). Below is the full transcript of a talk, one numbered sentence per line with its timestamp and length.
+\(topicLine)
+Pick ONE single continuous passage (one run of CONSECUTIVE sentences, no jumps) of about \(target) seconds (acceptable: \(Int(Double(target) * 0.7))–\(Int(Double(target) * 1.2))s) that works perfectly as a stand-alone short.
+
+Rules:
+- It must START on a line that grabs attention and makes sense with no context — never on a line that depends on what came before ("And so…", "That's why…", "He said…").
+- It must END on a strong, conclusive line (a punchline, takeaway or challenge) — never mid-thought.
+- Prefer a complete story, illustration or one powerful point.
+- Skip greetings, announcements, housekeeping and anything referring to visuals the viewer can't see.
+- Never use sentences marked (USED) — they belong to other reels. This is reel #\(reelNumber).\(othersLine)
+
+Transcript:
+\(lines)
+
+Respond with ONLY valid JSON, no markdown:
+{"title":"short catchy title (max 8 words)","segments":[{"from":40,"to":52}]}
+"""
+        let prompt = single ? singlePrompt : """
 You are an expert short-form video editor (Reels, TikTok, Shorts). Below is the full transcript of a talk, one numbered sentence per line with its timestamp and length.
 \(topicLine)
 Build ONE coherent short of about \(target) seconds (acceptable: \(Int(Double(target) * 0.85))–\(Int(Double(target) * 1.15))s) by choosing runs of CONSECUTIVE sentences. It must make complete sense to someone who never saw the talk.
@@ -261,7 +279,15 @@ Respond with ONLY valid JSON, no markdown:
             case .openai:    text = try await callOpenAI(prompt: prompt, apiKey: apiKey)
             case .google:    text = try await callGoogle(prompt: prompt, apiKey: apiKey)
             }
-            do { return try parseStory(text, sentenceCount: sentences.count, avoid: avoid) }
+            do {
+                var plan = try parseStory(text, sentenceCount: sentences.count, avoid: avoid)
+                if single, let first = plan.ranges.first, let last = plan.ranges.last {
+                    // One passage: if the model returned pieces, join them only when they're adjacent
+                    plan.ranges = plan.ranges.count > 1 && last.upperBound - first.lowerBound <= plan.ranges.reduce(0) { $0 + $1.count } + 2
+                        ? [first.lowerBound...last.upperBound] : [plan.ranges.max { $0.count < $1.count }!]
+                }
+                return plan
+            }
             catch { lastError = error }
         }
         throw lastError

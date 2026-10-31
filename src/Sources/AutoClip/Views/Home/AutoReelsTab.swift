@@ -73,6 +73,8 @@ struct AutoReelJobParams: Codable {
     var crossDissolve: Bool
     var emojiOverlays: Bool
     var outputDir: URL
+    /// One continuous moment per reel (the old Auto Clips) — optional so older records decode
+    var singleClip: Bool? = nil
 }
 
 // MARK: - Active job (lives in store, survives tab switches)
@@ -340,6 +342,7 @@ struct AutoReelsTab: View {
     @AppStorage("ar_targetDur")   private var targetDuration: Double = 90
     @AppStorage("ar_reelCount")   private var desiredReelCount: Int = 0
     @AppStorage("ar_useAI")       private var useAI: Bool = false
+    @AppStorage("ar_singleClip")  private var singleClip: Bool = false
     @AppStorage("ar_provider")    private var providerRaw: String = LLMClipService.AIProvider.anthropic.rawValue
     @AppStorage("ar_dissolve")    private var crossDissolve: Bool = false
     @AppStorage("ar_emoji")       private var emojiOverlays: Bool = false
@@ -813,6 +816,18 @@ struct AutoReelsTab: View {
                             .buttonStyle(.plain)
                         }
                     }
+                }
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Style").font(.system(size: 12)).foregroundColor(Color.white.opacity(0.6))
+                    Picker("", selection: $singleClip) {
+                        Text("Story (stitched)").tag(false)
+                        Text("Single clip").tag(true)
+                    }
+                    .pickerStyle(.segmented).labelsHidden()
+                    Text(singleClip
+                         ? "Each reel is one continuous moment from the video — no cuts."
+                         : "Each reel stitches the best lines into one story.")
+                        .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.4))
                 }
                 HStack {
                     Text("Target length").font(.system(size: 12)).foregroundColor(Color.white.opacity(0.6))
@@ -2149,8 +2164,9 @@ private extension AutoReelsTab {
         let styleIdx = captionStyleIndex; let dur = targetDuration
         let ai = useAI; let prov = aiProvider
         let key = apiKeys[aiProvider] ?? ""; let reelCnt = desiredReelCount
-        let sMode = useStoryline ? storylineMode : nil
+        let sMode = useStoryline && !singleClip ? storylineMode : nil
         let topic = topicText; let dissolve = crossDissolve; let emojis = emojiOverlays
+        let single = singleClip
         let store = self.store
 
         let jobID = UUID()
@@ -2216,7 +2232,7 @@ private extension AutoReelsTab {
                     captions: captions, captionStyleIndex: styleIdx, targetDuration: dur,
                     useAI: ai, providerRaw: prov.rawValue, desiredReelCount: reelCnt,
                     storylineModeRaw: sMode?.rawValue, topic: topic, crossDissolve: dissolve,
-                    emojiOverlays: emojis, outputDir: outDir)
+                    emojiOverlays: emojis, outputDir: outDir, singleClip: single)
                 await self.startPipelineAsync(jobID: jobID, videoURL: videoURL, format: fmt, captions: captions,
                                               styleIdx: styleIdx, targetDur: dur,
                                               useAI: ai, provider: prov, apiKey: key,
@@ -2249,14 +2265,15 @@ private extension AutoReelsTab {
         let styleIdx = captionStyleIndex; let dur = targetDuration
         let ai = useAI; let prov = aiProvider
         let key = apiKeys[aiProvider] ?? ""; let reelCnt = desiredReelCount
-        let sMode = useStoryline ? storylineMode : nil
+        let sMode = useStoryline && !singleClip ? storylineMode : nil
         let topic = topicText; let dissolve = crossDissolve; let emojis = emojiOverlays
+        let single = singleClip
         let params = AutoReelJobParams(videoURL: videoURL, formatRaw: fmt.rawValue,
                                        captions: captions, captionStyleIndex: styleIdx,
                                        targetDuration: dur, useAI: ai, providerRaw: prov.rawValue,
                                        desiredReelCount: reelCnt, storylineModeRaw: sMode?.rawValue,
                                        topic: topic, crossDissolve: dissolve,
-                                       emojiOverlays: emojis, outputDir: outDir)
+                                       emojiOverlays: emojis, outputDir: outDir, singleClip: single)
         let jobID = UUID()
         let task = Task.detached(priority: .userInitiated) {
             await self.startPipelineAsync(jobID: jobID, videoURL: videoURL, format: fmt,
@@ -2315,6 +2332,7 @@ private extension AutoReelsTab {
                                     outputDir: URL = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first!,
                                     retryParams: AutoReelJobParams? = nil) async {
         let title = videoURL.deletingPathExtension().lastPathComponent
+        let single = retryParams?.singleClip ?? false
 
         let srcPath = videoURL.path
         func upd(_ progress: Double, _ msg: String, finished: Bool = false, error: String? = nil, out: URL? = nil) async {
@@ -2415,7 +2433,7 @@ private extension AutoReelsTab {
                             sentences: storySentences.map { ($0.start, $0.end, $0.text) },
                             targetDuration: targetDur, topic: topic.isEmpty ? nil : topic,
                             avoid: usedSentences, reelNumber: i + 1, otherTitles: aiTitles,
-                            provider: provider, apiKey: apiKey)
+                            single: single, provider: provider, apiKey: apiKey)
                         // Keep it near the target if the model overshoots
                         let ranges = ReelGenerator.fit(plan.ranges, to: targetDur, sentences: storySentences)
                         usedSentences.formUnion(ranges.flatMap { Array($0) })
@@ -2437,6 +2455,13 @@ private extension AutoReelsTab {
                             NSLocalizedDescriptionKey: "AI clip selection failed for reel \(i + 1): \(error.localizedDescription)"
                         ])
                     }
+                } else if single {
+                    // One continuous moment, the best one the scorer finds that isn't used yet
+                    guard let r = ReelGenerator.singleWindow(storySentences, segments: segments, target: targetDur,
+                                                             avoid: usedSentences, rank: i == 0 ? baseVariation % 3 : 0)
+                    else { break }
+                    usedSentences.formUnion(r)
+                    reelClips = ReelGenerator.clips(for: [r], in: storySentences, source: workingURL.path)
                 } else {
                     let (hook, rest) = svc.selectHookAndClips(from: segments, targetDuration: targetDur,
                                                                variation: localVariation,

@@ -60,6 +60,8 @@ enum ReelGenerator {
         var emojiOverlays: Bool
         var provider: LLMClipService.AIProvider
         var useAI: Bool
+        /// One continuous moment per reel instead of a stitched story
+        var singleClip = false
     }
 
     static func settings(for record: AutoReelRecord) -> Settings {
@@ -75,7 +77,8 @@ enum ReelGenerator {
             crossDissolve: d?.crossDissolve ?? p?.crossDissolve ?? false,
             emojiOverlays: d?.emojiOverlays ?? p?.emojiOverlays ?? false,
             provider: LLMClipService.AIProvider(rawValue: providerRaw) ?? .google,
-            useAI: p?.useAI ?? true)
+            useAI: p?.useAI ?? true,
+            singleClip: p?.singleClip ?? false)
     }
 
     static func sourceVideoPath(for record: AutoReelRecord) -> String? {
@@ -107,6 +110,47 @@ enum ReelGenerator {
             rs[rs.count - 1] = last.lowerBound...(last.upperBound - 1)
         }
         return rs
+    }
+
+    /// Single-clip mode without AI: the best continuous passage of about `target` seconds,
+    /// scored by the auto-segmenter (hooks, clean endings, no "And…/So…" openers).
+    /// `rank` picks the 2nd, 3rd… best non-overlapping passage for variety.
+    static func singleWindow(_ sentences: [ReelDraft.Sentence], segments: [Clip], target: Double,
+                             avoid: Set<Int>, rank: Int = 0) -> ClosedRange<Int>? {
+        guard !sentences.isEmpty else { return nil }
+        let weakOpeners: Set<String> = ["and", "so", "but", "because", "or", "then", "which", "that",
+                                        "this", "it", "he", "she", "they", "those", "these", "like",
+                                        "um", "uh", "yeah", "okay", "ok", "well", "right", "also", "now", "just"]
+        let scores: [Double] = sentences.map { s in
+            let mid = (s.start + s.end) / 2
+            return segments.first { $0.startTime <= mid && $0.endTime >= mid }?.score ?? 0
+        }
+        var windows: [(range: ClosedRange<Int>, score: Double)] = []
+        for a in sentences.indices where !avoid.contains(a) {
+            var b = a
+            while b + 1 < sentences.count, !avoid.contains(b + 1),
+                  sentences[b].end - sentences[a].start < target * 0.9 { b += 1 }
+            let dur = sentences[b].end - sentences[a].start
+            guard dur >= target * 0.6, dur <= target * 1.3 else { continue }
+            var score = scores[a...b].reduce(0, +) / Double(b - a + 1)
+            let opener = sentences[a].words.first?.word.lowercased().trimmingCharacters(in: .punctuationCharacters) ?? ""
+            if weakOpeners.contains(opener) { score -= 25 }
+            // Very short or rambling openers rarely hook ("Like is that like, it's just…")
+            let firstLen = sentences[a].words.count
+            if firstLen < 4 || sentences[a].text.lowercased().contains("like,") { score -= 12 }
+            if sentences[a].text.hasSuffix("?") { score += 6 }          // a question pulls viewers in
+            if sentences[a].start < 90 { score -= 10 }                   // greetings / intro
+            if let end = sentences[b].words.last?.word.last, "!?".contains(end) { score += 5 }
+            score -= abs(dur - target) / max(1, target) * 10
+            windows.append((a...b, score))
+        }
+        // Best first, skipping passages that overlap an already-better one
+        var picked: [ClosedRange<Int>] = []
+        for w in windows.sorted(by: { $0.score > $1.score }) where !picked.contains(where: { $0.overlaps(w.range) }) {
+            picked.append(w.range)
+            if picked.count > rank { break }
+        }
+        return picked.count > rank ? picked[rank] : picked.last
     }
 
     /// Indices of transcript sentences already used by this record's reels.
@@ -142,11 +186,18 @@ enum ReelGenerator {
                     targetDuration: st.targetDuration, topic: st.topic.isEmpty ? nil : st.topic,
                     avoid: used, reelNumber: (record.drafts?.count ?? 0) + n + 1,
                     otherTitles: (record.drafts ?? []).map(\.title) + out.map(\.title),
-                    provider: st.provider, apiKey: key)
+                    single: st.singleClip, provider: st.provider, apiKey: key)
                 let ranges = fit(plan.ranges, to: st.targetDuration, sentences: sentences)
                 used.formUnion(ranges.flatMap { Array($0) })
                 let title = plan.title.isEmpty ? "Reel \((record.drafts?.count ?? 0) + n + 1)" : plan.title
                 out.append(draft(title: title, clips: clips(for: ranges, in: sentences, source: source), source: source, settings: st))
+            } else if st.singleClip {
+                let segs = VideoExportService.shared.autoSegmentsFromWords(words, sourceVideoPath: source)
+                guard let r = singleWindow(sentences, segments: segs, target: st.targetDuration, avoid: used) else { break }
+                used.formUnion(r)
+                let cl = clips(for: [r], in: sentences, source: source)
+                out.append(draft(title: cl.first?.words.prefix(6).map(\.word).joined(separator: " ") ?? "Reel",
+                                 clips: cl, source: source, settings: st))
             } else {
                 // No AI: best unused moments by the built-in scorer
                 let svc = VideoExportService.shared

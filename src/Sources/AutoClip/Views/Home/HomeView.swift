@@ -78,7 +78,6 @@ struct HomeView: View {
     var tabBar: some View {
         HStack(spacing: 0) {
             tabButton(title: "Projects", icon: "square.grid.2x2.fill", tab: .projects)
-            tabButton(title: "Auto Clips", icon: "folder.fill", tab: .autoClips)
             tabButton(title: "Auto Reels", icon: "play.rectangle.on.rectangle.fill", tab: .autoReels)
             Spacer()
         }
@@ -422,14 +421,16 @@ struct CombinedProjectsView: View {
                         .padding(.horizontal, 20).padding(.bottom, 24)
                     }
 
-                    // Auto Clips section
-                    sectionHeader(title: "Auto Clips", count: library.projects.count,
-                                  icon: "folder.fill")
+                    // Clip projects made before Auto Clips was folded into Auto Reels (still openable)
                     if library.projects.isEmpty {
-                        Text("No clips yet. Create one in the Auto Clips tab.")
-                            .font(.system(size: 13)).foregroundColor(Color.white.opacity(0.35))
-                            .padding(.horizontal, 20).padding(.bottom, 24)
+                        if reelsStore.reels.isEmpty && reelsStore.activeJobs.isEmpty {
+                            Text("Nothing here yet. Make reels or single clips in the Auto Reels tab.")
+                                .font(.system(size: 13)).foregroundColor(Color.white.opacity(0.35))
+                                .padding(.horizontal, 20).padding(.bottom, 24)
+                        }
                     } else {
+                        sectionHeader(title: "Clip projects", count: library.projects.count,
+                                      icon: "folder.fill")
                         LazyVGrid(
                             columns: [GridItem(.adaptive(minimum: 220, maximum: 320), spacing: 12)],
                             spacing: 12
