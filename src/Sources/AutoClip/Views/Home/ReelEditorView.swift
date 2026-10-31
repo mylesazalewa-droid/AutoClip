@@ -1,6 +1,7 @@
 import SwiftUI
 import AVFoundation
 import AppKit
+import UniformTypeIdentifiers
 
 // MARK: - Review & export hub (one record = one import, several reels)
 
@@ -25,6 +26,7 @@ struct ReelDraftsView: View {
     @State private var genError: String?
     @State private var request = ""
     @State private var topics: [String] = []
+    @State private var showGraphics = false
 
     private var record: AutoReelRecord? { store.reels.first { $0.id == recordID } }
     private var drafts: [ReelDraft] { record?.drafts ?? [] }
@@ -94,6 +96,16 @@ struct ReelDraftsView: View {
                 }
                 .buttonStyle(.plain).foregroundColor(.white).disabled(genStatus != nil)
                 .help("One SEO-rich teaser built as a hook rollercoaster that ends on a cliffhanger")
+                Button { showGraphics = true } label: {
+                    Label("Graphics", systemImage: "photo.on.rectangle.angled").font(.system(size: 12, weight: .semibold))
+                        .padding(.horizontal, 10).padding(.vertical, 6)
+                        .background(Color.white.opacity(0.08)).cornerRadius(7)
+                }
+                .buttonStyle(.plain).foregroundColor(.white)
+                .help("Quote cards, a carousel and a thumbnail for the full message")
+            }
+            .sheet(isPresented: $showGraphics) {
+                if let rec = record { SocialGraphicsView(record: rec, gold: gold) }
             }
             // Chat: ask for a short about something the talk covers
             HStack(spacing: 8) {
@@ -423,6 +435,8 @@ struct ReelEditorView: View {
     @State private var editingSentence: UUID?
     @State private var editText = ""
     @State private var lastWordClick: (sentence: UUID, index: Int)?
+    @State private var following = false
+    @State private var followTask: Task<Void, Never>?
 
     /// The sentence being spoken at the playhead, and which of its words.
     private var playing: (id: UUID, word: Int)? {
@@ -476,6 +490,7 @@ struct ReelEditorView: View {
                         VStack(alignment: .leading, spacing: 14) {
                             sizeSection
                             captionsSection
+                            audioSection
                             Text("CLIPS — click words to cut them (shift-click a range) · ▶ plays · ✏️ fixes caption text")
                                 .font(.system(size: 10, weight: .semibold)).foregroundColor(Color.white.opacity(0.35)).tracking(1)
                             ForEach(Array(draft.pieces.enumerated()), id: \.element.id) { i, _ in pieceCard(i) }
@@ -543,8 +558,21 @@ struct ReelEditorView: View {
                 }), in: 0...max(total, 0.1)).tint(gold)
                 Text(formatDur(time)).font(.system(size: 10, design: .monospaced)).foregroundColor(Color.white.opacity(0.5))
             }
-            Text("Quick preview — the export adds face tracking and full quality.")
+            Text(following ? "Finding the speaker…" : "The preview follows the speaker like the export does.")
                 .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.35)).multilineTextAlignment(.center)
+        }
+    }
+
+    /// Re-crops the preview to follow whoever is talking (same tracking as the export, cached)
+    private func followSpeaker(_ item: AVPlayerItem) {
+        followTask?.cancel()
+        following = true
+        let d = draft
+        followTask = Task {
+            let vc = await Task.detached(priority: .userInitiated) { await d.followComposition(for: item) }.value
+            guard !Task.isCancelled else { return }
+            if player.currentItem === item, let vc { item.videoComposition = vc }
+            following = false
         }
     }
 
@@ -561,6 +589,7 @@ struct ReelEditorView: View {
         guard let (item, words) = await draft.previewItem() else { return }
         if let o = observer { player.removeTimeObserver(o); observer = nil }
         player.replaceCurrentItem(with: item)
+        followSpeaker(item)
         reelWords = words
         timeline = draft.sentenceTimeline
         if let track = try? await item.asset.loadTracks(withMediaType: .video).first,
@@ -586,6 +615,69 @@ struct ReelEditorView: View {
     }
 
     // MARK: Captions
+
+    // MARK: Audio
+
+    private var audio: Binding<AudioSettings> {
+        Binding(get: { draft.audioSettings }, set: { draft.audio = $0; $0.save() })
+    }
+
+    private var audioSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("AUDIO").font(.system(size: 10, weight: .semibold)).foregroundColor(Color.white.opacity(0.35)).tracking(1)
+            Toggle(isOn: audio.cleanVoice) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Clean up voice").font(.system(size: 12)).foregroundColor(.white)
+                    Text("Removes room echo, hum and background noise")
+                        .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.4))
+                }
+            }.toggleStyle(.switch).tint(gold)
+            if audio.wrappedValue.cleanVoice {
+                HStack {
+                    Text("Strength").font(.system(size: 11)).foregroundColor(Color.white.opacity(0.6))
+                    Slider(value: audio.strength, in: 0.3...1).tint(gold)
+                }
+            }
+            Toggle(isOn: audio.levelVoice) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Even out volume").font(.system(size: 12)).foregroundColor(.white)
+                    Text("Evens out loud and quiet moments and sets a steady volume")
+                        .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.4))
+                }
+            }.toggleStyle(.switch).tint(gold)
+            HStack {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Background music").font(.system(size: 12)).foregroundColor(.white)
+                    Text(audio.wrappedValue.musicName ?? "None — dips under speech when added")
+                        .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.4)).lineLimit(1)
+                }
+                Spacer()
+                if audio.wrappedValue.musicPath != nil {
+                    Button { audio.wrappedValue.musicPath = nil } label: { Image(systemName: "xmark.circle") }
+                        .buttonStyle(.plain).foregroundColor(Color.white.opacity(0.5)).help("Remove music")
+                }
+                Button("Choose…") { chooseMusic() }.controlSize(.small)
+            }
+            if audio.wrappedValue.musicPath != nil {
+                HStack {
+                    Text("Music volume").font(.system(size: 11)).foregroundColor(Color.white.opacity(0.6))
+                    Slider(value: audio.musicVolume, in: 0.03...0.35).tint(gold)
+                }
+            }
+            Text("Audio changes are applied when you export.")
+                .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.3))
+        }
+        .padding(12).background(Color.white.opacity(0.04)).cornerRadius(10)
+    }
+
+    private func chooseMusic() {
+        let panel = NSOpenPanel()
+        panel.title = "Choose background music"
+        panel.allowedContentTypes = [.audio, .mpeg4Audio, .mp3, .wav, .aiff]
+        panel.canChooseDirectories = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        audio.wrappedValue.musicPath = url.path
+    }
 
     private var captionsSection: some View {
         VStack(alignment: .leading, spacing: 10) {

@@ -53,6 +53,9 @@ struct ReelDraft: Identifiable, Codable, Equatable {
         }
     }
     var seo: SEO?
+    /// Voice clean-up / music for this reel (nil = the user's default settings)
+    var audio: AudioSettings?
+    var audioSettings: AudioSettings { audio ?? AudioSettings.load() ?? AudioSettings() }
 
     // MARK: Building
 
@@ -247,6 +250,7 @@ struct ReelDraft: Identifiable, Codable, Equatable {
         o.crossDissolve = crossDissolve
         o.emojiOverlays = emojiOverlays
         o.topicKeywords = topicKeywords
+        o.audio = audioSettings
         return o
     }
 
@@ -263,6 +267,13 @@ struct ReelDraft: Identifiable, Codable, Equatable {
             try? seo.asText.write(to: url.deletingPathExtension().appendingPathExtension("txt"),
                                   atomically: true, encoding: .utf8)
         }
+    }
+
+    /// Speaker-following crop for an item made by `previewItem()` — the same tracking the export
+    /// uses (and caches), so the preview frames the reel the way it will be rendered.
+    func followComposition(for item: AVPlayerItem) async -> AVVideoComposition? {
+        guard let format = VideoExportService.ExportFormat(rawValue: formatRaw) else { return nil }
+        return await VideoExportService.shared.followComposition(for: renderClips, asset: item.asset, format: format)
     }
 
     /// Instant, un-rendered preview of the current edit (no captions burned in).

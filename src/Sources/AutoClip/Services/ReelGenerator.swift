@@ -226,6 +226,16 @@ enum ReelGenerator {
             sentences: c.sentences.map { ($0.start, $0.end, $0.text) }, provider: c.st.provider, apiKey: c.key)
     }
 
+    /// Quote cards, carousel and thumbnail text for the talk, plus what's needed to draw them.
+    static func graphics(for record: AutoReelRecord, progress: @escaping (String) -> Void)
+        async throws -> (plan: LLMClipService.GraphicsPlan, sentences: [ReelDraft.Sentence], source: String) {
+        let c = try await aiContext(record, progress: progress)
+        progress("AI is picking quotes…")
+        let plan = try await LLMClipService.shared.composeGraphics(
+            sentences: c.sentences.map { ($0.start, $0.end, $0.text) }, provider: c.st.provider, apiKey: c.key)
+        return (plan, c.sentences, c.source)
+    }
+
     private static func err(_ m: String) -> NSError {
         NSError(domain: "AutoClip", code: 7, userInfo: [NSLocalizedDescriptionKey: m])
     }

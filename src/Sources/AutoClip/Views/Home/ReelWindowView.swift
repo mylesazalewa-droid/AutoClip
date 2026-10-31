@@ -59,6 +59,8 @@ struct DraftPreviewPane: View {
     @State private var isPlaying = false
     @State private var observer: Any?
     @State private var sourceAspect: CGFloat = 16.0 / 9.0
+    @State private var following = false
+    @State private var followTask: Task<Void, Never>?
 
     private var aspect: CGFloat {
         switch VideoExportService.ExportFormat(rawValue: draft.formatRaw) ?? .vertical9x16 {
@@ -98,6 +100,10 @@ struct DraftPreviewPane: View {
                 Text("\(fmt(time)) / \(fmt(total))").font(.system(size: 11, design: .monospaced)).foregroundColor(Color.white.opacity(0.5))
             }
             .frame(maxWidth: 520)
+            if following {
+                Label("Finding the speaker…", systemImage: "person.crop.rectangle")
+                    .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.4))
+            }
         }
         .padding(20)
         .task { await load() }
@@ -117,6 +123,7 @@ struct DraftPreviewPane: View {
         guard let (item, ws) = await draft.previewItem() else { return }
         if let o = observer { player.removeTimeObserver(o); observer = nil }
         player.replaceCurrentItem(with: item)
+        followSpeaker(item)
         words = ws
         total = max(0.1, draft.duration)
         time = 0; isPlaying = false
@@ -128,6 +135,19 @@ struct DraftPreviewPane: View {
         observer = player.addPeriodicTimeObserver(forInterval: CMTime(value: 1, timescale: 20), queue: .main) { t in
             time = CMTimeGetSeconds(t)
             if time >= total - 0.05 { isPlaying = false }
+        }
+    }
+
+    /// Re-crops the preview to follow whoever is talking (same tracking as the export)
+    private func followSpeaker(_ item: AVPlayerItem) {
+        followTask?.cancel()
+        following = true
+        let d = draft
+        followTask = Task {
+            let vc = await Task.detached(priority: .userInitiated) { await d.followComposition(for: item) }.value
+            guard !Task.isCancelled else { return }
+            if player.currentItem === item, let vc { item.videoComposition = vc }
+            following = false
         }
     }
 

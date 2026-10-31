@@ -57,6 +57,8 @@ class VideoExportService {
         var emojiOverlays: Bool = false
         /// When set, overrides captionStyle / captionBg* with the user's custom look
         var captionLook: CaptionLook? = nil
+        /// Voice clean-up, levelling and background music (reels)
+        var audio: AudioSettings? = nil
     }
 
     enum ExportError: LocalizedError {
@@ -111,10 +113,11 @@ class VideoExportService {
         let needsReencode = options.format != .original || (options.burnCaptions && !clip.words.isEmpty)
 
         // Detect face positions only when we're cropping to a different aspect ratio
-        var faceSamples: [(time: Double, centerX: Double)] = []
+        var faceSamples: [FaceSample] = []
         let needsFaceTracking = options.format == .vertical9x16 || options.format == .portrait4x5 || options.format == .square1x1
         if needsFaceTracking && videoSize.width > videoSize.height {
-            faceSamples = await detectFaces(in: asset, clipRange: clipTimeRange, videoSize: videoSize)
+            faceSamples = await detectFaces(in: asset, clipRange: clipTimeRange, videoSize: videoSize,
+                                            cropFraction: cropFraction(videoSize: videoSize, renderSize: renderSize))
         }
 
         // Preserve preferred transform on the composition track so orientation is correct in passthrough
@@ -265,10 +268,19 @@ class VideoExportService {
             .concatenating(CGAffineTransform(scaleX: scale, y: scale))
     }
 
-    /// Glide the crop between face samples with transform ramps (instead of jumping every sample).
+    /// One framing decision: where the crop is centred at `time`. `cut` = jump here instantly
+    /// (switching to another speaker) instead of gliding from the previous sample.
+    struct FaceSample: Equatable {
+        var time: Double
+        var centerX: Double
+        var cut = false
+    }
+
+    /// Glide the crop between face samples with transform ramps (instead of jumping every sample),
+    /// and cut instantly where the speaker changes.
     /// All times are integer CMTimes clamped to `end`, so ramps are contiguous and never overlap
     /// or overrun the instruction's time range (which AVFoundation rejects).
-    private func applyFaceTrack(_ samples: [(time: Double, centerX: Double)],
+    private func applyFaceTrack(_ samples: [FaceSample],
                                 to li: AVMutableVideoCompositionLayerInstruction,
                                 base: CMTime, end: CMTime, videoSize: CGSize, renderSize: CGSize,
                                 preferredTransform: CGAffineTransform) {
@@ -280,7 +292,7 @@ class VideoExportService {
             guard CMTimeCompare(tA, end) < 0 else { break }
             let a = cropTransform(centerX: samples[i].centerX, videoSize: videoSize,
                                   renderSize: renderSize, preferredTransform: preferredTransform)
-            if i + 1 < samples.count {
+            if i + 1 < samples.count, !samples[i + 1].cut {
                 let tB = at(samples[i + 1].time)
                 if CMTimeCompare(tB, tA) > 0 {
                     let b = cropTransform(centerX: samples[i + 1].centerX, videoSize: videoSize,
@@ -293,70 +305,189 @@ class VideoExportService {
         }
     }
 
-    // MARK: - Face Detection
+    // MARK: - Face / speaker tracking
 
-    private func detectFaces(in asset: AVAsset, clipRange: CMTimeRange, videoSize: CGSize) async -> [(time: Double, centerX: Double)] {
-        let generator = AVAssetImageGenerator(asset: asset)
-        generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = CGSize(width: 640, height: 360)
-        generator.requestedTimeToleranceBefore = CMTime(seconds: 0.25, preferredTimescale: 600)
-        generator.requestedTimeToleranceAfter = CMTime(seconds: 0.25, preferredTimescale: 600)
+    /// Detection results are cached per source range, so the preview's tracking is reused on export.
+    private static var faceCache: [String: [FaceSample]] = [:]
+    private static let faceCacheLock = NSLock()
+    private static func cachedFaces(_ key: String) -> [FaceSample]? {
+        faceCacheLock.withLock { faceCache[key] }
+    }
+    private static func cacheFaces(_ v: [FaceSample], _ key: String) {
+        faceCacheLock.withLock { faceCache[key] = v }
+    }
 
+    /// Where to point the crop over `clipRange`, as reel-relative samples.
+    /// One person: follow them smoothly. Several people: follow whoever is talking (mouth movement),
+    /// cutting to the new speaker once they've clearly taken over; when everyone fits in the frame,
+    /// frame them together.
+    func detectFaces(in asset: AVAsset, clipRange: CMTimeRange, videoSize: CGSize,
+                     cropFraction: Double = 0.32) async -> [FaceSample] {
         let startSec = CMTimeGetSeconds(clipRange.start)
         let endSec = startSec + CMTimeGetSeconds(clipRange.duration)
-        let interval = 0.5
+        let path = (asset as? AVURLAsset)?.url.path ?? "\(ObjectIdentifier(asset))"
+        let key = String(format: "%@|%.2f|%.2f|%.3f", path, startSec, endSec, cropFraction)
+        if let cached = Self.cachedFaces(key) { return cached }
 
-        var raw: [(time: Double, centerX: Double?)] = []
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+        generator.maximumSize = CGSize(width: 960, height: 540)
+        generator.requestedTimeToleranceBefore = CMTime(seconds: 0.1, preferredTimescale: 600)
+        generator.requestedTimeToleranceAfter = CMTime(seconds: 0.1, preferredTimescale: 600)
+
+        let interval = 1.0 / 3.0
+        var frames: [(time: Double, faces: [DetectedFace])] = []
         var t = startSec
         while t <= endSec {
-            let cm = CMTime(seconds: t, preferredTimescale: 600)
-            var cx: Double? = nil
-            if let img = try? generator.copyCGImage(at: cm, actualTime: nil) {
-                cx = await detectFaceCenterX(in: img, sourceWidth: videoSize.width)
+            var faces: [DetectedFace] = []
+            if let img = try? generator.copyCGImage(at: CMTime(seconds: t, preferredTimescale: 600), actualTime: nil) {
+                faces = detectFacesWithMouths(in: img)
             }
-            raw.append((time: t - startSec, centerX: cx))
+            frames.append((t - startSec, faces))
             t += interval
         }
 
-        // Missed detections hold the last known position instead of snapping to center
-        guard let firstHit = raw.first(where: { $0.centerX != nil })?.centerX else {
-            return raw.map { (time: $0.time, centerX: Double(videoSize.width / 2)) }
-        }
-        var last = firstHit
-        let filled = raw.map { r -> (time: Double, centerX: Double) in
-            if let cx = r.centerX { last = cx }
-            return (time: r.time, centerX: last)
-        }
-        return smoothSamples(filled, frameWidth: Double(videoSize.width))
+        let result = Self.planFraming(frames, frameWidth: Double(videoSize.width), cropFraction: cropFraction)
+        Self.cacheFaces(result, key)
+        return result
     }
 
-    private func detectFaceCenterX(in image: CGImage, sourceWidth: CGFloat) async -> Double? {
-        await withCheckedContinuation { cont in
-            let request = VNDetectFaceRectanglesRequest { req, _ in
-                // Follow the largest (closest) face, not whichever Vision lists first
-                guard let obs = req.results as? [VNFaceObservation],
-                      let face = obs.max(by: { $0.boundingBox.width * $0.boundingBox.height
-                                             < $1.boundingBox.width * $1.boundingBox.height }) else {
-                    cont.resume(returning: nil)
-                    return
-                }
-                // boundingBox is normalized with origin at bottom-left; midX gives horizontal center
-                let cx = Double(face.boundingBox.midX) * Double(sourceWidth)
-                cont.resume(returning: cx)
+    /// A face in one frame: normalised horizontal centre, size, and how open the mouth is.
+    struct DetectedFace {
+        var x: Double
+        var height: Double
+        var mouth: Double?
+    }
+
+    private func detectFacesWithMouths(in image: CGImage) -> [DetectedFace] {
+        let request = VNDetectFaceLandmarksRequest()
+        let handler = VNImageRequestHandler(cgImage: image, options: [:])
+        try? handler.perform([request])
+        return (request.results ?? []).compactMap { f in
+            let box = f.boundingBox
+            // Tiny faces are the back of the room, a screen, or a false hit
+            guard box.height > 0.07 else { return nil }
+            var mouth: Double? = nil
+            if let lips = f.landmarks?.innerLips?.normalizedPoints, lips.count > 2 {
+                let ys = lips.map { Double($0.y) }
+                mouth = (ys.max()! - ys.min()!)          // relative to face height
             }
-            let handler = VNImageRequestHandler(cgImage: image, options: [:])
-            try? handler.perform([request])
+            return DetectedFace(x: Double(box.midX), height: Double(box.height), mouth: mouth)
         }
     }
 
-    private func smoothSamples(_ samples: [(time: Double, centerX: Double)], frameWidth: Double) -> [(time: Double, centerX: Double)] {
+    /// Turns per-frame faces into framing samples (pure function, so it can be unit tested).
+    static func planFraming(_ frames: [(time: Double, faces: [DetectedFace])],
+                            frameWidth: Double, cropFraction: Double) -> [FaceSample] {
+        guard !frames.isEmpty else { return [] }
+
+        // 1. Link faces across frames into people, by horizontal position
+        struct Person { var x: Double; var seen = 0; var xs: [Double?]; var mouths: [Double?] }
+        var people: [Person] = []
+        for (i, fr) in frames.enumerated() {
+            var used = Set<Int>()
+            for f in fr.faces.sorted(by: { $0.height > $1.height }) {
+                let match = people.indices
+                    .filter { !used.contains($0) && abs(people[$0].x - f.x) < 0.12 }
+                    .min(by: { abs(people[$0].x - f.x) < abs(people[$1].x - f.x) })
+                let p: Int
+                if let match { p = match } else {
+                    people.append(Person(x: f.x, xs: Array(repeating: nil, count: frames.count),
+                                         mouths: Array(repeating: nil, count: frames.count)))
+                    p = people.count - 1
+                }
+                used.insert(p)
+                people[p].x = people[p].x * 0.7 + f.x * 0.3
+                people[p].seen += 1
+                people[p].xs[i] = f.x
+                people[p].mouths[i] = f.mouth
+            }
+        }
+        // Only people on screen for a good part of the clip count
+        let minSeen = max(2, frames.count / 5)
+        let cast = people.filter { $0.seen >= minSeen }.sorted { $0.seen > $1.seen }
+        guard !cast.isEmpty else {
+            return frames.map { FaceSample(time: $0.time, centerX: frameWidth / 2) }
+        }
+
+        // Positions with gaps held at the last known place
+        func filled(_ xs: [Double?], fallback: Double) -> [Double] {
+            var last = xs.compactMap { $0 }.first ?? fallback
+            return xs.map { if let v = $0 { last = v }; return last }
+        }
+        let tracks = cast.map { filled($0.xs, fallback: $0.x) }
+
+        // 2. Who is talking: mouth movement (std-dev of openness) over about one second
+        let n = frames.count
+        func talk(_ p: Int, _ i: Int) -> Double {
+            let win = cast[p].mouths[max(0, i - 3)...min(n - 1, i + 3)].compactMap { $0 }
+            guard win.count >= 3 else { return 0 }
+            let mean = win.reduce(0, +) / Double(win.count)
+            return sqrt(win.map { ($0 - mean) * ($0 - mean) }.reduce(0, +) / Double(win.count))
+        }
+
+        // 3. Choose who to frame in each frame, with hysteresis so the camera doesn't ping-pong
+        var target: [Int] = Array(repeating: 0, count: n)       // index into cast, or -1 = group shot
+        var current = 0
+        if cast.count > 1 {
+            current = (0..<cast.count).max(by: { talk($0, 0) < talk($1, 0) }) ?? 0
+        }
+        var challenger = -1, streak = 0, held = 0
+        let holdMin = 6        // ≥ 2s on a shot before cutting away
+        let takeOver = 3       // someone else must clearly lead for ~1s
+        for i in 0..<n {
+            held += 1
+            if cast.count > 1 {
+                let scores = (0..<cast.count).map { talk($0, i) }
+                let best = scores.indices.max(by: { scores[$0] < scores[$1] })!
+                if best != current && scores[best] > scores[current] * 1.6 + 0.004 {
+                    streak = best == challenger ? streak + 1 : 1
+                    challenger = best
+                    if streak >= takeOver && held >= holdMin {
+                        // Cut back to when they started leading (talk scores lag ~1s)
+                        let from = max(0, i - streak - 1)
+                        for k in from..<i { target[k] = best }
+                        current = best; held = streak + 1; streak = 0; challenger = -1
+                    }
+                } else { streak = 0; challenger = -1 }
+            }
+            target[i] = current
+        }
+
+        // 4. Group shot when everyone on screen fits inside the crop
+        var out: [FaceSample] = []
+        var prevTarget = -2
+        for i in 0..<n {
+            let visible = (0..<cast.count).filter { cast[$0].xs[i] != nil }.map { tracks[$0][i] }
+            var x = tracks[target[i]][i]
+            var tgt = target[i]
+            if visible.count > 1, let lo = visible.min(), let hi = visible.max(), hi - lo < cropFraction * 0.8 {
+                x = (lo + hi) / 2; tgt = -1
+            }
+            out.append(FaceSample(time: frames[i].time, centerX: x * frameWidth, cut: i > 0 && tgt != prevTarget && tgt >= 0 && prevTarget >= 0))
+            prevTarget = tgt
+        }
+
+        // 5. Smooth each shot separately so cuts stay crisp
+        var smoothed: [FaceSample] = []
+        var segStart = 0
+        for i in 1...n where i == n || out[i].cut {
+            var seg = smoothSamples(Array(out[segStart..<i]), frameWidth: frameWidth)
+            if segStart > 0 { seg[0].cut = true }
+            smoothed += seg
+            segStart = i
+        }
+        return smoothed
+    }
+
+    private static func smoothSamples(_ samples: [FaceSample], frameWidth: Double) -> [FaceSample] {
         guard samples.count > 2 else { return samples }
 
-        // Pass 1: median (window 5 ≈ 2.5s) removes one-off misdetections without lagging
+        // Pass 1: median (window 7 ≈ 2.3s) removes one-off misdetections without lagging
         var pass1 = samples
         for i in samples.indices {
-            let win = samples[max(0, i - 2)...min(samples.count - 1, i + 2)].map(\.centerX).sorted()
-            pass1[i] = (time: samples[i].time, centerX: win[win.count / 2])
+            let win = samples[max(0, i - 3)...min(samples.count - 1, i + 3)].map(\.centerX).sorted()
+            pass1[i].centerX = win[win.count / 2]
         }
 
         // Pass 2: dead zone — hold the frame steady unless the speaker moves > 6% of frame width
@@ -365,17 +496,81 @@ class VideoExportService {
         var committed = pass1[0].centerX
         for i in pass1.indices {
             if abs(pass1[i].centerX - committed) > threshold { committed = pass1[i].centerX }
-            held[i] = (time: pass1[i].time, centerX: committed)
+            held[i].centerX = committed
         }
 
         // Pass 3: ease into each new position over ~1.5s; ramps interpolate between samples
         var out = held
-        let alpha = 0.3
+        let alpha = 0.22
         for i in 1..<held.count {
-            out[i] = (time: held[i].time,
-                      centerX: out[i - 1].centerX * (1 - alpha) + held[i].centerX * alpha)
+            out[i].centerX = out[i - 1].centerX * (1 - alpha) + held[i].centerX * alpha
         }
         return out
+    }
+
+    /// Fraction of the source width the crop window covers for this output shape.
+    func cropFraction(videoSize: CGSize, renderSize: CGSize) -> Double {
+        let aspect = renderSize.width / renderSize.height
+        let cropH = min(videoSize.height, videoSize.width / aspect)
+        return Double(cropH * aspect / videoSize.width)
+    }
+
+    // MARK: - Speaker-following preview
+
+    /// A light video composition that crops the stitched preview like the export does,
+    /// following the speaker. `clips` must be in the order they were inserted into `asset`.
+    func followComposition(for clips: [Clip], asset: AVAsset, format: ExportFormat,
+                           previewHeight: CGFloat = 960) async -> AVMutableVideoComposition? {
+        guard format != .original, format != .horizontal16x9,
+              let compTrack = try? await asset.loadTracks(withMediaType: .video).first else { return nil }
+        var assets: [String: AVURLAsset] = [:]
+        var instructions: [AVMutableVideoCompositionInstruction] = []
+        var insertAt = CMTime.zero
+        var renderSize = CGSize.zero
+        for clip in clips {
+            let a = assets[clip.sourceVideoPath] ?? AVURLAsset(url: URL(fileURLWithPath: clip.sourceVideoPath))
+            assets[clip.sourceVideoPath] = a
+            guard let track = try? await a.loadTracks(withMediaType: .video).first,
+                  let nat = try? await track.load(.naturalSize),
+                  let pt = try? await track.load(.preferredTransform) else { continue }
+            let vs = visualSize(naturalSize: nat, transform: pt)
+            if renderSize == .zero {
+                let full = computeRenderSize(format: format, videoSize: vs)
+                let s = min(1, previewHeight / full.height)
+                renderSize = CGSize(width: (full.width * s).rounded(), height: (full.height * s).rounded())
+            }
+            let range = CMTimeRange(start: CMTime(seconds: clip.startTime, preferredTimescale: 600),
+                                    end: CMTime(seconds: clip.endTime, preferredTimescale: 600))
+            let seg = CMTimeRange(start: insertAt, duration: range.duration)
+            let li = AVMutableVideoCompositionLayerInstruction(assetTrack: compTrack)
+            if vs.width > vs.height {
+                let faces = await detectFaces(in: a, clipRange: range, videoSize: vs,
+                                              cropFraction: cropFraction(videoSize: vs, renderSize: renderSize))
+                if faces.isEmpty {
+                    li.setTransform(cropTransform(centerX: vs.width / 2, videoSize: vs, renderSize: renderSize, preferredTransform: pt), at: seg.start)
+                } else {
+                    applyFaceTrack(faces, to: li, base: seg.start, end: seg.end, videoSize: vs,
+                                   renderSize: renderSize, preferredTransform: pt)
+                }
+            } else {
+                li.setTransform(cropTransform(centerX: vs.width / 2, videoSize: vs, renderSize: renderSize, preferredTransform: pt), at: seg.start)
+            }
+            let ins = AVMutableVideoCompositionInstruction()
+            ins.timeRange = seg
+            ins.layerInstructions = [li]
+            instructions.append(ins)
+            insertAt = seg.end
+        }
+        guard !instructions.isEmpty, renderSize != .zero else { return nil }
+        // Cover the composition's true end exactly (rounding gaps make AVFoundation reject it)
+        if let dur = try? await asset.load(.duration), let last = instructions.last, dur > last.timeRange.start {
+            last.timeRange = CMTimeRange(start: last.timeRange.start, end: dur)
+        }
+        let vc = AVMutableVideoComposition()
+        vc.renderSize = renderSize
+        vc.frameDuration = CMTime(value: 1, timescale: 30)
+        vc.instructions = instructions
+        return vc
     }
 
     // MARK: - Caption Layer
@@ -1273,7 +1468,8 @@ class VideoExportService {
 
                 if needsFace && clipVideoSize.width > clipVideoSize.height {
                     let srcRange = CMTimeRange(start: CMTime(seconds: clip.startTime, preferredTimescale: 600), duration: segDur)
-                    let faces    = await detectFaces(in: clipAsset, clipRange: srcRange, videoSize: clipVideoSize)
+                    let faces    = await detectFaces(in: clipAsset, clipRange: srcRange, videoSize: clipVideoSize,
+                                                     cropFraction: cropFraction(videoSize: clipVideoSize, renderSize: renderSize))
 
                     if faces.isEmpty {
                         let t = cropTransform(centerX: clipVideoSize.width / 2, videoSize: clipVideoSize, renderSize: renderSize, preferredTransform: clipTransform)
@@ -1349,6 +1545,36 @@ class VideoExportService {
             videoComposition = vc
         }
 
+        // ── Pass 2b: audio clean-up + background music ───────────────────────
+        var audioMix: AVAudioMix? = nil
+        var cleanedFile: URL? = nil
+        defer { if let cleanedFile { try? FileManager.default.removeItem(at: cleanedFile) } }
+        if let audio = options.audio, audio.isActive {
+            if (audio.cleanVoice || audio.levelVoice), let speech = compAudio {
+                await MainActor.run { progress(0.6, "Cleaning up audio...") }
+                do {
+                    let url = try await AudioCleaner.cleanedAudio(of: composition, settings: audio)
+                    cleanedFile = url
+                    let cleaned = AVURLAsset(url: url)
+                    if let src = try await cleaned.loadTracks(withMediaType: .audio).first {
+                        let compDur = try await composition.load(.duration)
+                        let cleanDur = try await cleaned.load(.duration)
+                        speech.removeTimeRange(CMTimeRange(start: .zero, duration: compDur))
+                        try speech.insertTimeRange(CMTimeRange(start: .zero, duration: CMTimeMinimum(compDur, cleanDur)),
+                                                   of: src, at: .zero)
+                    }
+                } catch {
+                    // Keep the original sound rather than failing the whole export
+                    print("Audio clean-up skipped: \(error.localizedDescription)")
+                }
+            }
+            if let music = audio.musicPath, FileManager.default.fileExists(atPath: music) {
+                audioMix = try? await AudioCleaner.addMusic(URL(fileURLWithPath: music), to: composition,
+                                                            duration: reelDuration, words: remappedWords,
+                                                            volume: audio.musicVolume)
+            }
+        }
+
         // ── Pass 3: export ────────────────────────────────────────────────────
         await MainActor.run { progress(0.65, "Exporting reel...") }
 
@@ -1380,6 +1606,7 @@ class VideoExportService {
         session.outputFileType = .mp4
         session.timeRange   = CMTimeRange(start: .zero, duration: compDurationForExport)
         if let vc = videoComposition { session.videoComposition = vc }
+        if let audioMix { session.audioMix = audioMix }
 
         let timer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { _ in
             let p = 0.65 + Double(session.progress) * 0.35

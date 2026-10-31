@@ -341,6 +341,57 @@ Respond with ONLY valid JSON: {"topics":["...","..."]}
         return topics
     }
 
+    // MARK: - Social graphics (quote cards, carousel, thumbnail)
+
+    struct GraphicsPlan: Equatable {
+        struct Quote: Equatable { var text: String; var sentence: Int }
+        var quotes: [Quote]
+        var carouselTitle: String
+        var carouselSlides: [String]
+        var thumbnailHeadline: String
+        var thumbnailSentence: Int
+    }
+
+    func composeGraphics(sentences: [(start: Double, end: Double, text: String)],
+                         provider: AIProvider, apiKey: String) async throws -> GraphicsPlan {
+        let prompt = """
+You are a social media designer for a church. Below is the transcript of a sermon/talk, one numbered sentence per line.
+
+Write content for still graphics:
+1. "quotes": the 5 most shareable, stand-alone quotes. Use the speaker's own words (you may trim filler or join two adjacent sentences, but never invent). Each max 25 words, must make sense with no context. "sentence" = the index of the line it comes from.
+2. "carousel": an Instagram carousel that teaches the heart of the message. "title" = a scroll-stopping hook (max 8 words). "slides" = 4–6 key points, each max 22 words, in the speaker's voice, building to the main truth. Do not include a final call-to-action slide.
+3. "thumbnail": for the full sermon video. "headline" = 2–5 bold words that create curiosity (not the sermon title). "sentence" = index of a line where the speaker is likely most animated/emotional (a strong moment), used for the photo.
+
+Transcript:
+\(numbered(sentences))
+
+Respond with ONLY valid JSON, no markdown:
+{"quotes":[{"text":"...","sentence":12}],"carousel":{"title":"...","slides":["..."]},"thumbnail":{"headline":"...","sentence":40}}
+"""
+        var lastError: Error = llmError("AI returned no graphics")
+        for _ in 1...2 {
+            let text = try await ask(prompt, provider: provider, apiKey: apiKey)
+            guard let a = text.firstIndex(of: "{"), let b = text.lastIndex(of: "}"),
+                  let obj = try? JSONSerialization.jsonObject(with: Data(String(text[a...b]).utf8)) as? [String: Any] else {
+                lastError = llmError("AI graphics weren't valid JSON"); continue
+            }
+            let clamp = { (i: Int?) in max(0, min(sentences.count - 1, i ?? 0)) }
+            let quotes = (obj["quotes"] as? [[String: Any]] ?? []).compactMap { q -> GraphicsPlan.Quote? in
+                guard let t = q["text"] as? String, !t.isEmpty else { return nil }
+                return .init(text: t, sentence: clamp(q["sentence"] as? Int))
+            }
+            let car = obj["carousel"] as? [String: Any] ?? [:]
+            let thumb = obj["thumbnail"] as? [String: Any] ?? [:]
+            guard !quotes.isEmpty else { lastError = llmError("AI found no quotes"); continue }
+            return GraphicsPlan(quotes: quotes,
+                                carouselTitle: car["title"] as? String ?? "",
+                                carouselSlides: car["slides"] as? [String] ?? [],
+                                thumbnailHeadline: thumb["headline"] as? String ?? "",
+                                thumbnailSentence: clamp(thumb["sentence"] as? Int))
+        }
+        throw lastError
+    }
+
     // MARK: - 🔥 Fire Short — a teaser cut built to make people click through
 
     struct FirePlan {
