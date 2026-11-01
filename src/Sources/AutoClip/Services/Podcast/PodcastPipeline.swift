@@ -4,9 +4,11 @@ import AppKit
 /// The steps of making an episode: read it, plan the edit and the camera, write show notes, export.
 extension PodcastStore {
 
-    /// Starts a new episode from one or more recordings (each extra video is another camera angle).
-    func create(title: String, paths: [String]) -> String {
-        let e = PodcastEpisode(title: title, angles: paths.map { .init(path: $0) })
+    /// Starts a new episode from one or more recordings: camera angles sharing one sound, or
+    /// (`oneFilePerPerson`) each person's own recording from Zoom, Riverside or separate mics.
+    func create(title: String, paths: [String], oneFilePerPerson: Bool = false) -> String {
+        var e = PodcastEpisode(title: title, angles: paths.map { .init(path: $0) })
+        if oneFilePerPerson && paths.count > 1 { e.oneFilePerPerson = true }
         save(e)
         analyze(e.id)
         return e.id
@@ -45,30 +47,66 @@ extension PodcastStore {
             for i in e.angles.indices {
                 let asset = AVURLAsset(url: URL(fileURLWithPath: e.angles[i].path))
                 e.angles[i].duration = CMTimeGetSeconds(try await asset.load(.duration))
-                if i == 0 { e.isAudioOnly = try await asset.loadTracks(withMediaType: .video).isEmpty }
+                e.angles[i].hasVideo = try await !asset.loadTracks(withMediaType: .video).isEmpty
             }
-            e.duration = e.angles[0].duration
+            let remote = e.separateTracks
+            e.isAudioOnly = remote ? !e.angles.contains { $0.hasVideo == true } : e.angles[0].hasVideo != true
+            var trackEnergy: [[Float]] = []
             if e.angles.count > 1 {
                 for i in 1..<e.angles.count {
-                    say(id, "Lining up camera \(i + 1) with camera 1 by their sound…")
-                    e.angles[i].offset = try await PodcastAnalysis.offset(of: e.angles[i].path, against: master.path)
+                    say(id, remote ? "Lining up \(i + 1) recordings…" : "Lining up camera \(i + 1) with camera 1 by their sound…")
+                    // Separate mics mostly hear different voices; they usually start together
+                    e.angles[i].offset = try await PodcastAnalysis.offset(of: e.angles[i].path, against: master.path,
+                                                                          minScore: remote ? 0.35 : nil) ?? 0
                 }
             }
+            e.duration = remote ? e.angles.map { $0.offset + $0.duration }.max() ?? 0 : e.angles[0].duration
             save(e)
 
-            let words = try await TranscriptCache.transcript(for: master.path) { msg in
+            if remote {
+                for (k, a) in e.angles.enumerated() {
+                    let label = "Listening to recording \(k + 1) of \(e.angles.count)…"
+                    say(id, label, 0)
+                    trackEnergy.append(try await PodcastVoice.trackEnergy(a.path, offset: a.offset, duration: a.duration) { p in
+                        Task { @MainActor in self.say(id, label, p) }
+                    })
+                }
+                say(id, "Mixing everyone's recordings…", 0)
+                try FileManager.default.createDirectory(at: e.folder, withIntermediateDirectories: true)
+                try await PodcastVoice.mix(paths: e.angles.map(\.path), offsets: e.angles.map(\.offset), energy: trackEnergy,
+                                           duration: e.duration, to: URL(fileURLWithPath: e.soundPath)) { p in
+                    Task { @MainActor in self.say(id, "Mixing everyone's recordings…", p) }
+                }
+            }
+
+            forgetWords(e)
+            let words = try await TranscriptCache.transcript(for: e.soundPath) { msg in
                 Task { @MainActor in self.say(id, msg) }
             }
-            e.cuts = PodcastAnalysis.cuts(words: words, duration: e.duration, settings: e.settings, previous: e.cuts)
+            say(id, "Listening for “um”s and telling voices apart…", 0)
+            let features = try await PodcastVoice.features(e.soundPath, mfcc: true, voicingIn: PodcastVoice.gaps(words),
+                                                           duration: e.duration) { p in
+                Task { @MainActor in self.say(id, "Listening for “um”s and telling voices apart…", p) }
+            }
+            e.heardFillers = PodcastVoice.fillers(words: words, features: features).map { [$0.lowerBound, $0.upperBound] }
+            let voices = PodcastVoice.segments(words: words, features: features)
+            if let data = try? JSONEncoder().encode(voices) { try? data.write(to: e.folder.appendingPathComponent("voices.json")) }
+            e.cuts = PodcastAnalysis.cuts(words: e.withHeardFillers(words), duration: e.duration, settings: e.settings, previous: e.cuts)
             save(e)
 
+            let old = e.people
+            if remote {
+                try await findPeopleByTrack(&e, words: words, energy: trackEnergy)
+            } else if e.isAudioOnly {
+                peopleByVoice(&e, words: words, voices: voices)
+            } else {
+                try await findPeople(&e, words: words, voices: voices)
+            }
+            // Keep names given before
+            for i in e.people.indices where old.indices.contains(i) { e.people[i].name = old[i].name }
             if !e.isAudioOnly {
-                let old = e.people
-                try await findPeople(&e, words: words)
-                // Keep names given before
-                for i in e.people.indices where old.indices.contains(i) { e.people[i].name = old[i].name }
                 e.shots = PodcastAnalysis.planShots(e, words: words)
-                for p in e.people {
+                for p in e.people where p.w > 0 {
                     if let img = await PodcastVideo.faceThumbnail(e, p) {
                         thumbnails["\(id)-\(p.id)"] = img
                         if let tiff = img.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff),
@@ -83,7 +121,57 @@ extension PodcastStore {
         }
     }
 
-    private func findPeople(_ e: inout PodcastEpisode, words: [Word]) async throws {
+    /// One file per person: each recording is one person, and whoever is loudest on their own
+    /// microphone is talking. Their face (if the file has video) is found for framing.
+    private func findPeopleByTrack(_ e: inout PodcastEpisode, words: [Word], energy: [[Float]]) async throws {
+        let id = e.id
+        var people: [PodcastEpisode.Person] = []
+        for (k, a) in e.angles.enumerated() {
+            var box = [0.0, 0, 0, 0]
+            if a.hasVideo == true {
+                let label = "Finding \(k == 0 ? "the first" : "the next") face…"
+                say(id, label, 0)
+                let track = try await PodcastAnalysis.faces(path: a.path, cache: e.folder.appendingPathComponent("faces-\(k).json")) { p in
+                    Task { @MainActor in self.say(id, label, p) }
+                }
+                if let main = PodcastAnalysis.people(in: track, keepAll: true).max(by: { $0.seen < $1.seen }) { box = PodcastAnalysis.medianBox(main.boxes) }
+            }
+            people.append(.init(id: k, name: "Person \(k + 1)", angle: k, x: box[0], y: box[1], w: box[2], h: box[3]))
+        }
+        e.people = people
+        let act = PodcastVoice.trackActivity(energy)
+        let activity = act.enumerated().map { (person: $0.offset, angleOffset: 0.0, step: 0.4, values: $0.element) }
+        e.turns = PodcastAnalysis.turns(activity: activity, duration: e.duration, speech: Self.speechSpans(words))
+    }
+
+    /// Audio only: the people are the voices.
+    private func peopleByVoice(_ e: inout PodcastEpisode, words: [Word], voices: [PodcastVoice.Segment]) {
+        var labels = PodcastVoice.cluster(voices, k: e.speakerCount)
+        // Number the voices in the order they first speak
+        var order: [Int: Int] = [:]
+        for l in labels where order[l] == nil { order[l] = order.count }
+        labels = labels.map { order[$0]! }
+        let n = order.count
+        guard n > 1 else { e.people = []; e.turns = []; return }
+        e.people = (0..<n).map { .init(id: $0, name: "Person \($0 + 1)", angle: 0, x: 0, y: 0, w: 0, h: 0) }
+        let series = PodcastVoice.series(voices, labels: labels, people: n, duration: e.duration)
+        e.turns = PodcastAnalysis.turns(activity: [], duration: e.duration, speech: Self.speechSpans(words),
+                                        voice: Dictionary(uniqueKeysWithValues: series.enumerated().map { ($0.offset, $0.element) }))
+    }
+
+    /// Audio only: tell this many voices apart (nil = work it out), keeping the names given.
+    func setSpeakerCount(_ id: String, _ n: Int?) {
+        guard var e = episode(id), let words = TranscriptCache.load(for: e.soundPath),
+              let data = try? Data(contentsOf: e.folder.appendingPathComponent("voices.json")),
+              let voices = try? JSONDecoder().decode([PodcastVoice.Segment].self, from: data) else { return }
+        e.speakerCount = n
+        let old = e.people
+        peopleByVoice(&e, words: words, voices: voices)
+        for i in e.people.indices where old.indices.contains(i) { e.people[i].name = old[i].name }
+        save(e)
+    }
+
+    private func findPeople(_ e: inout PodcastEpisode, words: [Word], voices: [PodcastVoice.Segment]) async throws {
         let id = e.id
         var tracks: [Int: PodcastAnalysis.FaceTrack] = [:]
         for (k, a) in e.angles.enumerated() {
@@ -134,14 +222,66 @@ extension PodcastStore {
             }
         }
         e.people = people
-        // Speech spans from the transcript (words with gaps under 0.6s joined)
+        let voice = people.count > 1 ? voiceForFaces(voices, people: people.map(\.id), activity: activity, duration: e.duration) : [:]
+        e.turns = PodcastAnalysis.turns(activity: activity, duration: e.duration, speech: Self.speechSpans(words), voice: voice)
+    }
+
+    /// Speech spans from the transcript (words with gaps under 0.6s joined)
+    static func speechSpans(_ words: [Word]) -> [ClosedRange<Double>] {
         var speech: [ClosedRange<Double>] = []
         for w in words.sorted(by: { $0.startTime < $1.startTime }) {
             if let last = speech.last, w.startTime - last.upperBound < 0.6 { speech[speech.count - 1] = last.lowerBound...max(last.upperBound, w.endTime) }
             else { speech.append(w.startTime...max(w.startTime, w.endTime)) }
         }
-        e.turns = PodcastAnalysis.turns(activity: activity, duration: e.duration, speech: speech)
+        return speech
     }
+
+    /// Groups the voices into as many as there are faces and matches each voice to the face whose
+    /// mouth moves most while it speaks. Used only when the match is clear, so it can carry the
+    /// moments a face is turned away or hidden.
+    private func voiceForFaces(_ segs: [PodcastVoice.Segment], people: [Int],
+                               activity: [(person: Int, angleOffset: Double, step: Double, values: [Double])],
+                               duration: Double) -> [Int: [Double]] {
+        guard segs.count >= 20 else { return [:] }
+        let labels = PodcastVoice.cluster(segs, k: people.count)
+        func face(_ p: Int, _ t: Double) -> Double {
+            activity.filter { $0.person == p }.map { a -> Double in
+                let i = Int(((t - a.angleOffset) / a.step).rounded())
+                return a.values.indices.contains(i) ? a.values[i] : 0
+            }.max() ?? 0
+        }
+        // How much each face moves while each voice talks
+        var table: [[Double]] = Array(repeating: Array(repeating: 0, count: people.count), count: people.count)
+        var counts = [Int](repeating: 0, count: people.count)
+        for (seg, l) in zip(segs, labels) where l < people.count {
+            counts[l] += 1
+            for (j, p) in people.enumerated() {
+                var sum = 0.0, n = 0.0
+                var t = seg.start
+                while t < seg.end { sum += face(p, t); n += 1; t += 0.4 }
+                table[l][j] += n > 0 ? sum / n : 0
+            }
+        }
+        var pairs: [(c: Int, p: Int, v: Double)] = []
+        for c in 0..<people.count where counts[c] > 0 {
+            for j in 0..<people.count { pairs.append((c, j, table[c][j] / Double(counts[c]))) }
+        }
+        var voiceOf: [Int: Int] = [:], usedP = Set<Int>()
+        for pr in pairs.sorted(by: { $0.v > $1.v }) where voiceOf[pr.c] == nil && !usedP.contains(pr.p) {
+            voiceOf[pr.c] = pr.p; usedP.insert(pr.p)
+        }
+        // Each voice's face must move clearly more than the others while it speaks
+        for (c, j) in voiceOf {
+            let mine = table[c][j] / Double(max(1, counts[c]))
+            let others = (0..<people.count).filter { $0 != j }.map { table[c][$0] / Double(max(1, counts[c])) }.max() ?? 0
+            if mine < others * 1.2 + 0.02 { return [:] }
+        }
+        let series = PodcastVoice.series(segs, labels: labels, people: people.count, duration: duration)
+        var out: [Int: [Double]] = [:]
+        for (c, j) in voiceOf { out[people[j]] = series[c] }
+        return out
+    }
+
 
     func thumbnail(_ e: PodcastEpisode, _ p: PodcastEpisode.Person) -> NSImage? {
         let key = "\(e.id)-\(p.id)"
@@ -157,15 +297,15 @@ extension PodcastStore {
 
     /// Rebuilds the pause and filler cuts after the edit settings change.
     func refreshCuts(_ id: String) {
-        guard var e = episode(id), let path = e.angles.first?.path, let words = TranscriptCache.load(for: path) else { return }
-        e.cuts = PodcastAnalysis.cuts(words: words, duration: e.duration, settings: e.settings, previous: e.cuts)
+        guard var e = episode(id), let words = TranscriptCache.load(for: e.soundPath) else { return }
+        e.cuts = PodcastAnalysis.cuts(words: e.withHeardFillers(words), duration: e.duration, settings: e.settings, previous: e.cuts)
         save(e)
     }
 
     /// Re-plans the camera. Shots chosen by hand stay unless `resetManual`.
     func replanShots(_ id: String, resetManual: Bool = false) {
-        guard var e = episode(id), let path = e.angles.first?.path else { return }
-        let words = TranscriptCache.load(for: path) ?? []
+        guard var e = episode(id) else { return }
+        let words = TranscriptCache.load(for: e.soundPath) ?? []
         let manual = resetManual ? [] : e.shots.filter(\.manual)
         var shots = PodcastAnalysis.planShots(e, words: words)
         for m in manual { shots = override(shots, with: m) }
@@ -197,7 +337,7 @@ extension PodcastStore {
 
     func writeNotes(_ id: String) {
         run(id) { [self] in
-            guard let e = episode(id), let path = e.angles.first?.path, let words = TranscriptCache.load(for: path) else { return }
+            guard let e = episode(id), let words = TranscriptCache.load(for: e.soundPath) else { return }
             say(id, "Writing show notes and chapters…")
             let provider = LLMClipService.AIProvider(rawValue: UserDefaults.standard.string(forKey: "ar_provider") ?? "") ?? .google
             guard let key = await LLMClipService.shared.loadAPIKey(for: provider), !key.isEmpty else {
@@ -231,7 +371,7 @@ extension PodcastStore {
                 Task { @MainActor in self.say(id, msg, p) }
             }
             var done: [String: String] = [:]
-            let words = TranscriptCache.load(for: e.angles.first?.path ?? "") ?? []
+            let words = TranscriptCache.load(for: e.soundPath) ?? []
 
             if !e.isAudioOnly {
                 for f in PodcastVideo.formats where e.settings.formats.contains(f) {

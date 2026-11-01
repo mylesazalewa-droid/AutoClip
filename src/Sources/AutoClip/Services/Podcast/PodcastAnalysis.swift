@@ -67,7 +67,8 @@ enum PodcastAnalysis {
 
     /// Links faces across frames into people (by horizontal position) and keeps the ones on screen
     /// for a good share of the recording.
-    static func people(in track: FaceTrack) -> [Cluster] {
+    /// `keepAll` keeps faces seen only briefly (one person's own camera that is sometimes empty).
+    static func people(in track: FaceTrack, keepAll: Bool = false) -> [Cluster] {
         let n = track.frames.count
         var clusters: [Cluster] = []
         for (i, faces) in track.frames.enumerated() {
@@ -87,7 +88,7 @@ enum PodcastAnalysis {
                 if clusters[k].boxes.count < 4000 { clusters[k].boxes.append([Double(f.x), Double(f.y), Double(f.w), Double(f.h)]) }
             }
         }
-        return clusters.filter { $0.seen >= max(3, n / 7) }.sorted { $0.cx < $1.cx }
+        return clusters.filter { $0.seen >= (keepAll ? 3 : max(3, n / 7)) }.sorted { $0.cx < $1.cx }
     }
 
     static func medianBox(_ boxes: [[Double]]) -> [Double] {
@@ -114,19 +115,24 @@ enum PodcastAnalysis {
 
     /// Who is talking when, on the first file's clock. `speech` = spans where someone is speaking
     /// (from the transcript), so silence never triggers a switch.
+    /// `voice` = person → 1 where their voice was recognised (0.4 s steps, first file's clock),
+    /// added to what their mouth shows.
     static func turns(activity: [(person: Int, angleOffset: Double, step: Double, values: [Double])],
-                      duration: Double, speech: [ClosedRange<Double>]) -> [PodcastEpisode.Turn] {
-        let ids = Array(Set(activity.map(\.person))).sorted()
+                      duration: Double, speech: [ClosedRange<Double>], voice: [Int: [Double]] = [:]) -> [PodcastEpisode.Turn] {
+        let ids = Array(Set(activity.map(\.person)).union(voice.keys)).sorted()
         guard ids.count > 1 else {
             return ids.first.map { [PodcastEpisode.Turn(start: 0, end: duration, person: $0)] } ?? []
         }
         let step = 0.4
         let n = Int(duration / step) + 1
         func score(_ p: Int, _ t: Double) -> Double {
-            activity.filter { $0.person == p }.map { a -> Double in
+            let face = activity.filter { $0.person == p }.map { a -> Double in
                 let i = Int(((t - a.angleOffset) / a.step).rounded())
                 return a.values.indices.contains(i) ? a.values[i] : 0
             }.max() ?? 0
+            let vi = Int(t / step)
+            let v = voice[p].map { $0.indices.contains(vi) ? $0[vi] : 0 } ?? 0
+            return face + 0.8 * v
         }
         var speechIdx = 0
         func speaking(_ t: Double) -> Bool {
@@ -215,8 +221,10 @@ enum PodcastAnalysis {
 
     /// Where `other` starts on `master`'s clock, found by matching their loudness envelopes:
     /// coarse (50 ms) over ±5 minutes, then fine (10 ms) around the best match.
-    static func offset(of other: String, against master: String) async throws -> Double {
-        func best(_ a: [Float], _ b: [Float], lags: ClosedRange<Int>) -> Int {
+    /// With `minScore`, nil when the two don't clearly share a sound (separate microphones that
+    /// each hear mostly one person).
+    static func offset(of other: String, against master: String, minScore: Float? = nil) async throws -> Double? {
+        func best(_ a: [Float], _ b: [Float], lags: ClosedRange<Int>) -> (lag: Int, score: Float) {
             func norm(_ x: [Float]) -> [Float] {
                 let c = Float(max(1, x.count))
                 let m: Float = x.reduce(0, +) / c
@@ -226,23 +234,26 @@ enum PodcastAnalysis {
                 return x.map { ($0 - m) / d }
             }
             let a = norm(a), b = norm(b)
+            // A lag that overlaps only a sliver of the recordings can match by chance
+            let minOverlap = max(200, min(a.count, b.count) / 3)
             var bestLag = 0, bestScore = -Float.infinity
             for lag in lags {
                 var s: Float = 0, k = 0
                 // b[i] lines up with a[i + lag]
                 var i = max(0, -lag)
                 while i < b.count && i + lag < a.count { s += a[i + lag] * b[i]; k += 1; i += 1 }
-                if k > 200, s / Float(k) > bestScore { bestScore = s / Float(k); bestLag = lag }
+                if k > minOverlap, s / Float(k) > bestScore { bestScore = s / Float(k); bestLag = lag }
             }
-            return bestLag
+            return (bestLag, bestScore)
         }
         let a = try await envelope(master, hop: 0.05, limit: 900)
         let b = try await envelope(other, hop: 0.05, limit: 600)
-        guard !a.isEmpty, !b.isEmpty else { return 0 }
-        let coarse = best(a, b, lags: -6000...6000)
+        guard !a.isEmpty, !b.isEmpty else { return minScore == nil ? 0 : nil }
+        let (coarse, score) = best(a, b, lags: -6000...6000)
+        if let minScore, score < minScore { return nil }
         let fa = try await envelope(master, hop: 0.01, limit: 900)
         let fb = try await envelope(other, hop: 0.01, limit: 600)
-        let fine = best(fa, fb, lags: (coarse * 5 - 10)...(coarse * 5 + 10))
+        let fine = best(fa, fb, lags: (coarse * 5 - 10)...(coarse * 5 + 10)).lag
         return Double(fine) * 0.01
     }
 
@@ -323,11 +334,16 @@ enum PodcastAnalysis {
             return max(0, s - 0.12)
         }
 
-        // Which angle shows everyone (the wide), and each person's best angle for a close-up
-        let wideAngle = (0..<e.angles.count).max { a, b in
-            e.people.filter { $0.angle == a }.count < e.people.filter { $0.angle == b }.count
-        } ?? 0
+        // Which angle shows everyone (the wide), and each person's best angle for a close-up.
+        // One file per person: the wide is everyone side by side.
+        let videoAngles = e.angles.indices.filter { e.angles[$0].hasVideo ?? true }
+        let wideAngle = e.separateTracks
+            ? (videoAngles.count > 1 ? PodcastEpisode.grid : videoAngles.first ?? 0)
+            : (0..<e.angles.count).max { a, b in
+                e.people.filter { $0.angle == a }.count < e.people.filter { $0.angle == b }.count
+            } ?? 0
         func closeAngle(_ p: PodcastEpisode.Person) -> (angle: Int, real: Bool) {
+            if e.separateTracks { return (p.angle, videoAngles.contains(p.angle)) }
             if let other = p.otherAngles.keys.sorted().first { return (other, true) }
             if p.angle != wideAngle || e.people.filter({ $0.angle == p.angle }).count == 1 && e.angles.count > 1 { return (p.angle, true) }
             return (p.angle, false)
@@ -336,11 +352,12 @@ enum PodcastAnalysis {
             guard let p = e.person(pid) else { return .init(start: s, end: t, angle: wideAngle, person: nil) }
             let (angle, real) = closeAngle(p)
             if real { return .init(start: s, end: t, angle: angle, person: pid, zoom: punch && zoom ? 1.3 : 1) }
+            if e.separateTracks { return .init(start: s, end: t, angle: wideAngle, person: nil) }
             if zoom { return .init(start: s, end: t, angle: angle, person: pid, zoom: punch ? 1.35 : 1) }
             return .init(start: s, end: t, angle: wideAngle, person: nil)
         }
         func wide(_ s: Double, _ t: Double, punch: Bool = false) -> PodcastEpisode.Shot {
-            .init(start: s, end: t, angle: wideAngle, person: nil, zoom: punch && zoom ? 1.25 : 1)
+            .init(start: s, end: t, angle: wideAngle, person: nil, zoom: punch && zoom && wideAngle != PodcastEpisode.grid ? 1.25 : 1)
         }
 
         var shots: [PodcastEpisode.Shot] = []

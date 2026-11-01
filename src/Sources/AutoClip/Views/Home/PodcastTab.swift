@@ -93,18 +93,23 @@ struct NewEpisodeSheet: View {
     @State private var link = ""
     @State private var downloading: String?
     @State private var error: String?
+    @State private var perPerson = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("New episode").font(.system(size: 18, weight: .semibold)).foregroundColor(.white)
             TextField("Episode title", text: $title).textFieldStyle(.roundedBorder)
             Text("RECORDINGS").font(.system(size: 10, weight: .semibold)).foregroundColor(Color.white.opacity(0.4)).tracking(1)
-            Text("Add the video or audio. Filmed with more than one camera? Add each camera's file — AutoClip lines them up by their sound and cuts between them. The sound comes from the first file.")
+            Text(perPerson
+                 ? "Add each person's own recording (video or audio). AutoClip mixes them, evens out the voices, follows whoever is talking on their own mic, and shows everyone side by side for the back-and-forth."
+                 : "Add the video or audio. Filmed with more than one camera? Add each camera's file — AutoClip lines them up by their sound and cuts between them. The sound comes from the first file.")
                 .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.55)).fixedSize(horizontal: false, vertical: true)
+            Toggle("Each file is one person (Zoom, Riverside, SquadCast, or a mic each)", isOn: $perPerson)
+                .font(.system(size: 12)).foregroundColor(.white)
             VStack(spacing: 4) {
                 ForEach(Array(files.enumerated()), id: \.offset) { i, f in
                     HStack {
-                        Text(i == 0 ? "Main" : "Camera \(i + 1)").font(.system(size: 10, weight: .semibold)).foregroundColor(gold).frame(width: 60, alignment: .leading)
+                        Text(perPerson ? "Person \(i + 1)" : i == 0 ? "Main" : "Camera \(i + 1)").font(.system(size: 10, weight: .semibold)).foregroundColor(gold).frame(width: 60, alignment: .leading)
                         Text(URL(fileURLWithPath: f).lastPathComponent).font(.system(size: 12)).foregroundColor(.white).lineLimit(1)
                         Spacer()
                         if i > 0 { Button { files.swapAt(i, i - 1) } label: { Image(systemName: "chevron.up") }.buttonStyle(.borderless) }
@@ -124,17 +129,21 @@ struct NewEpisodeSheet: View {
             }
             if let downloading { HStack { ProgressView().controlSize(.small); Text(downloading).font(.system(size: 11)).foregroundColor(Color.white.opacity(0.6)) } }
             if let error { Text(error).font(.system(size: 11)).foregroundColor(warn) }
+            if perPerson && files.count == 1 {
+                Text("Add a recording for each person.").font(.system(size: 11)).foregroundColor(warn)
+            }
             HStack {
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button("Create episode") {
                     let t = title.trimmingCharacters(in: .whitespaces)
-                    let id = PodcastStore.shared.create(title: t.isEmpty ? YTDLP.title(fromFile: URL(fileURLWithPath: files[0])) : t, paths: files)
+                    let id = PodcastStore.shared.create(title: t.isEmpty ? YTDLP.title(fromFile: URL(fileURLWithPath: files[0])) : t, paths: files,
+                                                        oneFilePerPerson: perPerson)
                     onCreate(id)
                     dismiss()
                 }
                 .keyboardShortcut(.defaultAction).buttonStyle(.borderedProminent).tint(gold)
-                .disabled(files.isEmpty || downloading != nil)
+                .disabled(files.isEmpty || downloading != nil || (perPerson && files.count < 2))
             }
         }
         .padding(20).frame(width: 520).background(panel)
@@ -313,7 +322,7 @@ struct PodcastEpisodeView: View {
             let pauses = e.enabledCuts.filter { $0.kind == .pause }, fillers = e.enabledCuts.filter { $0.kind == .filler }
             Text("\(pauses.count) pause\(pauses.count == 1 ? "" : "s") shortened · \(fillers.count) filler word\(fillers.count == 1 ? "" : "s") cut").font(.system(size: 12)).foregroundColor(.white)
             if !e.isAudioOnly {
-                Text("\(e.people.count) \(e.people.count == 1 ? "person" : "people") · \(e.angles.count) camera\(e.angles.count == 1 ? "" : "s") · \(e.shots.count) shots")
+                Text("\(e.people.count) \(e.people.count == 1 ? "person" : "people") · \(e.angles.count) \(e.separateTracks ? "recordings" : e.angles.count == 1 ? "camera" : "cameras") · \(e.shots.count) shots")
                     .font(.system(size: 12)).foregroundColor(Color.white.opacity(0.7))
             }
             HStack(spacing: 8) {
@@ -350,6 +359,8 @@ struct PodcastEpisodeView: View {
     }
 
     private func describe(_ s: PodcastEpisode.Shot, _ e: PodcastEpisode) -> String {
+        if s.angle == PodcastEpisode.grid { return "Everyone side by side" }
+        if e.separateTracks, let p = e.person(s.person) { return s.zoom > 1 ? "Tight shot of \(p.name)" : p.name }
         let cam = e.angles.count > 1 ? "Camera \(s.angle + 1): " : ""
         guard let p = e.person(s.person) else { return cam + (s.zoom > 1 ? "Wide, pushed in" : "Wide shot") }
         return cam + (s.zoom > 1 ? "Tight close-up on \(p.name)" : "Close-up on \(p.name)")
@@ -357,6 +368,14 @@ struct PodcastEpisodeView: View {
 
     private func options(_ e: PodcastEpisode) -> [(label: String, angle: Int, person: Int?, zoom: Double)] {
         var out: [(String, Int, Int?, Double)] = []
+        if e.separateTracks {
+            if e.angles.filter({ $0.hasVideo == true }).count > 1 { out.append(("Everyone side by side", PodcastEpisode.grid, nil, 1)) }
+            for p in e.people where e.angles[safe: p.angle]?.hasVideo == true {
+                out.append((p.name, p.angle, p.id, 1))
+                out.append(("Tight shot of \(p.name)", p.angle, p.id, 1.3))
+            }
+            return out
+        }
         for k in e.angles.indices {
             let cam = e.angles.count > 1 ? "Camera \(k + 1) – " : ""
             out.append((cam + "Wide", k, nil, 1))
@@ -457,6 +476,7 @@ struct PodcastEditSection: View {
     var body: some View {
         if let e = store.episode(id) {
             VStack(alignment: .leading, spacing: 14) {
+                if e.isAudioOnly { PodcastSpeakersCard(id: id) }
                 AssessCard(title: "Tighten the edit") {
                     HStack(spacing: 16) {
                         Toggle("Shorten long pauses", isOn: setting(\.tightenPauses))
@@ -467,12 +487,21 @@ struct PodcastEditSection: View {
                         .fixedSize().disabled(!e.settings.tightenPauses)
                     }
                     Toggle("Remove “um”, “uh” and “ah”", isOn: setting(\.removeFillers))
-                    Text("The transcript leaves out some “um”s, so a few may stay in.")
-                        .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.4))
+                    let heard = e.heardFillers?.count ?? 0
+                    Text(heard > 0
+                         ? "Includes \(heard) “um”\(heard == 1 ? "" : "s") heard in the pauses that the transcript left out. Ones run straight into the next word can still slip through."
+                         : "AutoClip also listens in the pauses for “um”s the transcript leaves out; ones run straight into the next word can still slip through.")
+                        .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.4)).fixedSize(horizontal: false, vertical: true)
                     let pauses = e.cuts.filter { $0.kind == .pause && $0.enabled }, fillers = e.cuts.filter { $0.kind == .filler && $0.enabled }
+                    let texts = e.cuts.filter { $0.kind == .manual && $0.enabled }
+                    if !texts.isEmpty {
+                        Text("Plus \(texts.count) cut\(texts.count == 1 ? "" : "s") made in the transcript (\(podcastTime(texts.reduce(0) { $0 + $1.length }))).")
+                            .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.7))
+                    }
                     Text("Cuts \(pauses.count) pause\(pauses.count == 1 ? "" : "s") (\(podcastTime(pauses.reduce(0) { $0 + $1.length }))) and \(fillers.count) filler word\(fillers.count == 1 ? "" : "s") — the episode goes from \(podcastTime(e.duration)) to \(podcastTime(e.editedDuration)).")
                         .font(.system(size: 12, weight: .medium)).foregroundColor(.white).fixedSize(horizontal: false, vertical: true)
                 }
+                PodcastTranscriptEditor(id: id, seek: seek)
                 AssessCard(title: "Every cut", subtitle: "Untick any you want to keep. ▶ plays across the cut.") {
                     HStack {
                         Button("Cut all") { store.update(id) { e in for i in e.cuts.indices { e.cuts[i].enabled = true } } }
@@ -487,8 +516,8 @@ struct PodcastEditSection: View {
                                     store.update(id) { e in if let i = e.cuts.firstIndex(where: { $0.id == c.id }) { e.cuts[i].enabled = on } }
                                 })).labelsHidden().toggleStyle(.checkbox)
                                 Text(podcastTime(c.start)).font(.system(size: 11, design: .monospaced)).foregroundColor(Color.white.opacity(0.5)).frame(width: 56, alignment: .leading)
-                                Image(systemName: c.kind == .filler ? "text.bubble" : "pause.circle").font(.system(size: 11))
-                                    .foregroundColor(c.kind == .filler ? gold : Color.white.opacity(0.6))
+                                Image(systemName: c.kind == .filler ? "text.bubble" : c.kind == .manual ? "scissors" : "pause.circle").font(.system(size: 11))
+                                    .foregroundColor(c.kind == .pause ? Color.white.opacity(0.6) : gold)
                                 Text(c.label).font(.system(size: 12)).foregroundColor(c.enabled ? .white : Color.white.opacity(0.4))
                                 Spacer()
                                 Text(String(format: "−%.1fs", c.length)).font(.system(size: 11, design: .monospaced)).foregroundColor(Color.white.opacity(0.45))
@@ -547,14 +576,16 @@ struct PodcastCameraSection: View {
                         }
                     }
                 }
-                AssessCard(title: "Cameras") {
+                AssessCard(title: e.separateTracks ? "Recordings" : "Cameras") {
                     ForEach(Array(e.angles.enumerated()), id: \.offset) { i, a in
                         HStack {
-                            Image(systemName: "video.fill").foregroundColor(gold)
-                            Text("Camera \(i + 1)").font(.system(size: 12, weight: .semibold)).foregroundColor(.white)
+                            Image(systemName: a.hasVideo == false ? "mic.fill" : "video.fill").foregroundColor(gold)
+                            Text(e.separateTracks ? (e.people.first { $0.angle == i }?.name ?? "Person \(i + 1)") : "Camera \(i + 1)")
+                                .font(.system(size: 12, weight: .semibold)).foregroundColor(.white)
                             Text(URL(fileURLWithPath: a.path).lastPathComponent).font(.system(size: 11)).foregroundColor(Color.white.opacity(0.6)).lineLimit(1)
                             Spacer()
-                            Text(i == 0 ? "sound comes from here" : String(format: "lined up (%@%.1fs)", a.offset >= 0 ? "+" : "", a.offset))
+                            Text(e.separateTracks ? (i == 0 || a.offset == 0 ? "starts with the others" : String(format: "lined up (%@%.1fs)", a.offset >= 0 ? "+" : "", a.offset))
+                                 : i == 0 ? "sound comes from here" : String(format: "lined up (%@%.1fs)", a.offset >= 0 ? "+" : "", a.offset))
                                 .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.45))
                             if i > 0 {
                                 Button { store.update(id) { $0.angles.remove(at: i) }; store.analyze(id) } label: { Image(systemName: "minus.circle") }
@@ -562,8 +593,9 @@ struct PodcastCameraSection: View {
                             }
                         }
                     }
-                    Button { addAngle() } label: { Label("Add another camera angle…", systemImage: "plus") }.controlSize(.small)
-                    Text("With one camera, AutoClip makes extra shots by zooming in on whoever is talking.")
+                    Button { addAngle() } label: { Label(e.separateTracks ? "Add another person's recording…" : "Add another camera angle…", systemImage: "plus") }.controlSize(.small)
+                    Text(e.separateTracks ? "Each person's own mic decides who is talking. Quick back-and-forth shows everyone side by side."
+                         : "With one camera, AutoClip makes extra shots by zooming in on whoever is talking.")
                         .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.4))
                 }
                 AssessCard(title: "Camera style") {
@@ -602,7 +634,9 @@ struct PodcastCameraSection: View {
 
     private func addAngle() {
         let p = NSOpenPanel()
-        p.allowedContentTypes = [.movie, .video, .mpeg4Movie, .quickTimeMovie]
+        p.allowedContentTypes = store.episode(id)?.separateTracks == true
+            ? [.movie, .video, .audio, .mpeg4Movie, .quickTimeMovie, .mp3, .wav]
+            : [.movie, .video, .mpeg4Movie, .quickTimeMovie]
         p.allowsMultipleSelection = true
         guard p.runModal() == .OK else { return }
         store.update(id) { e in for u in p.urls where !e.angles.contains(where: { $0.path == u.path }) { e.angles.append(.init(path: u.path)) } }

@@ -14,7 +14,8 @@ enum PodcastAudio {
     /// What the program file depends on, so it is only rebuilt when something changed.
     static func signature(_ e: PodcastEpisode) -> String {
         let s = e.settings
-        let parts: [String] = [e.angles.first?.path ?? "", e.keptRanges.map { String(format: "%.2f-%.2f", $0.lowerBound, $0.upperBound) }.joined(separator: ","),
+        let modified = ((try? FileManager.default.attributesOfItem(atPath: e.soundPath))?[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
+        let parts: [String] = [e.soundPath, "\(modified)", e.keptRanges.map { String(format: "%.2f-%.2f", $0.lowerBound, $0.upperBound) }.joined(separator: ","),
                                "\(s.cleanVoice)\(s.strength)\(s.levelVoices)\(s.loudness)", s.introPath ?? "", s.outroPath ?? "",
                                s.musicBedPath ?? "", "\(s.musicVolume)\(s.introLead)\(s.outroTail)"]
         var h: UInt64 = 1469598103934665603
@@ -38,7 +39,8 @@ enum PodcastAudio {
         for f in (try? FileManager.default.contentsOfDirectory(at: e.folder, includingPropertiesForKeys: nil)) ?? []
         where f.lastPathComponent.hasPrefix("program-") { try? FileManager.default.removeItem(at: f) }
 
-        guard let source = e.angles.first?.path else { throw Failure(message: "This episode has no recording.") }
+        let source = e.soundPath
+        guard FileManager.default.fileExists(atPath: source) else { throw Failure(message: "This episode's recording is missing.") }
         let tmp = FileManager.default.temporaryDirectory
         let edited = tmp.appendingPathComponent("podcast-edit-\(UUID().uuidString).caf")
         let cleaned = tmp.appendingPathComponent("podcast-clean-\(UUID().uuidString).caf")

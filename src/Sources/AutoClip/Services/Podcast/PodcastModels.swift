@@ -23,12 +23,35 @@ struct PodcastEpisode: Codable, Identifiable, Equatable {
     var exports: [String: String] = [:]
     /// Set once transcription and analysis have finished
     var analyzed = false
+    /// Each file is one person's own recording (Zoom, Riverside, separate mics) rather than
+    /// cameras sharing one sound
+    var oneFilePerPerson: Bool?
+    /// "um"s heard in the pauses that the transcript left out: [start, end]
+    var heardFillers: [[Double]]?
+    /// How many voices to tell apart in an audio-only episode (nil = work it out)
+    var speakerCount: Int?
 
     struct Angle: Codable, Equatable, Hashable {
         var path: String
         /// Where this file's 0:00 falls on the first file's clock
         var offset: Double = 0
         var duration: Double = 0
+        var hasVideo: Bool?
+    }
+
+    /// The angle number of the "everyone side by side" shot (one file per person)
+    static let grid = -1
+
+    var separateTracks: Bool { oneFilePerPerson ?? false }
+
+    /// The episode's sound before clean-up: the first file, or the mix of everyone's tracks.
+    var soundPath: String {
+        separateTracks ? folder.appendingPathComponent("mix.caf").path : (angles.first?.path ?? "")
+    }
+
+    /// The transcript plus the "um"s heard in the pauses (so the edit can cut them).
+    func withHeardFillers(_ words: [Word]) -> [Word] {
+        words + (heardFillers ?? []).filter { $0.count == 2 }.map { Word(id: UUID(), word: "um", startTime: $0[0], endTime: $0[1], confidence: 0) }
     }
 
     struct Cut: Codable, Equatable, Identifiable {
@@ -213,6 +236,18 @@ final class PodcastStore: ObservableObject {
     var tasks: [String: Task<Void, Never>] = [:]
     /// Face stills for naming people: "episode-person" → image
     @Published var thumbnails: [String: NSImage] = [:]
+    /// Transcripts in time order by sound file, so the text editor doesn't re-read them
+    private var wordCache: [String: [Word]] = [:]
+
+    func words(_ e: PodcastEpisode) -> [Word] {
+        if let w = wordCache[e.soundPath] { return w }
+        guard let w = TranscriptCache.load(for: e.soundPath) else { return [] }
+        let sorted = w.sorted { $0.startTime < $1.startTime }
+        wordCache[e.soundPath] = sorted
+        return sorted
+    }
+
+    func forgetWords(_ e: PodcastEpisode) { wordCache[e.soundPath] = nil }
 
     nonisolated static var dir: URL {
         URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Documents/AutoClip/Podcasts")

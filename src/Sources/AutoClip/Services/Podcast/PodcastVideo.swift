@@ -66,6 +66,21 @@ enum PodcastVideo {
         return clampRect(W / 2, (H - baseH) / 2, baseW, baseH)
     }
 
+    /// Where each person goes in the side-by-side shot: a row on wide sizes, a column on tall
+    /// ones, a 2×2 grid for four.
+    static func gridTiles(_ n: Int, _ size: CGSize) -> [CGRect] {
+        guard n > 0 else { return [] }
+        let landscape = size.width >= size.height * 1.2
+        let cols = n == 1 ? 1 : n <= 3 ? (landscape ? n : 1) : 2
+        let rows = (n + cols - 1) / cols
+        let gap = (min(size.width, size.height) * 0.008).rounded()
+        let w = ((size.width - gap * CGFloat(cols + 1)) / CGFloat(cols)).rounded(.down)
+        let h = ((size.height - gap * CGFloat(rows + 1)) / CGFloat(rows)).rounded(.down)
+        return (0..<n).map { i in
+            CGRect(x: gap + CGFloat(i % cols) * (w + gap), y: gap + CGFloat(i / cols) * (h + gap), width: w, height: h)
+        }
+    }
+
     // MARK: Building
 
     struct Built {
@@ -118,8 +133,8 @@ enum PodcastVideo {
                let at = comp.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) {
                 try at.insertTimeRange(CMTimeRange(start: .zero, duration: try await pa.load(.duration)), of: src, at: .zero)
             }
-        } else if let a = e.angles.first {
-            let asset = AVURLAsset(url: URL(fileURLWithPath: a.path))
+        } else if !e.soundPath.isEmpty {
+            let asset = AVURLAsset(url: URL(fileURLWithPath: e.soundPath))
             if let src = try await asset.loadTracks(withMediaType: .audio).first,
                let at = comp.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) {
                 var out = 0.0
@@ -139,13 +154,35 @@ enum PodcastVideo {
             size = CGSize(width: (size.width * s / 2).rounded() * 2, height: (size.height * s / 2).rounded() * 2)
         }
 
-        // Shot plan → opacity and framing changes per angle
+        // Shot plan → opacity, framing and (for side by side) cropping changes per angle
         var opacity: [Int: [Double: Float]] = [:]
         var framing: [Int: [Double: CGAffineTransform]] = [:]
-        for (k, a) in angles.enumerated() where a != nil { opacity[k] = [0: 0]; framing[k] = [:] }
+        var cropping: [Int: [Double: CGRect]] = [:]
+        for (k, a) in angles.enumerated() where a != nil { opacity[k] = [0: 0]; framing[k] = [:]; cropping[k] = [:] }
+        let usesGrid = e.shots.contains { $0.angle == PodcastEpisode.grid }
+        let gridAngles = angles.indices.filter { angles[$0] != nil }
+        let tiles = gridTiles(gridAngles.count, size)
         let shots = e.shots.isEmpty ? [PodcastEpisode.Shot(start: 0, end: e.duration, angle: 0, person: nil)] : e.shots
         for shot in shots {
             let s = lead + e.editedTime(shot.start), en = lead + e.editedTime(shot.end)
+            if shot.angle == PodcastEpisode.grid && gridAngles.count > 1 {
+                // Everyone side by side: each person's video framed into their own tile
+                guard en > s else { continue }
+                for (n, k) in gridAngles.enumerated() {
+                    guard let a = angles[k] else { continue }
+                    let tile = tiles[n]
+                    let who = e.people.first { $0.angle == k && $0.w > 0 }
+                    let rect = crop(person: who, angle: k, zoom: 1, src: a.size, out: tile.size, group: [], fallback: nil)
+                    let scale = tile.width / rect.width
+                    framing[k]![s] = a.transform
+                        .concatenating(CGAffineTransform(translationX: -rect.minX, y: -rect.minY))
+                        .concatenating(CGAffineTransform(scaleX: scale, y: scale))
+                        .concatenating(CGAffineTransform(translationX: tile.minX, y: tile.minY))
+                    cropping[k]![s] = rect.applying(a.transform.inverted()).standardized
+                    opacity[k]![s] = 1
+                }
+                continue
+            }
             let k = (angles[safe: shot.angle] ?? nil) != nil ? shot.angle : (angles.firstIndex { $0 != nil } ?? 0)
             guard en > s, let a = angles[k] else { continue }
             let group = e.people.compactMap { p -> [Double]? in p.angle == k ? [p.x, p.y, p.w, p.h] : p.otherAngles[k] }
@@ -157,6 +194,7 @@ enum PodcastVideo {
                 .concatenating(CGAffineTransform(scaleX: scale, y: scale))
             for (j, b) in angles.enumerated() where b != nil { opacity[j]![s] = j == k ? 1 : 0 }
             framing[k]![s] = tf
+            if usesGrid { cropping[k]![s] = CGRect(origin: .zero, size: a.size).applying(a.transform.inverted()).standardized }
         }
         if lead + edited < total { for k in opacity.keys { opacity[k]![lead + edited] = 0 } }
 
@@ -173,6 +211,7 @@ enum PodcastVideo {
                 li.setTransform(frames.first?.value ?? a.transform, at: .zero)
             }
             for (time, tf) in frames where time < total { li.setTransform(tf, at: t(time)) }
+            for (time, r) in cropping[k]!.sorted(by: { $0.key < $1.key }) where time < total { li.setCropRectangle(r, at: t(time)) }
             return li
         }
         let vc = AVMutableVideoComposition()
