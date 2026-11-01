@@ -27,6 +27,7 @@ struct AssessTab: View {
     @State private var ytStatus: String?
     @State private var ytError: String?
     @State private var pendingDelete: String?
+    @State private var hoveredVideo: String?
     enum Mode: String, CaseIterable { case fillers = "Filler words", delivery = "Delivery", coach = "AI Coach", notes = "Notes", stage = "Stage", progress = "Progress" }
     @State private var mode: Mode = .fillers
     @State private var report: SpeakerReport?
@@ -286,11 +287,23 @@ struct AssessTab: View {
                                     .foregroundColor(selected == path ? .black : Color.white.opacity(0.85))
                                 Spacer(minLength: 0)
                             }
-                            .padding(.horizontal, 10).padding(.vertical, 7)
-                            .background(selected == path ? gold : Color.clear).cornerRadius(6)
+                            .padding(.leading, 10).padding(.trailing, 30).padding(.vertical, 7)
+                            .background(selected == path ? gold : hoveredVideo == path ? Color.white.opacity(0.05) : Color.clear).cornerRadius(6)
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .overlay(alignment: .trailing) {
+                            if hoveredVideo == path || selected == path {
+                                Button { pendingDelete = path } label: {
+                                    Image(systemName: "trash").font(.system(size: 11))
+                                        .foregroundColor(selected == path ? .black.opacity(0.7) : Color.white.opacity(0.6))
+                                        .frame(width: 24, height: 24).contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain).padding(.trailing, 4)
+                                .help("Delete or remove from this list")
+                            }
+                        }
+                        .onHover { inside in hoveredVideo = inside ? path : (hoveredVideo == path ? nil : hoveredVideo) }
                         .contextMenu {
                             speakerAssignMenu(path)
                             Divider()
