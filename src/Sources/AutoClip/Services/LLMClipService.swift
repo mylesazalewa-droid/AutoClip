@@ -501,6 +501,66 @@ Respond with ONLY valid JSON, no markdown:
         throw lastError
     }
 
+    // MARK: - Podcast show notes
+
+    /// Titles, description, chapters, keywords, quotes and a social post for a podcast episode.
+    /// `paragraphs` carry source-clock times; chapter times come back on that clock.
+    func podcastNotes(title: String, paragraphs: [(start: Double, speaker: String?, text: String)], people: [String],
+                      provider: AIProvider, apiKey: String) async throws -> PodcastNotes {
+        func stamp(_ t: Double) -> String { let i = Int(t); return String(format: "%d:%02d", i / 60, i % 60) }
+        var body = paragraphs.map { "[\(stamp($0.start))]\($0.speaker.map { " \($0):" } ?? "") \($0.text)" }.joined(separator: "\n")
+        if body.count > 240_000 { body = String(body.prefix(120_000)) + "\n[…]\n" + String(body.suffix(120_000)) }
+        let named = people.filter { $0.range(of: #"^Person \d+$"#, options: .regularExpression) == nil }
+        let prompt = """
+You write show notes for a podcast. Below is the transcript of an episode titled "\(title)"\(named.isEmpty ? "" : " with \(named.joined(separator: ", "))"). Each paragraph starts with a [m:ss] timestamp.
+
+Write in a warm, clear voice that matches the conversation. Don't invent anything that isn't said. Fix obvious transcription errors in names and Bible references.
+
+Return:
+- "titles": 3 episode title ideas (max 70 characters each), best first.
+- "summary": 1–2 sentences.
+- "description": a podcast description of 2–3 short paragraphs (what it's about, what listeners will take away); no timestamps, no hashtags.
+- "chapters": 5–12 chapters covering the whole episode in order, the first at "0:00": {"at": "m:ss", "title": max 6 words}. Put each chapter where that topic actually starts.
+- "keywords": 6–10 search keywords.
+- "quotes": 3–5 memorable lines, verbatim or lightly cleaned up, max 25 words each.
+- "guests": names of guests mentioned as being on the episode (empty if unclear).
+- "socialPost": a short post (2–3 sentences) inviting people to listen.
+
+Transcript:
+\(body)
+
+Respond with ONLY valid JSON, no markdown:
+{"titles":["..."],"summary":"...","description":"...","chapters":[{"at":"0:00","title":"..."}],"keywords":["..."],"quotes":["..."],"guests":[],"socialPost":"..."}
+"""
+        func seconds(_ v: Any?) -> Double? {
+            if let n = v as? Double { return n }
+            if let n = v as? Int { return Double(n) }
+            guard let s = v as? String else { return nil }
+            let c = s.split(separator: ":").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
+            return c.isEmpty ? nil : c.reduce(0) { $0 * 60 + $1 }
+        }
+        var lastError: Error = llmError("The AI didn't return show notes")
+        for _ in 1...2 {
+            let text = try await ask(prompt, provider: provider, apiKey: apiKey)
+            guard let a = text.firstIndex(of: "{"), let b = text.lastIndex(of: "}"),
+                  let o = try? JSONSerialization.jsonObject(with: Data(String(text[a...b]).utf8)) as? [String: Any] else {
+                lastError = llmError("The show notes weren't valid JSON — try again"); continue
+            }
+            var chapters: [PodcastNotes.Chapter] = (o["chapters"] as? [[String: Any]] ?? []).compactMap { c in
+                guard let t = c["title"] as? String, let at = seconds(c["at"]) else { return nil }
+                return .init(time: at, title: t)
+            }.sorted { $0.time < $1.time }
+            if let first = chapters.first, first.time > 1 { chapters.insert(.init(time: 0, title: "Introduction"), at: 0) }
+            let description = o["description"] as? String ?? ""
+            guard !description.isEmpty else { lastError = llmError("The show notes came back empty — try again"); continue }
+            return PodcastNotes(titles: o["titles"] as? [String] ?? [title], summary: o["summary"] as? String ?? "",
+                                description: description, chapters: chapters, keywords: o["keywords"] as? [String] ?? [],
+                                quotes: o["quotes"] as? [String] ?? [], guests: o["guests"] as? [String] ?? [],
+                                socialPost: o["socialPost"] as? String ?? "")
+        }
+        throw lastError
+    }
+
     // MARK: - Series coherence
 
     struct SeriesPart {

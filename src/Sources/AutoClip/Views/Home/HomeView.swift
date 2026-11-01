@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
-enum HomeTab { case projects, autoClips, autoReels, assess, search }
+enum HomeTab: String { case projects, autoClips, autoReels, podcast, assess, search }
 
 struct HomeView: View {
     @ObservedObject private var library = LibraryService.shared
@@ -11,7 +11,8 @@ struct HomeView: View {
     @State private var sortOrder: SortOrder = .newest
     @State private var filterCategory = "All"
     @State private var isDropTargeted = false
-    @State private var activeTab: HomeTab = .projects
+    /// The tab you were on last time
+    @AppStorage("home_tab") private var activeTab: HomeTab = .projects
     @State private var showAutoClipsSettings = false
 
     private let gold = Color(red: 1.0, green: 0.75, blue: 0.0)
@@ -45,6 +46,8 @@ struct HomeView: View {
                 switch activeTab {
                 case .autoReels:
                     AutoReelsTab()
+                case .podcast:
+                    PodcastTab()
                 case .assess:
                     AssessTab()
                 case .search:
@@ -77,12 +80,17 @@ struct HomeView: View {
         .sheet(isPresented: $appState.showYouTubeSheet) {
             YouTubeURLSheet()
         }
+        // "Make clips" in the Podcast tab opens Auto Reels
+        .onReceive(AutoReelsHandoff.shared.$showTab) { show in
+            if show { activeTab = .autoReels; AutoReelsHandoff.shared.showTab = false }
+        }
     }
 
     var tabBar: some View {
         HStack(spacing: 0) {
             tabButton(title: "Projects", icon: "square.grid.2x2.fill", tab: .projects)
             tabButton(title: "Auto Reels", icon: "play.rectangle.on.rectangle.fill", tab: .autoReels)
+            tabButton(title: "Podcast", icon: "mic.and.signal.meter.fill", tab: .podcast)
             tabButton(title: "Assess", icon: "waveform.badge.magnifyingglass", tab: .assess)
             tabButton(title: "Search", icon: "magnifyingglass", tab: .search)
             Spacer()

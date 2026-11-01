@@ -388,6 +388,13 @@ struct AutoReelsTab: View {
         .sheet(isPresented: $showingCreateSheet) {
             createReelSheet
         }
+        .onReceive(AutoReelsHandoff.shared.$pending) { url in
+            guard let url else { return }
+            AutoReelsHandoff.shared.pending = nil
+            pickedVideoURL = url
+            inputMode = .file
+            showingCreateSheet = true
+        }
         .alert("Error Detail", isPresented: Binding(
             get: { errorDetailText != nil },
             set: { if !$0 { errorDetailText = nil } }
