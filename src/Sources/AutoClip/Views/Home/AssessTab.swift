@@ -28,7 +28,9 @@ struct AssessTab: View {
     @State private var ytError: String?
     @State private var pendingDelete: String?
     @State private var hoveredVideo: String?
-    enum Mode: String, CaseIterable { case fillers = "Filler words", delivery = "Delivery", coach = "AI Coach", notes = "Notes", stage = "Stage", progress = "Progress" }
+    /// A moment to play once the next selected video loads (from the Series view)
+    @State private var pendingSeek: Double?
+    enum Mode: String, CaseIterable { case fillers = "Filler words", delivery = "Delivery", coach = "AI Coach", notes = "Notes", series = "Series", stage = "Stage", progress = "Progress" }
     @State private var mode: Mode = .fillers
     @State private var report: SpeakerReport?
     @State private var deliveryStatus: String?
@@ -65,8 +67,9 @@ struct AssessTab: View {
     private func color(_ k: String) -> Color { Self.colors[k] ?? .white }
 
     /// Videos already in AutoClip (practice runs, Auto Reels sources, YouTube downloads) plus any picked here.
+    private var allVideos: [String] { Self.knownVideos(reels: reelsStore.reels, extra: extraVideos, hidden: hiddenVideos) }
     private var videos: [String] {
-        let all = Self.knownVideos(reels: reelsStore.reels, extra: extraVideos, hidden: hiddenVideos)
+        let all = allVideos
         guard let s = activeSpeaker, profiles.speakers.count > 1 else { return all }
         return all.filter { profiles.speaker(for: $0).id == s.id }
     }
@@ -394,6 +397,7 @@ struct AssessTab: View {
         notesStatus = nil; notesError = nil
         if mode == .progress { mode = .fillers }
         player.replaceCurrentItem(with: AVPlayerItem(url: URL(fileURLWithPath: path)))
+        if let t = pendingSeek { pendingSeek = nil; play(at: t) }
         status = "Reading the transcript…"
         Task {
             do {
@@ -591,6 +595,12 @@ struct AssessTab: View {
                     if let r = report { CoachSection(report: r, status: coachStatus, error: coachError, run: runCoach, play: play(at:)) }
                 case .notes:
                     if let r = report { NotesSection(report: r, status: notesStatus, error: notesError, run: runNotes, play: play(at:)) }
+                case .series:
+                    if let path = selected {
+                        SeriesSection(path: path, videos: allVideos, reports: allReports) { p, t in
+                            if p == selected { if let t { play(at: t) } } else { pendingSeek = t; select(p) }
+                        }
+                    }
                 case .stage:
                     if let r = report { StageSection(report: r, status: stageStatus, play: play(at:)) }
                 case .progress:

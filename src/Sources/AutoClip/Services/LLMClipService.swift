@@ -501,6 +501,104 @@ Respond with ONLY valid JSON, no markdown:
         throw lastError
     }
 
+    // MARK: - Series coherence
+
+    struct SeriesPart {
+        var title: String
+        var date: Date
+        var paragraphs: [(start: Double, text: String)]
+        var bigIdea: String?
+    }
+
+    /// Reads every message in a series together and judges whether it holds together: one
+    /// throughline, each week building on the last, callbacks, gaps, repeats and tensions.
+    func seriesAnalysis(name: String, parts: [SeriesPart], provider: AIProvider, apiKey: String) async throws -> SeriesAnalysis {
+        func stamp(_ t: Double) -> String { let i = Int(t); return String(format: "%d:%02d", i / 60, i % 60) }
+        // Keep the prompt a sensible size: long series keep each talk's opening and closing in full
+        let budget = max(12_000, 220_000 / max(1, parts.count))
+        let df = DateFormatter(); df.dateStyle = .medium
+        let body = parts.enumerated().map { i, p -> String in
+            var text = p.paragraphs.map { "[\(stamp($0.start))] \($0.text)" }.joined(separator: "\n")
+            if text.count > budget {
+                text = String(text.prefix(budget / 2)) + "\n[… middle of the message left out for length …]\n" + String(text.suffix(budget / 2))
+            }
+            let idea = p.bigIdea.map { "\nBig idea noted earlier: \($0)" } ?? ""
+            return "=== PART \(i + 1): \(p.title) (\(df.string(from: p.date)))\(idea) ===\n\(text)"
+        }.joined(separator: "\n\n")
+        let prompt = """
+You are an experienced preaching coach. Below are the transcripts of a sermon series called "\(name)", \(parts.count) messages in the order they were preached. Each paragraph starts with a [m:ss] timestamp within that message.
+
+Assess the series AS A SERIES: does it hold together and make sense across the weeks? Look for:
+- a clear throughline (one idea the whole series develops) — or the lack of one;
+- whether each message builds on the previous ones, or could stand alone in any order;
+- explicit connections: recaps of earlier weeks, callbacks, repeated phrases or images, set-ups for next week;
+- gaps: missing steps in the logic, questions raised but never answered, abrupt jumps in topic;
+- overlaps: the same point taught again without adding anything;
+- tensions: places where messages seem to contradict or pull in different directions.
+Be honest and specific. Loosely related standalone messages should score low; a tightly built series high. Quote the preacher's actual words. Fix obvious transcription errors.
+
+Return:
+- "score": 1–10 for how coherent the series is.
+- "verdict": one sentence.
+- "summary": 3–4 sentences on how the series works as a whole.
+- "throughline": the one idea that ties it together, in one sentence (say plainly if there isn't a clear one).
+- "arc": 2–3 sentences on how it progresses from first to last.
+- "parts": one entry per message, in order: {"bigIdea": one sentence, "role": how it serves the series (1 sentence), "fit": 1–10 how well it connects to the throughline and the other messages, "note": one sentence on what would tie it in better (or what it does well), "links": up to 3 moments where the preacher connects to another message — {"at": "m:ss" from this message, "quote": max 20 words, "to": the other part's number}}.
+- "strengths": 2–4 {title (max 8 words), detail (1–2 sentences), parts: [part numbers]}.
+- "gaps": 0–4, same shape.
+- "overlaps": 0–3, same shape.
+- "tensions": 0–3, same shape (empty if none).
+- "suggestions": 3–5 concrete ways to make this series (or the next one) tie together better.
+- "recap": one paragraph summarising the whole series for the church website.
+
+\(body)
+
+Respond with ONLY valid JSON, no markdown:
+{"score":7,"verdict":"...","summary":"...","throughline":"...","arc":"...","parts":[{"bigIdea":"...","role":"...","fit":8,"note":"...","links":[{"at":"3:10","quote":"...","to":1}]}],"strengths":[{"title":"...","detail":"...","parts":[1,2]}],"gaps":[],"overlaps":[],"tensions":[],"suggestions":["..."],"recap":"..."}
+"""
+        func int(_ v: Any?) -> Int? { (v as? Int) ?? (v as? Double).map { Int($0) } ?? (v as? String).flatMap { Int($0) } }
+        func seconds(_ v: Any?) -> Double? {
+            if let n = v as? Double { return n }
+            if let n = v as? Int { return Double(n) }
+            guard let s = v as? String else { return nil }
+            let comps = s.split(separator: ":").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
+            guard !comps.isEmpty else { return nil }
+            return comps.reduce(0) { $0 * 60 + $1 }
+        }
+        func findings(_ v: Any?) -> [SeriesAnalysis.Finding] {
+            (v as? [[String: Any]] ?? []).compactMap { f in
+                guard let t = f["title"] as? String else { return nil }
+                let ps = (f["parts"] as? [Any] ?? []).compactMap(int).filter { (1...parts.count).contains($0) }
+                return .init(title: t, detail: f["detail"] as? String ?? "", parts: ps)
+            }
+        }
+        var lastError: Error = llmError("The AI didn't return a series assessment")
+        for _ in 1...2 {
+            let text = try await ask(prompt, provider: provider, apiKey: apiKey)
+            guard let a = text.firstIndex(of: "{"), let b = text.lastIndex(of: "}"),
+                  let o = try? JSONSerialization.jsonObject(with: Data(String(text[a...b]).utf8)) as? [String: Any] else {
+                lastError = llmError("The series assessment wasn't valid JSON — try again"); continue
+            }
+            var ps: [SeriesAnalysis.Part] = (o["parts"] as? [[String: Any]] ?? []).map { p in
+                let links: [SeriesAnalysis.Link] = (p["links"] as? [[String: Any]] ?? []).compactMap { l in
+                    guard let q = l["quote"] as? String else { return nil }
+                    return .init(time: seconds(l["at"]), quote: q, to: int(l["to"]).flatMap { (1...parts.count).contains($0) ? $0 : nil })
+                }
+                return .init(bigIdea: p["bigIdea"] as? String ?? "", role: p["role"] as? String ?? "",
+                             fit: min(10, max(1, int(p["fit"]) ?? 5)), note: p["note"] as? String ?? "", links: links)
+            }
+            guard !ps.isEmpty, let score = int(o["score"]) else { lastError = llmError("The series assessment came back empty — try again"); continue }
+            while ps.count < parts.count { ps.append(.init(bigIdea: "", role: "", fit: 5, note: "", links: [])) }
+            return SeriesAnalysis(videos: [], score: min(10, max(1, score)), verdict: o["verdict"] as? String ?? "",
+                                  summary: o["summary"] as? String ?? "", throughline: o["throughline"] as? String ?? "",
+                                  arc: o["arc"] as? String ?? "", parts: Array(ps.prefix(parts.count)),
+                                  strengths: findings(o["strengths"]), gaps: findings(o["gaps"]),
+                                  overlaps: findings(o["overlaps"]), tensions: findings(o["tensions"]),
+                                  suggestions: o["suggestions"] as? [String] ?? [], recap: o["recap"] as? String ?? "")
+        }
+        throw lastError
+    }
+
     // MARK: - Hopeful ending
 
     /// A short run from the talk (about 6–20s) that resolves `reelText` with hope — the
