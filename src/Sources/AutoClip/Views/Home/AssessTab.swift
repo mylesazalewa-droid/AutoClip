@@ -552,8 +552,8 @@ struct AssessTab: View {
                     Spacer()
                     if let r = report {
                         Menu {
-                            Button("Save as PDF…") { SpeakerReportDocument.savePDF(r, speaker: speakerName(r), history: sermons(of: profiles.speaker(for: r.videoPath))) }
-                            Button("Email as PDF…") { SpeakerReportDocument.email(r, speaker: speakerName(r), history: sermons(of: profiles.speaker(for: r.videoPath))) }
+                            Button("Save as PDF…") { SpeakerReportDocument.savePDF(r, speaker: speakerName(r), history: sermons(of: profiles.speaker(for: r.videoPath)), fillers: hits.map { ($0.kind, $0.time) }) }
+                            Button("Email as PDF…") { SpeakerReportDocument.email(r, speaker: speakerName(r), history: sermons(of: profiles.speaker(for: r.videoPath)), fillers: hits.map { ($0.kind, $0.time) }) }
                         } label: { Label("Share report", systemImage: "square.and.arrow.up") }
                         .fixedSize().controlSize(.small)
                         .help("A PDF of this assessment to send to a mentor or coach")
