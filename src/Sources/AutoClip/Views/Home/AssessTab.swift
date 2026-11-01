@@ -7,6 +7,10 @@ import UniformTypeIdentifiers
 /// messages. Click any dot, time or block to hear that moment.
 struct AssessTab: View {
     @ObservedObject private var reelsStore = AutoReelsStore.shared
+    @ObservedObject private var profiles = SpeakerProfiles.shared
+    /// The speaker the list and progress charts show ("" = everyone)
+    @AppStorage("assess_speaker") private var speakerFilter = ""
+    @State private var showSpeakers = false
     @State private var selected: String?
     @State private var words: [Word] = []
     @State private var hits: [FillerReport.Hit] = []
@@ -35,7 +39,17 @@ struct AssessTab: View {
     @State private var notesError: String?
     @State private var showPractice = false
     /// Real sermons only: practice runs stay out of the progress charts
-    private var sermonReports: [SpeakerReport] { allReports.filter { !$0.isPractice } }
+    private var allSermons: [SpeakerReport] { allReports.filter { !$0.isPractice } }
+    /// The chosen speaker, or the only one when there is just one
+    private var activeSpeaker: SpeakerProfiles.Speaker? {
+        profiles.speakers.count == 1 ? profiles.primary : profiles.speaker(id: speakerFilter)
+    }
+    /// Sermons by the chosen speaker (all of them when "Everyone" is picked)
+    private var sermonReports: [SpeakerReport] { sermons(of: activeSpeaker) }
+    private func sermons(of s: SpeakerProfiles.Speaker?) -> [SpeakerReport] {
+        guard let s else { return allSermons }
+        return allSermons.filter { profiles.speaker(for: $0.videoPath).id == s.id }
+    }
     private var extraVideos: [String] { extraRaw.split(separator: "\n").map(String.init) }
     private var hiddenVideos: Set<String> { Set(hiddenRaw.split(separator: "\n").map(String.init)) }
 
@@ -50,7 +64,16 @@ struct AssessTab: View {
     private func color(_ k: String) -> Color { Self.colors[k] ?? .white }
 
     /// Videos already in AutoClip (practice runs, Auto Reels sources, YouTube downloads) plus any picked here.
-    private var videos: [String] { Self.knownVideos(reels: reelsStore.reels, extra: extraVideos, hidden: hiddenVideos) }
+    private var videos: [String] {
+        let all = Self.knownVideos(reels: reelsStore.reels, extra: extraVideos, hidden: hiddenVideos)
+        guard let s = activeSpeaker, profiles.speakers.count > 1 else { return all }
+        return all.filter { profiles.speaker(for: $0).id == s.id }
+    }
+
+    /// A video added while one speaker is showing belongs to that speaker.
+    private func claim(_ path: String) {
+        if profiles.speakers.count > 1, let s = activeSpeaker { profiles.assign(path, to: s.id) }
+    }
 
     /// The same list for other tabs (Search), read from saved settings.
     static func knownVideos(reels: [AutoReelRecord]) -> [String] {
@@ -96,8 +119,8 @@ struct AssessTab: View {
                 if selected == nil && mode == .progress {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 14) {
-                            Text("Your progress").font(.system(size: 17, weight: .semibold)).foregroundColor(.white)
-                            SpeakerProgressSection(reports: sermonReports, open: { select($0) })
+                            progressHeader
+                            progressBody
                         }.padding(20)
                     }
                 } else if selected == nil {
@@ -108,7 +131,7 @@ struct AssessTab: View {
                             Button { showPractice = true } label: { Label("Record a practice run", systemImage: "mic.fill") }
                                 .buttonStyle(.bordered)
                             if !sermonReports.isEmpty {
-                                Button("📈 See your progress across \(sermonReports.count) message\(sermonReports.count == 1 ? "" : "s")") { mode = .progress }
+                                Button("📈 See \(progressOwner) progress across \(sermonReports.count) message\(sermonReports.count == 1 ? "" : "s")") { mode = .progress }
                                     .buttonStyle(.borderedProminent).tint(gold)
                             }
                         }
@@ -127,9 +150,11 @@ struct AssessTab: View {
         }
         .background(Color(red: 0.07, green: 0.08, blue: 0.12))
         .onAppear { allReports = SpeakerReportStore.all() }
+        .sheet(isPresented: $showSpeakers) { SpeakersSheet(reports: allReports) }
         .sheet(isPresented: $showPractice) {
             PracticeSheet { url in
                 hiddenRaw = hiddenVideos.subtracting([url.path]).joined(separator: "\n")
+                claim(url.path)
                 mode = .delivery
                 select(url.path)
             }
@@ -146,6 +171,74 @@ struct AssessTab: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    // MARK: Speakers
+
+    private func speakerName(_ r: SpeakerReport) -> String? {
+        profiles.speakers.count > 1 || profiles.primary.name != "Me" ? profiles.speaker(for: r.videoPath).name : nil
+    }
+
+    private var progressOwner: String {
+        guard let s = activeSpeaker, profiles.speakers.count > 1 || s.name != "Me" else { return profiles.speakers.count > 1 ? "everyone's" : "your" }
+        return s.name + "'s"
+    }
+
+    private var progressHeader: some View {
+        Text(progressOwner == "your" ? "Your progress" : progressOwner.prefix(1).uppercased() + progressOwner.dropFirst() + " progress")
+            .font(.system(size: 17, weight: .semibold)).foregroundColor(.white)
+    }
+
+    /// One speaker's trends, or (with "Everyone" picked) the speakers side by side.
+    @ViewBuilder private var progressBody: some View {
+        if activeSpeaker == nil {
+            SpeakerCompareCard(rows: profiles.speakers.map { s in (s, profiles.color(s), sermons(of: s)) },
+                               pick: { speakerFilter = $0.id })
+        } else {
+            SpeakerProgressSection(reports: sermonReports, open: { select($0) })
+        }
+    }
+
+    private var speakerMenu: some View {
+        Menu {
+            if profiles.speakers.count > 1 {
+                Button { speakerFilter = "" } label: { if speakerFilter.isEmpty { Label("Everyone", systemImage: "checkmark") } else { Text("Everyone") } }
+                Divider()
+            }
+            ForEach(profiles.speakers) { s in
+                Button { speakerFilter = s.id } label: {
+                    if activeSpeaker?.id == s.id { Label(s.name, systemImage: "checkmark") } else { Text(s.name) }
+                }
+            }
+            Divider()
+            Button("Add or edit speakers…") { showSpeakers = true }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: activeSpeaker == nil ? "person.2.fill" : "person.fill")
+                    .foregroundColor(activeSpeaker.map(profiles.color) ?? gold)
+                Text(activeSpeaker?.name ?? "Everyone").foregroundColor(.white)
+                Spacer()
+                Image(systemName: "chevron.up.chevron.down").font(.system(size: 9)).foregroundColor(Color.white.opacity(0.4))
+            }
+            .font(.system(size: 12, weight: .medium))
+            .padding(.horizontal, 9).padding(.vertical, 6)
+            .background(Color.white.opacity(0.06)).cornerRadius(7)
+            .contentShape(Rectangle())
+        }
+        .menuStyle(.borderlessButton).menuIndicator(.hidden)
+        .help("Whose messages to show. Each speaker gets their own progress charts.")
+    }
+
+    @ViewBuilder private func speakerAssignMenu(_ path: String) -> some View {
+        Menu("Speaker") {
+            ForEach(profiles.speakers) { s in
+                Button { profiles.assign(path, to: s.id) } label: {
+                    if profiles.speaker(for: path).id == s.id { Label(s.name, systemImage: "checkmark") } else { Text(s.name) }
+                }
+            }
+            Divider()
+            Button("Add a speaker…") { showSpeakers = true }
+        }
+    }
+
     // MARK: Video list
 
     private var videoList: some View {
@@ -158,6 +251,7 @@ struct AssessTab: View {
                 Button("Choose…") { chooseVideo() }.controlSize(.small)
             }
             .padding(.horizontal, 12).padding(.top, 12).padding(.bottom, 6)
+            speakerMenu.padding(.horizontal, 12).padding(.bottom, 8)
             // Import from YouTube
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
@@ -198,6 +292,8 @@ struct AssessTab: View {
                         }
                         .buttonStyle(.plain)
                         .contextMenu {
+                            speakerAssignMenu(path)
+                            Divider()
                             Button("Delete…") { pendingDelete = path }
                             Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)]) }
                         }
@@ -258,6 +354,7 @@ struct AssessTab: View {
                 ytStatus = nil; ytURL = ""
                 // A video removed earlier but downloaded again comes back
                 hiddenRaw = hiddenVideos.subtracting([file.path]).joined(separator: "\n")
+                claim(file.path)
                 select(file.path)
             } catch {
                 ytStatus = nil
@@ -273,6 +370,7 @@ struct AssessTab: View {
         guard panel.runModal() == .OK, let url = panel.url else { return }
         if !extraVideos.contains(url.path) { extraRaw = ([url.path] + extraVideos).joined(separator: "\n") }
         hiddenRaw = hiddenVideos.subtracting([url.path]).joined(separator: "\n")
+        claim(url.path)
         select(url.path)
     }
 
@@ -426,7 +524,23 @@ struct AssessTab: View {
                 HStack {
                     Text(YTDLP.title(fromFile: URL(fileURLWithPath: selected ?? "")))
                         .font(.system(size: 17, weight: .semibold)).foregroundColor(.white)
+                    if let path = selected, profiles.speakers.count > 1 {
+                        let who = profiles.speaker(for: path)
+                        Menu { speakerAssignMenu(path) } label: {
+                            Label(who.name, systemImage: "person.fill")
+                        }
+                        .menuStyle(.borderlessButton).fixedSize().tint(profiles.color(who))
+                        .help("Whose message is this?")
+                    }
                     Spacer()
+                    if let r = report {
+                        Menu {
+                            Button("Save as PDF…") { SpeakerReportDocument.savePDF(r, speaker: speakerName(r), history: sermons(of: profiles.speaker(for: r.videoPath))) }
+                            Button("Email as PDF…") { SpeakerReportDocument.email(r, speaker: speakerName(r), history: sermons(of: profiles.speaker(for: r.videoPath))) }
+                        } label: { Label("Share report", systemImage: "square.and.arrow.up") }
+                        .fixedSize().controlSize(.small)
+                        .help("A PDF of this assessment to send to a mentor or coach")
+                    }
                     Button { pendingDelete = selected } label: { Label("Delete", systemImage: "trash") }
                         .controlSize(.small)
                 }
@@ -438,7 +552,7 @@ struct AssessTab: View {
                 }
 
                 if let r = report, r.isPractice {
-                    PracticeCompareCard(report: r, sermons: sermonReports)
+                    PracticeCompareCard(report: r, sermons: sermons(of: profiles.speaker(for: r.videoPath)))
                 }
 
                 Picker("", selection: $mode) {
@@ -467,7 +581,7 @@ struct AssessTab: View {
                 case .stage:
                     if let r = report { StageSection(report: r, status: stageStatus, play: play(at:)) }
                 case .progress:
-                    SpeakerProgressSection(reports: sermonReports, open: { select($0) })
+                    progressBody
                 }
             }
             .padding(20)
