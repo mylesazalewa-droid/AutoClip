@@ -117,23 +117,22 @@ struct AssessTab: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            videoList.frame(width: 260)
-            Divider().background(Color.white.opacity(0.08))
+            videoList
             Group {
                 if selected == nil && mode == .progress {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 14) {
                             progressHeader
                             progressBody
-                        }.padding(20)
+                        }.padding(28)
                     }
                 } else if selected == nil {
                     VStack(spacing: 14) {
                         placeholder("Pick a video to assess", "AutoClip transcribes it (or reuses the saved transcript), then measures filler words, pace, pauses, voice and stage presence. The AI coach adds strengths, things to work on and a sermon map.")
-                            .frame(maxHeight: 260)
+                            .frame(maxHeight: 360)
                         HStack(spacing: 10) {
                             Button { showPractice = true } label: { Label("Record a practice run", systemImage: "mic.fill") }
-                                .buttonStyle(.bordered)
+                                .buttonStyle(SecondaryButtonStyle())
                             if !sermonReports.isEmpty {
                                 Button("📈 See \(progressOwner) progress across \(sermonReports.count) message\(sermonReports.count == 1 ? "" : "s")") { mode = .progress }
                                     .buttonStyle(PrimaryButtonStyle())
@@ -173,13 +172,7 @@ struct AssessTab: View {
     }
 
     private func placeholder(_ title: String, _ sub: String) -> some View {
-        VStack(spacing: 8) {
-            Image(systemName: "waveform.badge.magnifyingglass").font(.system(size: 36)).foregroundColor(gold)
-            Text(title).font(.system(size: 15, weight: .semibold)).foregroundColor(.white)
-            Text(sub).font(.system(size: 12)).foregroundColor(Color.white.opacity(0.5))
-                .multilineTextAlignment(.center).frame(maxWidth: 380)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        EmptyState(icon: "waveform.badge.magnifyingglass", title: title, message: sub) { EmptyView() }
     }
 
     // MARK: Speakers
@@ -195,7 +188,7 @@ struct AssessTab: View {
 
     private var progressHeader: some View {
         Text(progressOwner == "your" ? "Your progress" : progressOwner.prefix(1).uppercased() + progressOwner.dropFirst() + " progress")
-            .font(.system(size: 17, weight: .semibold)).foregroundColor(.white)
+            .font(Theme.display(28)).foregroundColor(Theme.cream)
     }
 
     /// One speaker's trends, or (with "Everyone" picked) the speakers side by side.
@@ -230,8 +223,8 @@ struct AssessTab: View {
                 Image(systemName: "chevron.up.chevron.down").font(.system(size: 9)).foregroundColor(Color.white.opacity(0.4))
             }
             .font(.system(size: 12, weight: .medium))
-            .padding(.horizontal, 9).padding(.vertical, 6)
-            .background(Color.white.opacity(0.06)).cornerRadius(7)
+            .padding(.horizontal, 12).padding(.vertical, 7)
+            .background(Capsule().fill(Color.white.opacity(0.05))).overlay(Capsule().stroke(Theme.line, lineWidth: 1))
             .contentShape(Rectangle())
         }
         .menuStyle(.borderlessButton).menuIndicator(.hidden)
@@ -253,16 +246,11 @@ struct AssessTab: View {
     // MARK: Video list
 
     private var videoList: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text("VIDEOS").font(.system(size: 10, weight: .semibold)).foregroundColor(Color.white.opacity(0.35)).tracking(1)
-                Spacer()
-                Button { showPractice = true } label: { Image(systemName: "mic.fill") }
-                    .controlSize(.small).help("Record a practice run")
-                Button("Choose…") { chooseVideo() }.controlSize(.small)
-            }
-            .padding(.horizontal, 12).padding(.top, 12).padding(.bottom, 6)
-            speakerMenu.padding(.horizontal, 12).padding(.bottom, 8)
+        SidebarPanel(title: "Sermons") {
+            IconPillButton(icon: "mic.fill", help: "Record a practice run") { showPractice = true }
+            IconPillButton(icon: "plus", help: "Choose a video") { chooseVideo() }
+        } content: {
+            speakerMenu.padding(.horizontal, 14).padding(.bottom, 8)
             // Import from YouTube
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
@@ -274,7 +262,8 @@ struct AssessTab: View {
                         .controlSize(.small)
                         .disabled(ytURL.trimmingCharacters(in: .whitespaces).isEmpty || ytStatus != nil)
                 }
-                .padding(7).background(Color.white.opacity(0.06)).cornerRadius(7)
+                .padding(.horizontal, 10).padding(.vertical, 6)
+                .background(Capsule().fill(Color.white.opacity(0.05))).overlay(Capsule().stroke(Theme.line, lineWidth: 1))
                 if let ytStatus {
                     HStack(spacing: 5) { ProgressView().scaleEffect(0.45).frame(width: 12, height: 12)
                         Text(ytStatus).font(.system(size: 10)).foregroundColor(Color.white.opacity(0.55)) }
@@ -283,30 +272,25 @@ struct AssessTab: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .padding(.horizontal, 12).padding(.bottom, 8)
+            .padding(.horizontal, 14).padding(.bottom, 10)
             ScrollView {
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 3) {
                     ForEach(videos, id: \.self) { path in
                         Button { select(path) } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: PracticeRecorder.isPractice(path) ? "mic.fill"
-                                      : TranscriptCache.load(for: path) != nil ? "text.bubble.fill" : "film")
-                                    .font(.system(size: 11)).foregroundColor(selected == path ? .black : gold.opacity(0.8))
-                                Text(YTDLP.title(fromFile: URL(fileURLWithPath: path)))
-                                    .font(.system(size: 12)).lineLimit(2).multilineTextAlignment(.leading)
-                                    .foregroundColor(selected == path ? .black : Color.white.opacity(0.85))
-                                Spacer(minLength: 0)
-                            }
-                            .padding(.leading, 10).padding(.trailing, 30).padding(.vertical, 7)
-                            .background(selected == path ? gold : hoveredVideo == path ? Color.white.opacity(0.05) : Color.clear).cornerRadius(6)
-                            .contentShape(Rectangle())
+                            let practice = PracticeRecorder.isPractice(path)
+                            let audioOnly = ["m4a", "mp3", "wav"].contains(URL(fileURLWithPath: path).pathExtension.lowercased())
+                            SidebarRow(thumb: audioOnly ? nil : path, icon: practice ? "mic.fill" : "film",
+                                       title: YTDLP.title(fromFile: URL(fileURLWithPath: path)),
+                                       detail: practice ? "Practice run" : TranscriptCache.load(for: path) != nil ? "Transcribed" : "Not assessed yet",
+                                       selected: selected == path)
+                                .padding(.trailing, hoveredVideo == path || selected == path ? 24 : 0)
                         }
                         .buttonStyle(.plain)
                         .overlay(alignment: .trailing) {
                             if hoveredVideo == path || selected == path {
                                 Button { pendingDelete = path } label: {
                                     Image(systemName: "trash").font(.system(size: 11))
-                                        .foregroundColor(selected == path ? .black.opacity(0.7) : Color.white.opacity(0.6))
+                                        .foregroundColor(Theme.muted)
                                         .frame(width: 24, height: 24).contentShape(Rectangle())
                                 }
                                 .buttonStyle(.plain).padding(.trailing, 4)
@@ -326,10 +310,9 @@ struct AssessTab: View {
                             .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.4)).padding(10)
                     }
                 }
-                .padding(.horizontal, 8)
+                .padding(.horizontal, 10).padding(.bottom, 12)
             }
         }
-        .background(Theme.surface)
         .confirmationDialog(deleteTitle, isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
                             titleVisibility: .visible) {
             if let path = pendingDelete {
@@ -545,9 +528,15 @@ struct AssessTab: View {
     private var report_: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                HStack {
-                    Text(YTDLP.title(fromFile: URL(fileURLWithPath: selected ?? "")))
-                        .font(.system(size: 17, weight: .semibold)).foregroundColor(.white)
+                HStack(alignment: .bottom) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 7) {
+                            Image(systemName: "diamond.fill").font(.system(size: 5)).foregroundColor(Theme.sand)
+                            Text(report?.isPractice == true ? "PRACTICE RUN" : "SERMON ASSESSMENT").font(.system(size: 10, weight: .semibold)).tracking(2).foregroundColor(Theme.sand)
+                        }
+                        Text(YTDLP.title(fromFile: URL(fileURLWithPath: selected ?? "")))
+                            .font(Theme.display(28)).foregroundColor(Theme.cream).lineLimit(2)
+                    }
                     if let path = selected, profiles.speakers.count > 1 {
                         let who = profiles.speaker(for: path)
                         Menu { speakerAssignMenu(path) } label: {
@@ -562,16 +551,20 @@ struct AssessTab: View {
                             Button("Save as PDF…") { SpeakerReportDocument.savePDF(r, speaker: speakerName(r), history: sermons(of: profiles.speaker(for: r.videoPath)), fillers: hits.map { ($0.kind, $0.time) }) }
                             Button("Email as PDF…") { SpeakerReportDocument.email(r, speaker: speakerName(r), history: sermons(of: profiles.speaker(for: r.videoPath)), fillers: hits.map { ($0.kind, $0.time) }) }
                         } label: { Label("Share report", systemImage: "square.and.arrow.up") }
-                        .fixedSize().controlSize(.small)
+                        .menuStyle(.borderlessButton).fixedSize()
+                        .padding(.horizontal, 12).padding(.vertical, 6)
+                        .background(Capsule().fill(Theme.terracotta))
                         .help("A PDF of this assessment to send to a mentor or coach")
                     }
-                    Button { pendingDelete = selected } label: { Label("Delete", systemImage: "trash") }
-                        .controlSize(.small)
+                    IconPillButton(icon: "trash", help: "Delete or remove from the list") { pendingDelete = selected }
                 }
 
                 HStack(alignment: .top, spacing: 16) {
                     VideoPlayer(player: player)
-                        .frame(width: 360, height: 203).cornerRadius(8)
+                        .frame(width: 400, height: 225)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Theme.line, lineWidth: 1))
+                        .shadow(color: .black.opacity(0.35), radius: 14, y: 6)
                     summary
                 }
 
@@ -579,10 +572,7 @@ struct AssessTab: View {
                     PracticeCompareCard(report: r, sermons: sermons(of: profiles.speaker(for: r.videoPath)))
                 }
 
-                Picker("", selection: $mode) {
-                    ForEach(Mode.allCases, id: \.self) { m in Text(m.rawValue).tag(m) }
-                }
-                .pickerStyle(.segmented).labelsHidden()
+                PillTabs(selection: $mode, items: Mode.allCases.map { ($0, $0.rawValue) })
 
                 switch mode {
                 case .fillers:
@@ -614,7 +604,7 @@ struct AssessTab: View {
                     progressBody
                 }
             }
-            .padding(20)
+            .padding(.horizontal, 28).padding(.vertical, 22)
         }
     }
 

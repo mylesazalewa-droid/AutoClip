@@ -36,12 +36,14 @@ struct SearchTab: View {
     var body: some View {
         HStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 0) {
+                PageHeader(eyebrow: "Search", title: "Everything you've preached",
+                           subtitle: "\(library.count) transcribed message\(library.count == 1 ? "" : "s") · “forgive” also finds forgiven and forgiveness")
                 searchBar
-                Divider().background(Color.white.opacity(0.08))
                 results
             }
-            Divider().background(Color.white.opacity(0.08))
             sidePanel.frame(width: 380)
+                .background(Theme.surface)
+                .overlay(Rectangle().fill(Theme.line).frame(width: 1), alignment: .leading)
         }
         .background(Theme.bg)
         .task { await load() }
@@ -51,32 +53,37 @@ struct SearchTab: View {
     // MARK: Search bar
 
     private var searchBar: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass").foregroundColor(gold)
-                TextField("Search everything you've preached: forgiveness, Romans 8, \"grace upon grace\"", text: $query)
-                    .textFieldStyle(.plain).font(.system(size: 14)).foregroundColor(.white)
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                Image(systemName: "magnifyingglass").font(.system(size: 15)).foregroundColor(gold)
+                TextField("Forgiveness, Romans 8, \"grace upon grace\"", text: $query)
+                    .textFieldStyle(.plain).font(.system(size: 16)).foregroundColor(Theme.cream)
                     .focused($focused)
                 if !query.isEmpty {
-                    Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundColor(Color.white.opacity(0.4)) }
+                    Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundColor(Theme.faint) }
                         .buttonStyle(.plain)
                 }
             }
-            .padding(10).background(Color.white.opacity(0.06)).cornerRadius(8)
+            .padding(.horizontal, 18).padding(.vertical, 13)
+            .background(Capsule().fill(Theme.surface))
+            .overlay(Capsule().stroke(focused ? Theme.sand.opacity(0.6) : Theme.line, lineWidth: 1))
             HStack(spacing: 6) {
                 ForEach(["forgiveness", "grace", "fear", "prayer", "purpose", "identity"], id: \.self) { s in
-                    Button(s) { query = s }
-                        .buttonStyle(.plain).font(.system(size: 11)).foregroundColor(Color.white.opacity(0.7))
-                        .padding(.horizontal, 8).padding(.vertical, 3).background(Color.white.opacity(0.06)).cornerRadius(10)
+                    Button(s.capitalized) { query = s }
+                        .buttonStyle(.plain).font(.system(size: 11, weight: .medium))
+                        .foregroundColor(query == s ? Theme.bg : Theme.text.opacity(0.8))
+                        .padding(.horizontal, 12).padding(.vertical, 5)
+                        .background(Capsule().fill(query == s ? Theme.sand : Color.white.opacity(0.05)))
+                        .overlay(Capsule().stroke(Theme.line, lineWidth: 1))
                 }
                 Spacer()
                 if library.contains(where: \.isPractice) {
-                    Toggle("Include practice runs", isOn: $includePractice).toggleStyle(.checkbox)
-                        .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.6))
+                    Toggle("Include practice runs", isOn: $includePractice).toggleStyle(.switch).controlSize(.mini)
+                        .font(.system(size: 11)).foregroundColor(Theme.muted)
                 }
             }
         }
-        .padding(16)
+        .padding(.horizontal, 28).padding(.bottom, 18)
         .onAppear { focused = true }
     }
 
@@ -119,14 +126,14 @@ struct SearchTab: View {
                     }
                 }
             }
-            .padding(16)
+            .padding(.horizontal, 28).padding(.vertical, 8)
         }
     }
 
     private var intro: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Find any moment across all your sermons")
-                .font(.system(size: 15, weight: .semibold)).foregroundColor(.white)
+                .font(Theme.display(20)).foregroundColor(Theme.cream)
             Text("Search \(library.count) transcribed video\(library.count == 1 ? "" : "s") for a word, a topic or a Bible passage. Useful for avoiding repeats, building a series or pulling clips. Words match their other forms, so “forgive” also finds “forgiven” and “forgiveness”. Put a phrase in quotes to match it exactly.")
                 .font(.system(size: 12)).foregroundColor(Color.white.opacity(0.6)).fixedSize(horizontal: false, vertical: true)
         }

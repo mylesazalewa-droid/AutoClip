@@ -563,63 +563,34 @@ struct AutoReelsTab: View {
 
     var gridView: some View {
         VStack(spacing: 0) {
-            // Header outside ScrollView — Divider forces VStack to full width (same as Auto Clips)
-            HStack {
-                Text("My Reels")
-                    .font(Theme.display(22, weight: .medium)).foregroundColor(Theme.cream)
-                let displayCount = reelSearch.isEmpty ? store.reels.count
-                    : store.reels.filter { $0.title.localizedCaseInsensitiveContains(reelSearch) }.count
-                Text("(\(displayCount))")
-                    .font(.system(size: 15)).foregroundColor(Color.white.opacity(0.4))
-                Spacer()
-                HStack(spacing: 6) {
-                    Image(systemName: "magnifyingglass").font(.system(size: 11))
-                        .foregroundColor(Color.white.opacity(0.35))
-                    TextField("Search reels…", text: $reelSearch)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 12))
-                        .foregroundColor(.white)
-                        .frame(width: 120)
-                }
-                .padding(.horizontal, 9).padding(.vertical, 5)
-                .background(Color.white.opacity(0.07)).cornerRadius(7)
+            let displayCount = reelSearch.isEmpty ? store.reels.count
+                : store.reels.filter { $0.title.localizedCaseInsensitiveContains(reelSearch) }.count
+            PageHeader(eyebrow: "Auto Reels", title: "My Reels",
+                       subtitle: "\(displayCount) project\(displayCount == 1 ? "" : "s") · short vertical clips cut from your messages") {
+                SearchPill(text: $reelSearch, placeholder: "Search reels", width: 200)
                 Button(action: {
                     pickedVideoURL = nil
                     inputMode = .file
                     showingCreateSheet = true
-                }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "plus")
-                        Text("New Reel")
-                    }
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.black)
-                    .padding(.horizontal, 16).padding(.vertical, 8)
-                    .background(gold)
-                    .cornerRadius(9)
-                }
-                .buttonStyle(.plain)
+                }) { Label("New Reel", systemImage: "plus") }
+                .buttonStyle(PrimaryButtonStyle())
             }
-            .padding(.horizontal, 20).padding(.vertical, 12)
-
-            Divider().background(Color.white.opacity(0.08))
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-
-
-                    // Active jobs + finished reels — same grid structure as Auto Clips
+                    // Active jobs + finished reels, as posters
                     LazyVGrid(
-                        columns: [GridItem(.adaptive(minimum: 260, maximum: 360), spacing: 12)],
-                        spacing: 12
+                        columns: [GridItem(.adaptive(minimum: 200, maximum: 240), spacing: 18, alignment: .top)],
+                        alignment: .leading,
+                        spacing: 22
                     ) {
                         ForEach(store.activeJobs) { job in activeJobCard(job) }
                         let visibleReels = reelSearch.isEmpty ? store.reels
                             : store.reels.filter { $0.title.localizedCaseInsensitiveContains(reelSearch) }
                         ForEach(visibleReels) { reel in reelCard(reel) }
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 16)
+                    .padding(.horizontal, 28)
+                    .padding(.top, 4)
                     .padding(.bottom, 30)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -1123,12 +1094,12 @@ struct AutoReelsTab: View {
                 // Thumbnail from source video (or placeholder while unavailable)
                 if let srcPath = job.sourceVideoPath {
                     ReelThumbnailView(path: srcPath)
-                        .frame(height: 200).clipped()
+                        .frame(height: 340).clipped()
                         .overlay(Color.black.opacity(0.35))  // dim so overlay text is readable
                 } else {
                     Rectangle()
                         .fill(Color.white.opacity(0.05))
-                        .frame(height: 200)
+                        .frame(height: 340)
                         .overlay(
                             Image(systemName: job.error != nil ? "exclamationmark.triangle" : "film.stack")
                                 .font(.system(size: 36))
@@ -1345,165 +1316,76 @@ private struct ReelCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ZStack(alignment: .bottomLeading) {
+        VStack(alignment: .leading, spacing: 8) {
+            ZStack(alignment: .topLeading) {
                 ReelThumbnailView(path: reel.path)
-                    .frame(minWidth: 0, maxWidth: .infinity)   // wide thumbnails must not push past the column
-                    .frame(height: 200)
+                    .frame(minWidth: 0, maxWidth: .infinity)
+                    .aspectRatio(9 / 16, contentMode: .fit)
                     .clipped()
-
-                VStack {
-                    HStack {
-                        Text(shortDate(reel.dateCreated))
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 5).padding(.vertical, 2)
-                            .background(Color.black.opacity(0.55))
-                            .cornerRadius(4)
-                        Spacer()
-                        HStack(spacing: 4) {
-                            Circle().fill(Theme.danger).frame(width: 5, height: 5)
-                            Text(formatReelDur(reel.duration))
-                                .font(.system(size: 9, weight: .medium)).foregroundColor(.white)
-                        }
-                        .padding(.horizontal, 5).padding(.vertical, 2)
-                        .background(Color.black.opacity(0.55))
-                        .cornerRadius(4)
+                // Shade for the labels
+                LinearGradient(colors: [.black.opacity(0.45), .clear, .clear, .black.opacity(0.6)], startPoint: .top, endPoint: .bottom)
+                HStack(spacing: 6) {
+                    if isMulti {
+                        Text("\(reel.paths.count) REELS").font(.system(size: 9, weight: .bold)).tracking(1)
+                            .foregroundColor(Theme.bg)
+                            .padding(.horizontal, 7).padding(.vertical, 3).background(Capsule().fill(Theme.sand))
                     }
-                    .padding(6)
                     Spacer()
+                    Text(formatReelDur(reel.duration)).font(.system(size: 9, weight: .semibold)).foregroundColor(Theme.cream)
+                        .padding(.horizontal, 7).padding(.vertical, 3).background(Capsule().fill(Color.black.opacity(0.55)))
                 }
-
-                if isMulti {
-                    Text("\(reel.paths.count) Reels")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(.black)
-                        .padding(.horizontal, 7).padding(.vertical, 3)
-                        .background(gold)
-                        .cornerRadius(5)
-                        .padding(8)
-                }
-
-                VStack {
-                    Spacer()
-                    HStack {
-                        Text(captionSnippet)
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundColor(.white)
-                            .lineLimit(1)
-                            .shadow(color: .black.opacity(0.8), radius: 2, x: 0, y: 1)
-                        Spacer()
-                        ZStack {
-                            Circle().fill(gold).frame(width: 26, height: 26)
-                            Text("\(scoreBadge)")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundColor(.black)
-                        }
-                    }
-                    .padding(.horizontal, 8).padding(.bottom, 6)
-                }
-
+                .padding(9)
+                // Hover: play, show in Finder, delete
                 if isHovered {
-                    ZStack {
-                        Color.black.opacity(0.45)
-                        HStack(spacing: 10) {
-                            Button(action: {
-                                let pts = reel.cutPointsPerReel.first ?? reel.cutPoints
-                                onPlay(primaryURL, pts, reel.duration)
-                            }) {
-                                Image(systemName: "play.circle.fill")
-                                    .font(.system(size: 36))
-                                    .foregroundColor(gold)
-                            }
-                            .buttonStyle(.plain)
-                            .help("Preview")
-
-                            Button(action: {
-                                let urls = reel.paths.map { URL(fileURLWithPath: $0) }
-                                    .filter { FileManager.default.fileExists(atPath: $0.path) }
+                    Color.black.opacity(0.35)
+                    VStack(spacing: 12) {
+                        Button {
+                            let pts = reel.cutPointsPerReel.first ?? reel.cutPoints
+                            onPlay(primaryURL, pts, reel.duration)
+                        } label: {
+                            Image(systemName: "play.fill").font(.system(size: 18)).foregroundColor(Theme.cream)
+                                .frame(width: 48, height: 48).background(Circle().fill(Theme.terracotta.opacity(0.95)))
+                                .shadow(color: .black.opacity(0.4), radius: 8, y: 3)
+                        }
+                        .buttonStyle(.plain).help("Preview")
+                        HStack(spacing: 8) {
+                            Button {
+                                let urls = reel.paths.map { URL(fileURLWithPath: $0) }.filter { FileManager.default.fileExists(atPath: $0.path) }
                                 onFinder(urls.isEmpty ? [primaryURL] : urls)
-                            }) {
-                                Image(systemName: "folder.fill")
-                                    .font(.system(size: 26))
-                                    .foregroundColor(Color.white.opacity(0.8))
+                            } label: {
+                                Image(systemName: "folder").font(.system(size: 11)).foregroundColor(Theme.cream)
+                                    .frame(width: 28, height: 28).background(Circle().fill(Color.black.opacity(0.55)))
                             }
-                            .buttonStyle(.plain)
-                            .help("Show in Finder")
-                        }
-                    }
-
-                    VStack {
-                        HStack {
-                            Spacer()
+                            .buttonStyle(.plain).help("Show in Finder")
                             Button(action: onDelete) {
-                                Image(systemName: "trash")
-                                    .font(.system(size: 11, weight: .semibold))
-                                    .foregroundColor(Theme.danger)
-                                    .padding(6)
-                                    .background(Color.black.opacity(0.65))
-                                    .cornerRadius(6)
+                                Image(systemName: "trash").font(.system(size: 11)).foregroundColor(Theme.danger)
+                                    .frame(width: 28, height: 28).background(Circle().fill(Color.black.opacity(0.55)))
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.plain).help("Delete")
                         }
-                        .padding(8)
-                        Spacer()
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-            .frame(height: 200)
-            .cornerRadius(8, corners: [.topLeft, .topRight])
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(isSelected ? Theme.sand : isHovered ? Theme.sand.opacity(0.6) : Theme.line, lineWidth: isSelected || isHovered ? 1.5 : 1)
+            )
+            .shadow(color: .black.opacity(isHovered ? 0.45 : 0.25), radius: isHovered ? 16 : 8, y: isHovered ? 8 : 4)
+            .contentShape(Rectangle())
             .onTapGesture { onSelect() }
 
-            HStack(alignment: .bottom, spacing: 2) {
-                ForEach(Array(waveformBars.enumerated()), id: \.offset) { _, h in
-                    RoundedRectangle(cornerRadius: 1)
-                        .fill(gold.opacity(0.5))
-                        .frame(width: 3, height: max(3, 18 * h))
-                }
+            VStack(alignment: .leading, spacing: 3) {
+                Text(reel.title).font(.system(size: 12, weight: .semibold)).foregroundColor(Theme.text)
+                    .lineLimit(2).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+                Text("\(reel.format) · \(relativeDate(reel.dateCreated))").font(.system(size: 10)).foregroundColor(Theme.muted)
             }
-            .frame(height: 20)
-            .padding(.horizontal, 12).padding(.top, 8)
-            .background(Theme.raised)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(reel.title)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.white)
-                    .lineLimit(2)
-
-                HStack(spacing: 4) {
-                    Text(reel.format)
-                        .font(.system(size: 11))
-                        .foregroundColor(Color.white.opacity(0.5))
-                    Circle().fill(Color.white.opacity(0.3)).frame(width: 2.5, height: 2.5)
-                    Text(formatReelDur(reel.duration))
-                        .font(.system(size: 11))
-                        .foregroundColor(Color.white.opacity(0.5))
-                    if isMulti {
-                        Circle().fill(Color.white.opacity(0.3)).frame(width: 2.5, height: 2.5)
-                        Text("\(reel.paths.count) reels")
-                            .font(.system(size: 11))
-                            .foregroundColor(gold.opacity(0.8))
-                    }
-                    Spacer()
-                    Text(relativeDate(reel.dateCreated))
-                        .font(.system(size: 11))
-                        .foregroundColor(Color.white.opacity(0.35))
-                }
-            }
-            .padding(.horizontal, 12).padding(.vertical, 8)
-            .background(Theme.raised)
-
+            .padding(.horizontal, 2)
         }
-        .background(Theme.raised)
-        .cornerRadius(8)
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(isSelected ? gold : (isHovered ? gold.opacity(0.4) : Color.white.opacity(0.06)),
-                        lineWidth: isSelected ? 1.5 : 1)
-        )
+        .scaleEffect(isHovered ? 1.02 : 1)
+        .animation(.easeOut(duration: 0.15), value: isHovered)
         .onHover { isHovered = $0 }
-        .onTapGesture { onSelect() }
     }
 
     private func formatReelDur(_ s: Double) -> String {
@@ -1991,16 +1873,23 @@ struct ReelThumbnailView: View {
         .task(id: path) { await loadThumbnail() }
     }
 
+    /// Pictures already made, shared by every card, sidebar row and banner
+    private static let cache = NSCache<NSString, NSImage>()
+
     private func loadThumbnail() async {
+        if let hit = Self.cache.object(forKey: path as NSString) { image = hit; return }
         guard FileManager.default.fileExists(atPath: path) else { return }
         let url = URL(fileURLWithPath: path)
         let asset = AVURLAsset(url: url)
         let gen = AVAssetImageGenerator(asset: asset)
         gen.appliesPreferredTrackTransform = true
-        gen.maximumSize = CGSize(width: 640, height: 360)
-        let t = CMTime(seconds: 1.5, preferredTimescale: 600)
+        gen.maximumSize = CGSize(width: 640, height: 640)
+        // Long videos (sermons, episodes) open on black or a title; pick a moment further in
+        let dur = (try? await asset.load(.duration)).map(CMTimeGetSeconds) ?? 0
+        let t = CMTime(seconds: dur > 60 ? dur * 0.12 : 1.5, preferredTimescale: 600)
         if let cgImg = try? await gen.image(at: t).image {
             let ns = NSImage(cgImage: cgImg, size: .zero)
+            Self.cache.setObject(ns, forKey: path as NSString)
             await MainActor.run { image = ns }
         }
     }

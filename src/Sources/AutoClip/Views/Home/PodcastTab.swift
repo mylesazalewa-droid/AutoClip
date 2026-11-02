@@ -18,8 +18,7 @@ struct PodcastTab: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            list.frame(width: 260)
-            Divider().background(Color.white.opacity(0.08))
+            list
             if let e = store.episode(selected) {
                 PodcastEpisodeView(id: e.id).id(e.id)
             } else {
@@ -31,55 +30,32 @@ struct PodcastTab: View {
     }
 
     private var list: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text("EPISODES").font(.system(size: 10, weight: .semibold)).foregroundColor(Color.white.opacity(0.35)).tracking(1)
-                Spacer()
-                Button { showNew = true } label: { Label("New", systemImage: "plus") }.controlSize(.small)
-            }
-            .padding(12)
+        SidebarPanel(title: "Episodes") {
+            IconPillButton(icon: "plus", help: "New episode") { showNew = true }
+        } content: {
             ScrollView {
-                VStack(spacing: 2) {
+                VStack(spacing: 3) {
                     ForEach(store.episodes) { e in
                         Button { selected = e.id } label: {
-                            HStack(alignment: .top, spacing: 8) {
-                                Image(systemName: e.isAudioOnly ? "mic.fill" : e.angles.count > 1 ? "video.fill.badge.plus" : "video.fill")
-                                    .font(.system(size: 11)).foregroundColor(selected == e.id ? .black : gold).frame(width: 16)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(e.title).font(.system(size: 12, weight: .medium)).lineLimit(2).multilineTextAlignment(.leading)
-                                        .foregroundColor(selected == e.id ? .black : .white)
-                                    if let st = store.status[e.id] {
-                                        Text(st).font(.system(size: 10)).lineLimit(1).foregroundColor(selected == e.id ? .black.opacity(0.6) : Color.white.opacity(0.5))
-                                    } else if e.duration > 0 {
-                                        Text("\(podcastTime(e.duration)) → \(podcastTime(e.editedDuration))").font(.system(size: 10, design: .monospaced))
-                                            .foregroundColor(selected == e.id ? .black.opacity(0.6) : Color.white.opacity(0.45))
-                                    }
-                                }
-                                Spacer(minLength: 0)
-                            }
-                            .padding(.horizontal, 10).padding(.vertical, 7)
-                            .background(selected == e.id ? gold : Color.clear).cornerRadius(6)
-                            .contentShape(Rectangle())
+                            SidebarRow(thumb: e.isAudioOnly ? nil : e.angles.first?.path,
+                                       icon: e.isAudioOnly ? "mic.fill" : "video.fill",
+                                       title: e.title,
+                                       detail: store.status[e.id] ?? (e.duration > 0 ? "\(podcastTime(e.duration)) → \(podcastTime(e.editedDuration))" : nil),
+                                       selected: selected == e.id)
                         }
                         .buttonStyle(.plain)
                     }
                 }
-                .padding(.horizontal, 8)
+                .padding(.horizontal, 10).padding(.bottom, 12)
             }
         }
-        .background(panel)
     }
 
     private var empty: some View {
-        VStack(spacing: 14) {
-            Image(systemName: "mic.and.signal.meter.fill").font(.system(size: 40)).foregroundColor(gold)
-            Text("Make a podcast").font(.system(size: 18, weight: .semibold)).foregroundColor(.white)
-            Text("Add a video or audio recording (and any other camera angles). AutoClip cuts the long pauses and “um”s, cleans up and evens out the voices, switches cameras to whoever is talking (or zooms in to make new shots from one camera), and exports YouTube, vertical, square and feed sizes plus a podcast audio file with chapters, show notes and a transcript.")
-                .font(.system(size: 12)).foregroundColor(Color.white.opacity(0.6)).multilineTextAlignment(.center).frame(maxWidth: 460)
-            Button { showNew = true } label: { Label("New episode", systemImage: "plus") }
-                .buttonStyle(PrimaryButtonStyle())
+        EmptyState(icon: "mic.and.signal.meter.fill", title: "Make a podcast",
+                   message: "Add a video or audio recording, plus any other camera angles or each person's own recording. AutoClip cuts the long pauses and “um”s, cleans up and evens out the voices, follows whoever is talking, and exports every size plus podcast audio with chapters, show notes and a transcript.") {
+            Button { showNew = true } label: { Label("New episode", systemImage: "plus") }.buttonStyle(PrimaryButtonStyle())
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -215,10 +191,8 @@ struct PodcastEpisodeView: View {
                         }
                         if !e.isAudioOnly { PodcastTimeline(episode: e, now: now) { seek($0) } }
                         if !e.isAudioOnly { currentShot(e) }
-                        Picker("", selection: $section) {
-                            ForEach(Section.allCases.filter { !(e.isAudioOnly && $0 == .camera) }, id: \.self) { Text($0.rawValue).tag($0) }
-                        }
-                        .pickerStyle(.segmented).labelsHidden()
+                        PillTabs(selection: $section, items: Section.allCases.filter { !(e.isAudioOnly && $0 == .camera) }.map { ($0, $0.rawValue) })
+                            .padding(.top, 6)
                         switch section {
                         case .edit: PodcastEditSection(id: id, seek: seek, clock: clock)
                         case .camera: PodcastCameraSection(id: id)
@@ -247,15 +221,22 @@ struct PodcastEpisodeView: View {
     }
 
     private func header(_ e: PodcastEpisode) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 7) {
+                Image(systemName: "diamond.fill").font(.system(size: 5)).foregroundColor(Theme.sand)
+                Text(e.isAudioOnly ? "PODCAST · AUDIO" : e.separateTracks ? "PODCAST · REMOTE" : "PODCAST EPISODE")
+                    .font(.system(size: 10, weight: .semibold)).tracking(2).foregroundColor(Theme.sand)
+                Text("· \(e.created.formatted(date: .abbreviated, time: .omitted))").font(.system(size: 10)).foregroundColor(Theme.faint)
+            }
         HStack(spacing: 10) {
             // The title is text until you choose to rename it, so it isn't selected on arrival
             if editingTitle {
                 TextField("Title", text: $title)
-                    .textFieldStyle(.plain).font(Theme.display(24)).foregroundColor(Theme.cream)
+                    .textFieldStyle(.plain).font(Theme.display(28)).foregroundColor(Theme.cream)
                     .onSubmit { store.update(id) { $0.title = title }; editingTitle = false }
                     .onChange(of: title) { t in store.update(id) { $0.title = t } }
             } else {
-                Text(e.title).font(Theme.display(24)).foregroundColor(Theme.cream).lineLimit(1)
+                Text(e.title).font(Theme.display(28)).foregroundColor(Theme.cream).lineLimit(1)
                     .onTapGesture(count: 2) { title = e.title; editingTitle = true }
                 Button { title = e.title; editingTitle = true } label: { Image(systemName: "pencil").font(.system(size: 12)) }
                     .buttonStyle(.plain).foregroundColor(Theme.faint).help("Rename")
@@ -266,8 +247,11 @@ struct PodcastEpisodeView: View {
                 Button("Show working files in Finder") { NSWorkspace.shared.activateFileViewerSelecting([e.folder]) }
                 Divider()
                 Button("Delete episode…", role: .destructive) { confirmDelete = true }
-            } label: { Image(systemName: "ellipsis.circle") }
+            } label: { Image(systemName: "ellipsis") }
             .menuStyle(.borderlessButton).fixedSize()
+            .padding(.horizontal, 8).padding(.vertical, 5)
+            .background(Capsule().fill(Color.white.opacity(0.05))).overlay(Capsule().stroke(Theme.line, lineWidth: 1))
+        }
         }
         .confirmationDialog("Delete “\(e.title)”?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Delete episode", role: .destructive) { store.cancel(id); store.delete(id) }
@@ -314,10 +298,7 @@ struct PodcastEpisodeView: View {
             }
             .frame(width: box.width, height: e.isAudioOnly ? 80 : box.height).cornerRadius(8)
             if !e.isAudioOnly {
-                Picker("", selection: $format) {
-                    ForEach(PodcastVideo.formats, id: \.self) { Text($0).tag($0) }
-                }
-                .pickerStyle(.segmented).labelsHidden().frame(width: 260)
+                PillTabs(selection: $format, items: PodcastVideo.formats.map { ($0, $0) }, compact: true)
             }
             Text("Preview with the original sound. Names, title card and cleaned-up sound are added on export.")
                 .font(.system(size: 9)).foregroundColor(Color.white.opacity(0.35))
@@ -613,10 +594,7 @@ struct PodcastCameraSection: View {
                         .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.4))
                 }
                 AssessCard(title: "Camera style") {
-                    Picker("Cutting", selection: plan(\.cameraStyle)) {
-                        Text("Calm — long shots").tag("calm"); Text("Balanced").tag("balanced"); Text("Lively — more cuts").tag("lively")
-                    }
-                    .pickerStyle(.segmented)
+                    PillTabs(selection: plan(\.cameraStyle), items: [("calm", "Calm — long shots"), ("balanced", "Balanced"), ("lively", "Lively — more cuts")])
                     Toggle("Make extra shots by zooming in", isOn: plan(\.zoomShots))
                     Toggle("Show names on screen", isOn: setting(\.showNames))
                     Toggle("Title card at the start, end card at the end", isOn: setting(\.titleCard))
