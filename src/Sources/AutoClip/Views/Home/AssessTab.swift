@@ -495,8 +495,10 @@ struct AssessTab: View {
                     coachError = "Add an API key in Auto Reels → AI settings to use the AI coach."
                     return
                 }
-                let c = try await LLMClipService.shared.coachReport(
-                    sentences: sentences.map { ($0.start, $0.end, $0.text) }, stats: stats, provider: provider, apiKey: key)
+                let c = try await CostTag.$video.withValue(report?.title) {
+                    try await LLMClipService.shared.coachReport(
+                        sentences: sentences.map { ($0.start, $0.end, $0.text) }, stats: stats, provider: provider, apiKey: key)
+                }
                 guard selected == path else { return }
                 report?.coach = c
                 if let r = report { SpeakerReportStore.save(r) }
@@ -524,9 +526,11 @@ struct AssessTab: View {
                     notesError = "Add an API key in Auto Reels → AI settings to write sermon notes."
                     return
                 }
-                let n = try await LLMClipService.shared.sermonNotes(
-                    sentences: sentences.map { ($0.start, $0.end, $0.text) }, title: r.title, verses: verses,
-                    kind: ContentKind.current, provider: provider, apiKey: key)
+                let n = try await CostTag.$video.withValue(r.title) {
+                    try await LLMClipService.shared.sermonNotes(
+                        sentences: sentences.map { ($0.start, $0.end, $0.text) }, title: r.title, verses: verses,
+                        kind: ContentKind.current, provider: provider, apiKey: key)
+                }
                 guard selected == path else { return }
                 report?.notes = n
                 if let r = report { SpeakerReportStore.save(r) }

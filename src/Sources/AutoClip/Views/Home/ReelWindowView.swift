@@ -51,6 +51,8 @@ struct ReelWindowView: View {
 struct DraftPreviewPane: View {
     let draft: ReelDraft
     let gold: Color
+    /// Start playing as soon as it's loaded (quick review)
+    var autoplay = false
 
     @State private var player = AVPlayer()
     @State private var words: [Word] = []
@@ -143,6 +145,7 @@ struct DraftPreviewPane: View {
             time = CMTimeGetSeconds(t)
             if time >= total - 0.05 { isPlaying = false }
         }
+        if autoplay { player.play(); isPlaying = true }
     }
 
     /// Re-crops the preview to follow whoever is talking (same tracking as the export)

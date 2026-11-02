@@ -344,8 +344,10 @@ extension PodcastStore {
                 throw PodcastAudio.Failure(message: "Add an API key in Auto Reels → AI settings to write show notes.")
             }
             let paras = PodcastExports.paragraphs(e, words: words)
-            let notes = try await LLMClipService.shared.podcastNotes(title: e.title, paragraphs: paras,
-                                                                    people: e.people.map(\.name), provider: provider, apiKey: key)
+            let notes = try await CostTag.$video.withValue(e.title) {
+                try await LLMClipService.shared.podcastNotes(title: e.title, paragraphs: paras,
+                                                             people: e.people.map(\.name), provider: provider, apiKey: key)
+            }
             update(id) { $0.notes = notes }
         }
     }

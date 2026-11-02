@@ -126,6 +126,8 @@ struct HomeView: View {
 
             Spacer()
 
+            AutoImportChip()
+            AIUsageChip()
             ContentKindMenu()
 
             if activeTab == .autoClips {

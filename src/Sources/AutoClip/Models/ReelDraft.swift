@@ -33,10 +33,12 @@ struct ReelDraft: Identifiable, Codable, Equatable {
     }
 
     /// "auto" follows the speaker, "careful" re-checks the tracking more closely, "fixed" holds
-    /// the crop still at `x` (0 = left edge of the video, 1 = right edge).
+    /// the crop still at `x` (0 = left edge of the video, 1 = right edge), "split" stacks two
+    /// people: the one at `x` on top, the one at `x2` below.
     struct Framing: Codable, Equatable {
         var mode: String
         var x: Double = 0.5
+        var x2: Double?
     }
 
     var id = UUID()
@@ -278,6 +280,7 @@ struct ReelDraft: Identifiable, Codable, Equatable {
                 if let f = piece.framing {
                     if f.mode == "fixed" { c.frameX = f.x }
                     if f.mode == "careful" { c.carefulFraming = true }
+                    if f.mode == "split" { c.splitX = [f.x, f.x2 ?? 0.75] }
                 }
                 runs.append(Run(clip: c, firstSentenceID: firstS.id, lastSentenceID: lastS.id,
                                 startsAtSentence: startsAtSentence && firstIsSentStart,
@@ -411,6 +414,9 @@ struct ReelDraft: Identifiable, Codable, Equatable {
         var at = CMTime.zero
         var words: [Word] = []
         var assets: [String: AVURLAsset] = [:]
+        // Split-screen clips need the picture twice (top and bottom)
+        let vTrack2 = renderClips.contains { $0.splitX != nil }
+            ? comp.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) : nil
         for clip in renderClips {
             let asset = assets[clip.sourceVideoPath] ?? AVURLAsset(url: URL(fileURLWithPath: clip.sourceVideoPath))
             assets[clip.sourceVideoPath] = asset
@@ -419,6 +425,7 @@ struct ReelDraft: Identifiable, Codable, Equatable {
             let range = CMTimeRange(start: CMTime(seconds: clip.startTime, preferredTimescale: 600),
                                     end: CMTime(seconds: clip.endTime, preferredTimescale: 600))
             guard (try? vTrack.insertTimeRange(range, of: sv, at: at)) != nil else { continue }
+            if clip.splitX != nil { try? vTrack2?.insertTimeRange(range, of: sv, at: at) }
             if let sa = try? await asset.loadTracks(withMediaType: .audio).first {
                 try? aTrack.insertTimeRange(range, of: sa, at: at)
             }

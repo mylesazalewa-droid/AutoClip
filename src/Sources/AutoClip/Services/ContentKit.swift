@@ -37,6 +37,13 @@ enum ContentKit {
 
     static func build(record: AutoReelRecord, in parent: URL, options o: Options,
                       progress: @escaping @MainActor (String) -> Void) async throws -> Result {
+        try await CostTag.$video.withValue(record.title) {
+            try await make(record: record, in: parent, options: o, progress: progress)
+        }
+    }
+
+    private static func make(record: AutoReelRecord, in parent: URL, options o: Options,
+                             progress: @escaping @MainActor (String) -> Void) async throws -> Result {
         let kind = record.kind
         let folder = parent.appendingPathComponent(safe(record.title) + " – Content Kit")
         let fm = FileManager.default
@@ -55,8 +62,12 @@ enum ContentKit {
         let wantsAI = o.posts || o.notes || o.graphics
         let key = wantsAI ? (await LLMClipService.shared.loadAPIKey(for: st.provider) ?? "") : ""
         let hasAI = !key.isEmpty
+        // Post captions are a simple job, so on-device AI can write them without a key
+        let localReady = o.posts && !hasAI ? await LocalAI.ready() : false
+        let canPost = hasAI || localReady
         if !hasAI && wantsAI {
-            skipped.append("Captions, notes and graphics need an AI key (Auto Reels → AI settings).")
+            skipped.append(canPost ? "Notes and graphics need an AI key (Auto Reels → AI settings)."
+                                   : "Captions, notes and graphics need an AI key (Auto Reels → AI settings).")
         }
 
         // Transcript + captions file for the full video
@@ -71,7 +82,7 @@ enum ContentKit {
         }
 
         // Post copy for each reel
-        if o.posts && hasAI && !drafts.isEmpty {
+        if o.posts && canPost && !drafts.isEmpty {
             await progress("Writing captions and hashtags…")
             do {
                 let reels = drafts.map { d in

@@ -129,7 +129,9 @@ struct SocialGraphicsView: View {
         error = nil; saved = nil; status = "Starting…"
         Task {
             do {
-                let r = try await ReelGenerator.graphics(for: record) { msg in Task { @MainActor in status = msg } }
+                let r = try await CostTag.$video.withValue(record.title) {
+                    try await ReelGenerator.graphics(for: record) { msg in Task { @MainActor in status = msg } }
+                }
                 source = r.source
                 cards = SocialGraphics.cards(from: r.plan, sentences: r.sentences)
                 images = [:]

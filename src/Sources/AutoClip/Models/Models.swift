@@ -62,6 +62,9 @@ struct Clip: Identifiable, Codable {
     var frameX: Double?
     /// Re-check the face tracking more closely for this clip
     var carefulFraming: Bool?
+    /// Split screen (vertical reels): two people stacked, top and bottom, each centred at these
+    /// horizontal positions (0…1)
+    var splitX: [Double]?
 
     var duration: TimeInterval { endTime - startTime }
 

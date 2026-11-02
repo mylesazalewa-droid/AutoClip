@@ -319,6 +319,16 @@ Respond with ONLY valid JSON, no markdown:
         }
     }
 
+    /// Simple jobs (hooks, post copy, topic lists) run on this Mac when on-device AI is on and
+    /// running, and on the cloud model otherwise.
+    private func askLight(_ prompt: String, provider: AIProvider, apiKey: String) async throws -> String {
+        if await LocalAI.ready() {
+            do { return try await LocalAI.generate(prompt) }
+            catch { if apiKey.isEmpty { throw error } }   // fall back to the cloud when there's a key
+        }
+        return try await ask(prompt, provider: provider, apiKey: apiKey)
+    }
+
     /// Builds one short that fulfils `request` ("a short about forgiveness") using only what
     /// the talk says. Throws with the model's explanation if the talk doesn't cover it.
     func composeRequested(_ request: String, sentences: [(start: Double, end: Double, text: String)],
@@ -372,7 +382,7 @@ Transcript:
 
 Respond with ONLY valid JSON: {"topics":["...","..."]}
 """
-        let text = try await ask(prompt, provider: provider, apiKey: apiKey)
+        let text = try await askLight(prompt, provider: provider, apiKey: apiKey)
         guard let a = text.firstIndex(of: "{"), let b = text.lastIndex(of: "}"),
               let obj = try? JSONSerialization.jsonObject(with: Data(String(text[a...b]).utf8)) as? [String: Any],
               let topics = obj["topics"] as? [String], !topics.isEmpty else {
@@ -721,7 +731,7 @@ What is said in the reel:
 
 Respond with ONLY valid JSON: {"hook":"..."}
 """
-        let text = try await ask(prompt, provider: provider, apiKey: apiKey)
+        let text = try await askLight(prompt, provider: provider, apiKey: apiKey)
         guard let a = text.firstIndex(of: "{"), let b = text.lastIndex(of: "}"),
               let obj = try? JSONSerialization.jsonObject(with: Data(String(text[a...b]).utf8)) as? [String: Any],
               let hook = obj["hook"] as? String, !hook.isEmpty else { throw llmError("AI didn't return a hook") }
@@ -802,7 +812,7 @@ Respond with ONLY valid JSON, no markdown:
 """
         var lastError: Error = llmError("AI returned no posts")
         for _ in 1...2 {
-            let text = try await ask(prompt, provider: provider, apiKey: apiKey)
+            let text = try await askLight(prompt, provider: provider, apiKey: apiKey)
             guard let a = text.firstIndex(of: "{"), let b = text.lastIndex(of: "}"),
                   let obj = try? JSONSerialization.jsonObject(with: Data(String(text[a...b]).utf8)) as? [String: Any],
                   let posts = obj["posts"] as? [[String: Any]] else { lastError = llmError("AI posts weren't valid JSON"); continue }
@@ -810,12 +820,20 @@ Respond with ONLY valid JSON, no markdown:
             for p in posts {
                 guard let i = (p["reel"] as? Int) ?? (p["reel"] as? Double).map({ Int($0) }), out.indices.contains(i) else { continue }
                 out[i] = .init(title: p["title"] as? String ?? reels[i].title, description: p["caption"] as? String ?? "",
-                               hashtags: (p["hashtags"] as? [String] ?? []).map { $0.hasPrefix("#") ? $0 : "#" + $0 }, hookText: "")
+                               hashtags: Self.hashtags(p["hashtags"]), hookText: "")
             }
             guard out.contains(where: { !$0.description.isEmpty }) else { lastError = llmError("AI posts came back empty"); continue }
             return out
         }
         throw lastError
+    }
+
+    /// Hashtags from a reply: an array, or one string of several (smaller models do that).
+    static func hashtags(_ v: Any?) -> [String] {
+        let raw = (v as? [String]) ?? (v as? String).map { [$0] } ?? []
+        return raw.flatMap { $0.split(whereSeparator: { $0 == " " || $0 == "," }) }
+            .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty && $0 != "#" }
+            .map { $0.hasPrefix("#") ? $0 : "#" + $0 }
     }
 
     // MARK: - 🔥 Fire Short — a teaser cut built to make people click through
@@ -949,6 +967,10 @@ Respond with ONLY valid JSON, no markdown:
               let blocks = json["content"] as? [[String: Any]] else {
             throw llmError("Unexpected Anthropic response")
         }
+        if let u = json["usage"] as? [String: Any] {
+            CostMeter.record(provider: "Claude", model: model, input: u["input_tokens"] as? Int ?? 0,
+                             output: u["output_tokens"] as? Int ?? 0)
+        }
         let text = blocks.filter { $0["type"] as? String == "text" }
                          .compactMap { $0["text"] as? String }.joined()
         guard !text.isEmpty else {
@@ -979,6 +1001,10 @@ Respond with ONLY valid JSON, no markdown:
               let msg = choices.first?["message"] as? [String: Any],
               let text = msg["content"] as? String else {
             throw llmError("Unexpected OpenAI response")
+        }
+        if let u = json["usage"] as? [String: Any] {
+            CostMeter.record(provider: "OpenAI", model: "gpt-4o-mini", input: u["prompt_tokens"] as? Int ?? 0,
+                             output: u["completion_tokens"] as? Int ?? 0)
         }
         return text
     }
@@ -1019,6 +1045,11 @@ Respond with ONLY valid JSON, no markdown:
         try checkHTTP(resp, data: data)
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw llmError("Gemini returned non-JSON response")
+        }
+        if let u = json["usageMetadata"] as? [String: Any] {
+            // Thinking tokens are billed as output
+            CostMeter.record(provider: "Gemini", model: model, input: u["promptTokenCount"] as? Int ?? 0,
+                             output: (u["candidatesTokenCount"] as? Int ?? 0) + (u["thoughtsTokenCount"] as? Int ?? 0))
         }
         // Surface prompt-block reason clearly
         if let blocked = (json["promptFeedback"] as? [String: Any])?["blockReason"] as? String {

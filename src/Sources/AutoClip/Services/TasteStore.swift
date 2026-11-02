@@ -61,6 +61,12 @@ final class TasteStore: ObservableObject {
         save()
     }
 
+    /// Undo of `liked` / `rejected` (quick review's Z).
+    func unliked(_ d: ReelDraft) { taste.kept.removeAll { $0.title == d.title }; save() }
+    func unrejected(_ d: ReelDraft) {
+        if let i = taste.rejected.lastIndex(where: { $0.title == d.title }) { taste.rejected.remove(at: i); save() }
+    }
+
     func addedSentence(before: Bool) {
         if before { taste.addedBefore += 1 } else { taste.addedAfter += 1 }
         save()

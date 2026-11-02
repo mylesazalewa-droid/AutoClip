@@ -14,6 +14,9 @@ struct SearchTab: View {
     @State private var playing: (path: String, title: String)?
     @State private var player = AVPlayer()
     @State private var includePractice = false
+    @State private var period = Period.all
+    @State private var compiled: String?
+    @Environment(\.openWindow) private var openWindow
     @FocusState private var focused: Bool
     private let gold = Theme.sand
 
@@ -31,6 +34,20 @@ struct SearchTab: View {
         let id: String
         let time: Double
         let text: String
+        let sentence: Int
+    }
+
+    enum Period: String, CaseIterable {
+        case all = "All time", year = "This year", twelve = "Last 12 months", ninety = "Last 90 days"
+        func includes(_ d: Date) -> Bool {
+            let cal = Calendar.current
+            switch self {
+            case .all: return true
+            case .year: return cal.component(.year, from: d) == cal.component(.year, from: Date())
+            case .twelve: return d > cal.date(byAdding: .month, value: -12, to: Date())!
+            case .ninety: return d > cal.date(byAdding: .day, value: -90, to: Date())!
+            }
+        }
     }
 
     var body: some View {
@@ -77,6 +94,10 @@ struct SearchTab: View {
                         .overlay(Capsule().stroke(Theme.line, lineWidth: 1))
                 }
                 Spacer()
+                Picker("", selection: $period) {
+                    ForEach(Period.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                }
+                .labelsHidden().controlSize(.small).fixedSize()
                 if library.contains(where: \.isPractice) {
                     Toggle("Include practice runs", isOn: $includePractice).toggleStyle(.switch).controlSize(.mini)
                         .font(.system(size: 11)).foregroundColor(Theme.muted)
@@ -93,11 +114,11 @@ struct SearchTab: View {
         let terms = TranscriptSearch.terms(query)
         guard !terms.words.isEmpty || !terms.phrases.isEmpty else { return [] }
         return library
-            .filter { includePractice || !$0.isPractice }
+            .filter { (includePractice || !$0.isPractice) && period.includes($0.date) }
             .compactMap { talk in
                 var hits: [Hit] = []
                 for (i, s) in talk.sentences.enumerated() where TranscriptSearch.matches(terms, tokens: talk.tokens[i], text: s.text) {
-                    hits.append(Hit(id: "\(talk.path)#\(i)", time: s.start, text: s.text))
+                    hits.append(Hit(id: "\(talk.path)#\(i)", time: s.start, text: s.text, sentence: i))
                 }
                 return hits.isEmpty ? nil : (talk, hits)
             }
@@ -119,8 +140,19 @@ struct SearchTab: View {
                     Text("Nothing found for “\(query)” in \(library.count) transcribed video\(library.count == 1 ? "" : "s").")
                         .font(.system(size: 13)).foregroundColor(Color.white.opacity(0.6))
                 } else {
-                    Text("\(total) mention\(total == 1 ? "" : "s") in \(found.count) message\(found.count == 1 ? "" : "s")")
-                        .font(.system(size: 13, weight: .semibold)).foregroundColor(.white)
+                    HStack {
+                        Text("\(total) mention\(total == 1 ? "" : "s") in \(found.count) message\(found.count == 1 ? "" : "s")")
+                            .font(.system(size: 13, weight: .semibold)).foregroundColor(.white)
+                        Spacer()
+                        if let c = compiled {
+                            Text(c).font(.system(size: 11)).foregroundColor(Theme.good)
+                        }
+                        Button { makeCompilation(found) } label: {
+                            Label("Make a compilation", systemImage: "rectangle.stack.badge.plus")
+                        }
+                        .buttonStyle(PrimaryButtonStyle(compact: true))
+                        .help("Every moment you said this, joined into a short reel and a full-length video you can edit and export")
+                    }
                     ForEach(found, id: \.talk.path) { group in
                         talkResults(group.talk, group.hits)
                     }
@@ -192,6 +224,73 @@ struct SearchTab: View {
             out[lo..<hi].font = .system(size: 12, weight: .semibold)
         }
         return out
+    }
+
+    // MARK: Compilation
+
+    /// One project with two reels: a short (the best few moments, about 90 seconds, vertical)
+    /// and a full compilation of every moment (widescreen). Each moment keeps a sentence of
+    /// context either side so it makes sense on its own. Oldest first, so it plays as a story.
+    private func makeCompilation(_ found: [(talk: Talk, hits: [Hit])]) {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        let groups = found.sorted { $0.talk.date < $1.talk.date }
+        var all: [Clip] = []
+        var perTalk: [[Clip]] = []
+        for g in groups {
+            let n = g.talk.sentences.count
+            var ranges: [ClosedRange<Int>] = []
+            for h in g.hits.sorted(by: { $0.sentence < $1.sentence }).prefix(12) {
+                let r = max(0, h.sentence - 1)...min(n - 1, h.sentence + 1)
+                if let last = ranges.last, r.lowerBound <= last.upperBound + 1 {
+                    ranges[ranges.count - 1] = last.lowerBound...max(last.upperBound, r.upperBound)
+                } else { ranges.append(r) }
+            }
+            let clips = ReelGenerator.clips(for: ranges, in: g.talk.sentences, source: g.talk.path)
+            perTalk.append(clips)
+            all += clips
+        }
+        guard let first = groups.first else { return }
+        // Short: one moment from each message in turn (shortest first) until about 90 seconds
+        var short: [Clip] = []
+        var total = 0.0
+        var round = 0
+        while total < 75, round < 6 {
+            var added = false
+            for clips in perTalk {
+                let sorted = clips.sorted { $0.duration < $1.duration }
+                guard round < sorted.count, sorted[round].duration <= 35, total + sorted[round].duration <= 100 else { continue }
+                short.append(sorted[round]); total += sorted[round].duration; added = true
+            }
+            if !added { break }
+            round += 1
+        }
+        if short.isEmpty, let c = all.min(by: { $0.duration < $1.duration }) { short = [c] }
+        short.sort { a, b in
+            let ia = all.firstIndex { $0.id == a.id } ?? 0, ib = all.firstIndex { $0.id == b.id } ?? 0
+            return ia < ib
+        }
+        let look = CaptionLook.load() ?? CaptionLook(preset: CaptionStyle.all[0])
+        let keys = TranscriptSearch.terms(q).words
+        func draft(_ title: String, _ clips: [Clip], _ format: VideoExportService.ExportFormat) -> ReelDraft {
+            var d = ReelDraft(title: title, clips: clips, sourceVideoPath: first.talk.path, formatRaw: format.rawValue,
+                              captions: true, look: look, crossDissolve: true, emojiOverlays: false, topicKeywords: keys)
+            d.keywords = keys
+            d.hookText = q.capitalized
+            return d
+        }
+        let name = q.replacingOccurrences(of: "\"", with: "")
+        let drafts = [draft("\(name.capitalized) — highlights", short, .vertical9x16),
+                      draft("\(name.capitalized) — every moment", all, .horizontal16x9)]
+        var rec = AutoReelRecord(id: UUID(), title: "“\(name)” across \(groups.count) message\(groups.count == 1 ? "" : "s")",
+                                 path: first.talk.path, paths: [first.talk.path], format: "9:16",
+                                 duration: drafts[0].duration, clipCount: all.count,
+                                 dateCreated: Date().timeIntervalSince1970,
+                                 reelTitles: drafts.map(\.title), drafts: drafts)
+        rec.sourceVideoPath = first.talk.path
+        rec.contentKind = ContentKind.current.rawValue
+        reelsStore.add(rec)
+        compiled = "Saved to Auto Reels"
+        openWindow(id: "reel-window", value: rec.id)
     }
 
     // MARK: Side panel: player + library

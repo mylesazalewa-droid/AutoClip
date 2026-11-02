@@ -278,11 +278,14 @@ enum ReelGenerator {
         return d
     }
 
-    static func aiContext(_ record: AutoReelRecord, progress: @escaping (String) -> Void)
+    /// `light` jobs can run on this Mac's on-device AI when there's no key.
+    static func aiContext(_ record: AutoReelRecord, light: Bool = false, progress: @escaping (String) -> Void)
         async throws -> (source: String, st: Settings, key: String, sentences: [ReelDraft.Sentence]) {
         guard let source = sourceVideoPath(for: record) else { throw err("Can't find this reel's source video.") }
         let st = settings(for: record)
-        guard let key = await LLMClipService.shared.loadAPIKey(for: st.provider), !key.isEmpty else {
+        let key = await LLMClipService.shared.loadAPIKey(for: st.provider) ?? ""
+        let local = light && key.isEmpty ? await LocalAI.ready() : false
+        guard !key.isEmpty || local else {
             throw err("This needs AI — add an API key for \(st.provider.rawValue) in Auto Reels → AI settings.")
         }
         let words = try await TranscriptCache.transcript(for: source, progress: progress)
@@ -311,7 +314,7 @@ enum ReelGenerator {
 
     /// Topics the talk covers, as one-click requests.
     static func topics(for record: AutoReelRecord, progress: @escaping (String) -> Void) async throws -> [String] {
-        let c = try await aiContext(record, progress: progress)
+        let c = try await aiContext(record, light: true, progress: progress)
         progress("AI is reading the talk…")
         return try await LLMClipService.shared.listTopics(
             sentences: c.sentences.map { ($0.start, $0.end, $0.text) }, provider: c.st.provider, apiKey: c.key)

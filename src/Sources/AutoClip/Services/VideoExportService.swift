@@ -272,6 +272,57 @@ class VideoExportService {
             .concatenating(CGAffineTransform(scaleX: scale, y: scale))
     }
 
+    // MARK: - Split screen
+
+    /// The two halves of a split-screen frame: each person's crop, scaled into the top or bottom
+    /// half of `renderSize`. Only for unrotated landscape sources.
+    private func splitHalves(_ xs: [Double], videoSize: CGSize, renderSize: CGSize, preferredTransform: CGAffineTransform)
+        -> [(transform: CGAffineTransform, crop: CGRect)] {
+        let halfH: CGFloat = (renderSize.height / 2).rounded()
+        let half = CGSize(width: renderSize.width, height: halfH)
+        let aspect: CGFloat = half.width / half.height
+        let cropH: CGFloat = min(videoSize.height, videoSize.width / aspect)
+        let cropW: CGFloat = cropH * aspect
+        var out: [(transform: CGAffineTransform, crop: CGRect)] = []
+        for (k, x) in xs.prefix(2).enumerated() {
+            let centre = CGFloat(x) * videoSize.width
+            var t = cropTransform(centerX: Double(centre), videoSize: videoSize, renderSize: half,
+                                  preferredTransform: preferredTransform)
+            if k == 1 { t = t.concatenating(CGAffineTransform(translationX: 0, y: halfH)) }
+            let cx: CGFloat = max(cropW / 2, min(videoSize.width - cropW / 2, centre))
+            out.append((t, CGRect(x: cx - cropW / 2, y: (videoSize.height - cropH) / 2, width: cropW, height: cropH)))
+        }
+        return out
+    }
+
+    /// Where the two main people sit across the frame (0…1, left then right), from a few frames
+    /// of the clip. nil when there aren't two people on screen.
+    func twoPeople(in path: String, from start: Double, to end: Double) async -> [Double]? {
+        let asset = AVURLAsset(url: URL(fileURLWithPath: path))
+        let gen = AVAssetImageGenerator(asset: asset)
+        gen.appliesPreferredTrackTransform = true
+        gen.maximumSize = CGSize(width: 1280, height: 720)
+        var xs: [Double] = []
+        let n = 8
+        for k in 0..<n {
+            let t = start + (end - start) * (Double(k) + 0.5) / Double(n)
+            if let img = try? gen.copyCGImage(at: CMTime(seconds: t, preferredTimescale: 600), actualTime: nil) {
+                xs += detectFacesWithMouths(in: img, minHeight: 0.06).map(\.x)
+            }
+        }
+        guard xs.count >= 4 else { return nil }
+        // Two groups: split at the widest gap between sorted positions
+        let s: [Double] = xs.sorted()
+        var cut = 1
+        for i in 1..<s.count where s[i] - s[i - 1] > s[cut] - s[cut - 1] { cut = i }
+        guard s[cut] - s[cut - 1] > 0.15 else { return nil }
+        let left: [Double] = Array(s[0..<cut]), right: [Double] = Array(s[cut..<s.count])
+        guard left.count >= 2, right.count >= 2 else { return nil }
+        let l: Double = left.reduce(0, +) / Double(left.count)
+        let r: Double = right.reduce(0, +) / Double(right.count)
+        return [l, r]
+    }
+
     /// One framing decision: where the crop is centred at `time`. `cut` = jump here instantly
     /// (switching to another speaker) instead of gliding from the previous sample.
     struct FaceSample: Equatable {
@@ -553,7 +604,8 @@ class VideoExportService {
     func followComposition(for clips: [Clip], asset: AVAsset, format: ExportFormat,
                            previewHeight: CGFloat = 960) async -> AVMutableVideoComposition? {
         guard format != .original, format != .horizontal16x9,
-              let compTrack = try? await asset.loadTracks(withMediaType: .video).first else { return nil }
+              let tracks = try? await asset.loadTracks(withMediaType: .video), let compTrack = tracks.first else { return nil }
+        let splitTrack = tracks.count > 1 ? tracks[1] : nil
         var assets: [String: AVURLAsset] = [:]
         var instructions: [AVMutableVideoCompositionInstruction] = []
         var insertAt = CMTime.zero
@@ -574,7 +626,17 @@ class VideoExportService {
                                     end: CMTime(seconds: clip.endTime, preferredTimescale: 600))
             let seg = CMTimeRange(start: insertAt, duration: range.duration)
             let li = AVMutableVideoCompositionLayerInstruction(assetTrack: compTrack)
-            if vs.width > vs.height, let fx = clip.frameX {
+            var extra: [AVMutableVideoCompositionLayerInstruction] = []
+            if format == .vertical9x16 || format == .portrait4x5, vs.width > vs.height, pt.isIdentity,
+               let sx = clip.splitX, sx.count == 2, let splitTrack {
+                let halves = splitHalves(sx, videoSize: vs, renderSize: renderSize, preferredTransform: pt)
+                li.setTransform(halves[0].transform, at: seg.start)
+                li.setCropRectangle(halves[0].crop, at: seg.start)
+                let li2 = AVMutableVideoCompositionLayerInstruction(assetTrack: splitTrack)
+                li2.setTransform(halves[1].transform, at: seg.start)
+                li2.setCropRectangle(halves[1].crop, at: seg.start)
+                extra.append(li2)
+            } else if vs.width > vs.height, let fx = clip.frameX {
                 // Held still where the editor put it
                 li.setTransform(cropTransform(centerX: fx * vs.width, videoSize: vs, renderSize: renderSize, preferredTransform: pt), at: seg.start)
             } else if vs.width > vs.height {
@@ -592,7 +654,7 @@ class VideoExportService {
             }
             let ins = AVMutableVideoCompositionInstruction()
             ins.timeRange = seg
-            ins.layerInstructions = [li]
+            ins.layerInstructions = [li] + extra
             instructions.append(ins)
             insertAt = seg.end
         }
@@ -1450,6 +1512,7 @@ class VideoExportService {
         }
         compVideo.preferredTransform = primaryTransform
         var compAudio: AVMutableCompositionTrack? = nil  // created lazily only when a source has audio
+        var compVideo2: AVMutableCompositionTrack? = nil // second copy of the picture, for split screen
 
         // ── Pass 1: stitch clips + remap words to reel timeline ──────────────
         var insertTime      = CMTime.zero
@@ -1482,6 +1545,13 @@ class VideoExportService {
                 continue  // skip clips whose range can't be inserted (malformed asset)
             }
             clipInsertTimes.append(insertTime)  // record exact CMTime before advancing
+            if clip.splitX != nil {
+                if compVideo2 == nil {
+                    compVideo2 = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid)
+                    compVideo2?.preferredTransform = primaryTransform
+                }
+                try? compVideo2?.insertTimeRange(range, of: srcVideo, at: insertTime)
+            }
             if let srcAudio {
                 if compAudio == nil {
                     compAudio = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)
@@ -1553,8 +1623,18 @@ class VideoExportService {
                 instr.timeRange = segRange
 
                 let li = AVMutableVideoCompositionLayerInstruction(assetTrack: compVideo)
+                var extra: [AVMutableVideoCompositionLayerInstruction] = []
 
-                if needsFace && clipVideoSize.width > clipVideoSize.height, let fx = clip.frameX {
+                if options.format == .vertical9x16 || options.format == .portrait4x5, clipVideoSize.width > clipVideoSize.height,
+                   clipTransform.isIdentity, let sx = clip.splitX, sx.count == 2, let second = compVideo2 {
+                    let halves = splitHalves(sx, videoSize: clipVideoSize, renderSize: renderSize, preferredTransform: clipTransform)
+                    li.setTransform(halves[0].transform, at: segStart)
+                    li.setCropRectangle(halves[0].crop, at: segStart)
+                    let li2 = AVMutableVideoCompositionLayerInstruction(assetTrack: second)
+                    li2.setTransform(halves[1].transform, at: segStart)
+                    li2.setCropRectangle(halves[1].crop, at: segStart)
+                    extra.append(li2)
+                } else if needsFace && clipVideoSize.width > clipVideoSize.height, let fx = clip.frameX {
                     let t = cropTransform(centerX: fx * clipVideoSize.width, videoSize: clipVideoSize, renderSize: renderSize, preferredTransform: clipTransform)
                     li.setTransform(t, at: segStart)
                 } else if needsFace && clipVideoSize.width > clipVideoSize.height {
@@ -1591,7 +1671,7 @@ class VideoExportService {
                     }
                 }
 
-                instr.layerInstructions = [li]
+                instr.layerInstructions = [li] + extra
                 instructions.append(instr)
             }
 

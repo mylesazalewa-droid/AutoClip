@@ -200,7 +200,9 @@ final class SeriesStore: ObservableObject {
                     errors[id] = "Add an API key in Auto Reels → AI settings to assess a series."
                     return
                 }
-                var a = try await LLMClipService.shared.seriesAnalysis(name: s.name, parts: parts, provider: provider, apiKey: key)
+                var a = try await CostTag.$video.withValue("Series: " + s.name) {
+                    try await LLMClipService.shared.seriesAnalysis(name: s.name, parts: parts, provider: provider, apiKey: key)
+                }
                 a.videos = s.videos
                 if var cur = series.first(where: { $0.id == id }) {
                     cur.analysis = a

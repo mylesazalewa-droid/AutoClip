@@ -28,6 +28,8 @@ struct ReelDraftsView: View {
     @State private var topics: [String] = []
     @State private var showGraphics = false
     @State private var showKit = false
+    @State private var showReview = false
+    @State private var showCleanup = false
 
     private var record: AutoReelRecord? { store.reels.first { $0.id == recordID } }
     private var drafts: [ReelDraft] { record?.drafts ?? [] }
@@ -68,6 +70,18 @@ struct ReelDraftsView: View {
                     .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.45))
             }
             Spacer()
+            Button { showReview = true } label: {
+                Label("Quick review", systemImage: "rectangle.stack").font(.system(size: 12, weight: .semibold))
+                    .padding(.horizontal, 10).padding(.vertical, 5)
+                    .background(gold).cornerRadius(6)
+            }
+            .buttonStyle(.plain).foregroundColor(.black)
+            .keyboardShortcut("r", modifiers: .command)
+            .help("Go through the reels one at a time: → keep, ← toss (⌘R)")
+            .disabled(drafts.isEmpty)
+            .sheet(isPresented: $showReview) {
+                ReviewModeView(recordID: recordID, selected: $selected, onToss: { notForMe($0) }, onExport: { export($0) })
+            }
             Button(role: .destructive) { onDelete(); dismiss() } label: {
                 Image(systemName: "trash").foregroundColor(Color.white.opacity(0.4))
             }.buttonStyle(.plain).help("Delete all of these reels")
@@ -111,8 +125,16 @@ struct ReelDraftsView: View {
                 }
                 .buttonStyle(.plain).foregroundColor(Theme.cream)
                 .help("Every reel, captions and hashtags, notes, graphics and a posting plan — in one folder")
+                Button { showCleanup = true } label: {
+                    Label("Clean up", systemImage: "scissors").font(.system(size: 12, weight: .semibold))
+                        .padding(.horizontal, 10).padding(.vertical, 6)
+                        .background(Color.white.opacity(0.08)).cornerRadius(7)
+                }
+                .buttonStyle(.plain).foregroundColor(.white)
+                .help("Save a tighter copy of the full video: fillers, false starts and long pauses cut")
             }
             .sheet(isPresented: $showKit) { ContentKitSheet(recordID: recordID) }
+            .sheet(isPresented: $showCleanup) { CleanupSheet(recordID: recordID) }
             .sheet(isPresented: $showGraphics) {
                 if let rec = record { SocialGraphicsView(record: rec, gold: gold) }
             }
@@ -160,7 +182,7 @@ struct ReelDraftsView: View {
         guard let rec = record else { return }
         genError = nil; genStatus = "Starting…"
         let n = moreCount
-        Task {
+        Task { await CostTag.$video.withValue(rec.title) {
             do {
                 let new = try await ReelGenerator.moreDrafts(for: rec, count: n) { msg in
                     Task { @MainActor in genStatus = msg }
@@ -168,14 +190,14 @@ struct ReelDraftsView: View {
                 append(new)
             } catch { genError = error.localizedDescription }
             genStatus = nil
-        }
+        } }
     }
 
     private func askForShort(_ text: String) {
         let req = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !req.isEmpty, let rec = record else { return }
         genError = nil; genStatus = "Starting…"
-        Task {
+        Task { await CostTag.$video.withValue(rec.title) {
             do {
                 let d = try await ReelGenerator.requestedShort(req, for: rec) { msg in
                     Task { @MainActor in genStatus = msg }
@@ -184,26 +206,26 @@ struct ReelDraftsView: View {
                 request = ""
             } catch { genError = error.localizedDescription }
             genStatus = nil
-        }
+        } }
     }
 
     private func suggestTopics() {
         guard let rec = record else { return }
         genError = nil; genStatus = "Starting…"
-        Task {
+        Task { await CostTag.$video.withValue(rec.title) {
             do {
                 topics = try await ReelGenerator.topics(for: rec) { msg in
                     Task { @MainActor in genStatus = msg }
                 }
             } catch { genError = error.localizedDescription }
             genStatus = nil
-        }
+        } }
     }
 
     private func generateFire() {
         guard let rec = record else { return }
         genError = nil; genStatus = "Starting…"
-        Task {
+        Task { await CostTag.$video.withValue(rec.title) {
             do {
                 let d = try await ReelGenerator.fireShort(for: rec) { msg in
                     Task { @MainActor in genStatus = msg }
@@ -211,7 +233,7 @@ struct ReelDraftsView: View {
                 append([d], atTop: true)
             } catch { genError = error.localizedDescription }
             genStatus = nil
-        }
+        } }
     }
 
     private func append(_ new: [ReelDraft], atTop: Bool = false) {
@@ -438,6 +460,7 @@ struct ReelDraftsView: View {
 
 struct ReelEditorView: View {
     @State var draft: ReelDraft
+    @State private var splitNote: [UUID: String] = [:]
     let gold: Color
     var onSave: (ReelDraft) -> Void
     var onExport: (ReelDraft) -> Void
@@ -799,8 +822,10 @@ struct ReelEditorView: View {
         Task {
             do {
                 let provider = LLMClipService.AIProvider(rawValue: UserDefaults.standard.string(forKey: "ar_provider") ?? "") ?? .google
-                guard let key = await LLMClipService.shared.loadAPIKey(for: provider), !key.isEmpty else {
-                    hookStatus = "Add an API key in Auto Reels → AI settings to write hooks with AI."
+                let key = await LLMClipService.shared.loadAPIKey(for: provider) ?? ""
+                let local = key.isEmpty ? await LocalAI.ready() : false
+                guard !key.isEmpty || local else {
+                    hookStatus = "Add an API key in Auto Reels → AI settings (or turn on on-device AI) to write hooks with AI."
                     return
                 }
                 let hook = try await LLMClipService.shared.writeHook(transcript: transcript, title: title,
@@ -1010,19 +1035,38 @@ struct ReelEditorView: View {
         }
     }
 
+    /// Split screen: find where the two people sit so each half frames one of them.
+    private func findTwoPeople(_ i: Int) {
+        let piece = draft.pieces[i]
+        guard let first = piece.sentences.first, let last = piece.sentences.last else { return }
+        splitNote[piece.id] = "Finding the two people…"
+        Task {
+            let xs = await VideoExportService.shared.twoPeople(in: piece.sourceVideoPath, from: first.start, to: last.end)
+            guard let k = draft.pieces.firstIndex(where: { $0.id == piece.id }), draft.pieces[k].framing?.mode == "split" else { return }
+            if let xs {
+                draft.pieces[k].framing = ReelDraft.Framing(mode: "split", x: (xs[0] * 100).rounded() / 100, x2: (xs[1] * 100).rounded() / 100)
+                splitNote[piece.id] = "Found two people. Drag to adjust who's on top or bottom."
+            } else {
+                splitNote[piece.id] = "Couldn't find two people clearly, so it's split down the middle. Drag to adjust."
+            }
+        }
+    }
+
     /// How the vertical crop follows the speaker in this clip.
     private func framingRow(_ i: Int) -> some View {
         let f = draft.pieces[i].framing ?? ReelDraft.Framing(mode: "auto")
         let mode = Binding<String>(get: { f.mode }, set: { m in
             var nf = draft.pieces[i].framing ?? ReelDraft.Framing(mode: m)
             nf.mode = m
+            if m == "split" { nf.x = 0.25; nf.x2 = 0.75 }
             draft.pieces[i].framing = m == "auto" ? nil : nf
+            if m == "split" { findTwoPeople(i) }
         })
         return VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
                 Image(systemName: "person.crop.rectangle").font(.system(size: 10)).foregroundColor(gold.opacity(0.8))
                 Text("Framing").font(.system(size: 10, weight: .semibold)).foregroundColor(Color.white.opacity(0.5))
-                PillTabs(selection: mode, items: [("auto", "Follow speaker"), ("careful", "Look closer"), ("fixed", "Hold still")], compact: true)
+                PillTabs(selection: mode, items: [("auto", "Follow speaker"), ("careful", "Look closer"), ("fixed", "Hold still"), ("split", "Split screen")], compact: true)
                 Spacer(minLength: 0)
             }
             if f.mode == "careful" {
@@ -1038,6 +1082,24 @@ struct ReelEditorView: View {
                     Text("Right").font(.system(size: 9)).foregroundColor(Color.white.opacity(0.4))
                 }
                 Text("The frame stays put on this part of the video for the whole clip.")
+                    .font(.system(size: 9)).foregroundColor(Color.white.opacity(0.4))
+            }
+            else if f.mode == "split" {
+                ForEach(0..<2, id: \.self) { k in
+                    HStack(spacing: 6) {
+                        Text(k == 0 ? "Top" : "Bottom").font(.system(size: 9, weight: .semibold)).foregroundColor(Color.white.opacity(0.5))
+                            .frame(width: 40, alignment: .leading)
+                        Text("Left").font(.system(size: 9)).foregroundColor(Color.white.opacity(0.4))
+                        Slider(value: Binding(get: { k == 0 ? f.x : (f.x2 ?? 0.75) }, set: { v in
+                            var nf = draft.pieces[i].framing ?? ReelDraft.Framing(mode: "split")
+                            if k == 0 { nf.x = (v * 100).rounded() / 100 } else { nf.x2 = (v * 100).rounded() / 100 }
+                            draft.pieces[i].framing = nf
+                        }), in: 0...1)
+                        .controlSize(.mini)
+                        Text("Right").font(.system(size: 9)).foregroundColor(Color.white.opacity(0.4))
+                    }
+                }
+                Text(splitNote[draft.pieces[i].id] ?? "Two people stacked: one on top, one below. Best for interviews and podcasts shot wide.")
                     .font(.system(size: 9)).foregroundColor(Color.white.opacity(0.4))
             }
         }

@@ -40,6 +40,7 @@ struct MainWindow: View {
             .frame(minWidth: 900, idealWidth: 1280, minHeight: 600, idealHeight: 800)
             .tint(Theme.action)
             .preferredColorScheme(.dark)
+            .task { AutoImport.shared.start() }
     }
 }
 
