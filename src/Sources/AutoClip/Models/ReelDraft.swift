@@ -57,7 +57,7 @@ struct ReelDraft: Identifiable, Codable, Equatable {
         var hashtags: [String]
         var hookText: String
         var asText: String {
-            [title, "", description, "", hashtags.joined(separator: " "), "", "On-screen hook: \(hookText)"]
+            ([title, "", description, "", hashtags.joined(separator: " ")] + (hookText.isEmpty ? [] : ["", "On-screen hook: \(hookText)"]))
                 .joined(separator: "\n")
         }
     }
@@ -73,6 +73,23 @@ struct ReelDraft: Identifiable, Codable, Equatable {
     var showVerses: Bool { verseCards ?? true }
     /// On-screen hook for the first seconds. nil = use the Fire Short's hook if any; "" = none
     var hookText: String?
+    /// Words the captions colour in the emphasis colour (from the AI, or typed by the user)
+    var keywords: [String]?
+    /// The caption look with this reel's highlighted words filled in. Bible references are
+    /// highlighted too when verse cards are on.
+    var styledLook: CaptionLook {
+        var l = look ?? CaptionLook.load() ?? CaptionLook(preset: CaptionStyle.all[0])
+        var keys = Set((keywords ?? []).flatMap { $0.split(separator: " ").map { CaptionLook.key(String($0)) } })
+        if showVerses {
+            let ws = pieces.flatMap { $0.sentences.flatMap(\.keptWords) }
+            for v in VerseDetector.find(in: ws) {
+                for t in v.text.split(separator: " ") { keys.insert(CaptionLook.key(String(t))) }
+            }
+        }
+        keys.remove("")
+        l.keywords = keys
+        return l
+    }
     var hook: String? {
         let h = (hookText ?? seo?.hookText ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         return h.isEmpty ? nil : h
@@ -352,7 +369,7 @@ struct ReelDraft: Identifiable, Codable, Equatable {
         var o = VideoExportService.ExportOptions()
         o.format = VideoExportService.ExportFormat(rawValue: formatRaw) ?? .vertical9x16
         o.burnCaptions = captions
-        if captions { o.captionLook = look ?? CaptionLook.load() ?? CaptionLook(preset: CaptionStyle.all[0]) }
+        if captions { o.captionLook = styledLook }
         o.crossDissolve = crossDissolve
         o.emojiOverlays = emojiOverlays
         o.topicKeywords = topicKeywords

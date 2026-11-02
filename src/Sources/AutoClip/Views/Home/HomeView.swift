@@ -126,6 +126,8 @@ struct HomeView: View {
 
             Spacer()
 
+            ContentKindMenu()
+
             if activeTab == .autoClips {
                 HStack(spacing: 7) {
                     Image(systemName: "magnifyingglass").foregroundColor(Theme.faint).font(.system(size: 12))

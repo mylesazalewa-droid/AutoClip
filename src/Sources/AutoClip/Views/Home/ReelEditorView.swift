@@ -27,6 +27,7 @@ struct ReelDraftsView: View {
     @State private var request = ""
     @State private var topics: [String] = []
     @State private var showGraphics = false
+    @State private var showKit = false
 
     private var record: AutoReelRecord? { store.reels.first { $0.id == recordID } }
     private var drafts: [ReelDraft] { record?.drafts ?? [] }
@@ -103,7 +104,15 @@ struct ReelDraftsView: View {
                 }
                 .buttonStyle(.plain).foregroundColor(.white)
                 .help("Quote cards, a carousel and a thumbnail for the full message")
+                Button { showKit = true } label: {
+                    Label("Content kit", systemImage: "shippingbox").font(.system(size: 12, weight: .semibold))
+                        .padding(.horizontal, 10).padding(.vertical, 6)
+                        .background(Theme.terracotta).cornerRadius(7)
+                }
+                .buttonStyle(.plain).foregroundColor(Theme.cream)
+                .help("Every reel, captions and hashtags, notes, graphics and a posting plan — in one folder")
             }
+            .sheet(isPresented: $showKit) { ContentKitSheet(recordID: recordID) }
             .sheet(isPresented: $showGraphics) {
                 if let rec = record { SocialGraphicsView(record: rec, gold: gold) }
             }
@@ -224,7 +233,7 @@ struct ReelDraftsView: View {
             seoLine("Title", seo.title)
             seoLine("Description", seo.description)
             seoLine("Hashtags", seo.hashtags.joined(separator: " "))
-            seoLine("On-screen hook", seo.hookText)
+            if !seo.hookText.isEmpty { seoLine("On-screen hook", seo.hookText) }
             Button("Copy all") { copy(seo.asText) }.buttonStyle(.plain)
                 .font(.system(size: 11, weight: .semibold)).foregroundColor(.orange)
         }
@@ -277,6 +286,9 @@ struct ReelDraftsView: View {
                     Image(systemName: "folder")
                 }.buttonStyle(.plain).foregroundColor(Color.white.opacity(0.6)).help("Show in Finder")
             }
+            Button { notForMe(d) } label: { Image(systemName: "hand.thumbsdown") }
+                .buttonStyle(.plain).foregroundColor(Color.white.opacity(0.45))
+                .help("Not for me — remove this reel, and AutoClip learns to pick fewer like it")
             Button { editingID = d.id } label: {
                 Label("Edit", systemImage: "slider.horizontal.3").font(.system(size: 12, weight: .medium))
                     .padding(.horizontal, 10).padding(.vertical, 5)
@@ -351,6 +363,16 @@ struct ReelDraftsView: View {
         store.update(rec)
     }
 
+    /// Throws a reel out and remembers it as the kind the user doesn't want.
+    private func notForMe(_ d: ReelDraft) {
+        guard var rec = record else { return }
+        TasteStore.shared.rejected(d, kind: rec.kind)
+        rec.drafts = (rec.drafts ?? []).filter { $0.id != d.id }
+        rec.reelTitles = (rec.drafts ?? []).map(\.title)
+        store.update(rec)
+        selected.remove(d.id)
+    }
+
     private func export(_ ids: [UUID]) {
         let targets = drafts.filter { ids.contains($0.id) }
         guard !targets.isEmpty else { return }
@@ -371,6 +393,7 @@ struct ReelDraftsView: View {
                     done.exportedPath = url.path
                     done.editedSinceExport = false
                     save(done)
+                    if let rec = record { TasteStore.shared.liked(done, kind: rec.kind) }
                     // keep the record's file list in step so cards/Finder actions see exports
                     if var rec = record {
                         let exported = (rec.drafts ?? []).compactMap(\.exportedPath)
@@ -450,7 +473,7 @@ struct ReelEditorView: View {
         return (ts.id, w)
     }
 
-    private var look: CaptionLook { draft.look ?? CaptionLook.load() ?? CaptionLook(preset: CaptionStyle.all[0]) }
+    private var look: CaptionLook { draft.styledLook }
     private var previewAspect: CGFloat {
         switch VideoExportService.ExportFormat(rawValue: draft.formatRaw) ?? .vertical9x16 {
         case .vertical9x16: return 9.0 / 16.0
@@ -673,6 +696,18 @@ struct ReelEditorView: View {
                 }
             }
 
+            // Highlighted caption words
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Key words in the captions").font(.system(size: 12)).foregroundColor(.white)
+                TextField("e.g. grace, free, enough",
+                          text: Binding(get: { (draft.keywords ?? []).joined(separator: ", ") },
+                                        set: { draft.keywords = $0.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty } }))
+                    .textFieldStyle(.plain).font(.system(size: 12)).foregroundColor(.white)
+                    .padding(6).background(Color.white.opacity(0.06)).cornerRadius(5)
+                Text("These words stand out in the caption's key-word colour\(draft.showVerses ? ", along with Bible references" : "").")
+                    .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.45))
+            }
+
             Divider().background(Color.white.opacity(0.06))
 
             HStack {
@@ -859,7 +894,7 @@ struct ReelEditorView: View {
                         }
                     }
                 }
-                CaptionEditorView(look: Binding(get: { look }, set: { draft.look = $0 }), gold: gold)
+                CaptionEditorView(look: Binding(get: { look }, set: { var l = $0; l.keywords = []; draft.look = l }), gold: gold)
             }
         }
         .padding(12).background(Color.white.opacity(0.04)).cornerRadius(10)
@@ -894,7 +929,10 @@ struct ReelEditorView: View {
                 if startsRun { nudgeRow(piece: i, sentence: j, isStart: true) }
                 let now = playing?.id == s.id ? playing : nil
                 HStack(alignment: .top, spacing: 8) {
-                    Button { draft.pieces[i].sentences[j].included.toggle() } label: {
+                    Button {
+                        draft.pieces[i].sentences[j].included.toggle()
+                        if !draft.pieces[i].sentences[j].included { TasteStore.shared.removedSentence() }
+                    } label: {
                         Image(systemName: s.included ? "checkmark.square.fill" : "square")
                             .foregroundColor(s.included ? gold : Color.white.opacity(0.3))
                     }
@@ -949,6 +987,7 @@ struct ReelEditorView: View {
                 neighbourNote = (draft.pieces[i].id, before ? "This clip already starts at the beginning of the message." : "This clip already runs to the end of the message.")
             } else {
                 neighbourNote = nil
+                TasteStore.shared.addedSentence(before: before)
                 if let s = before ? draft.pieces[i].sentences.first : draft.pieces[i].sentences.last {
                     // Let the new words settle into the preview, then play them
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { play(from: s.id) }

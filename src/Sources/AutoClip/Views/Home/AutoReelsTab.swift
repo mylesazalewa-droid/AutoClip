@@ -41,6 +41,9 @@ struct AutoReelRecord: Identifiable, Codable {
     /// Settings + source used to build these reels, for "Generate more" / 🔥 Fire Short
     var genParams: AutoReelJobParams? = nil
     var sourceVideoPath: String? = nil
+    /// Sermon, talk, podcast… (nil = records from before 2.87, which were made as sermons)
+    var contentKind: String? = nil
+    var kind: ContentKind { ContentKind(rawValue: contentKind ?? "") ?? .sermon }
 
     init(id: UUID, title: String, path: String, paths: [String] = [],
          format: String, duration: Double, clipCount: Int, dateCreated: Double,
@@ -2404,6 +2407,8 @@ private extension AutoReelsTab {
             var reelGroups: [[Clip]] = []
             var aiTitles: [String] = []
             var aiHooks: [String] = []
+            var aiKeywords: [[String]] = []
+            let kind = ContentKind.current
             // Story mode works on the full transcript, one sentence per line
             let storySentences = ReelDraft.sentences(from: words)
             var usedSentences = Set<Int>()
@@ -2421,7 +2426,7 @@ private extension AutoReelsTab {
                             sentences: storySentences.map { ($0.start, $0.end, $0.text) },
                             targetDuration: targetDur, topic: topic.isEmpty ? nil : topic,
                             avoid: usedSentences, reelNumber: i + 1, otherTitles: aiTitles,
-                            single: single, provider: provider, apiKey: apiKey)
+                            single: single, kind: kind, provider: provider, apiKey: apiKey)
                         // Keep it near the target if the model overshoots
                         let ranges = ReelGenerator.fit(plan.ranges, to: targetDur, sentences: storySentences)
                         usedSentences.formUnion(ranges.flatMap { Array($0) })
@@ -2436,6 +2441,7 @@ private extension AutoReelsTab {
                         }
                         aiTitles.append(plan.title)
                         aiHooks.append(plan.hook)
+                        aiKeywords.append(plan.keywords)
                         await upd(0.40 + Double(i) / Double(autoReels) * 0.10,
                                   "AI built reel \(i + 1) ✓")
                     } catch {
@@ -2496,6 +2502,8 @@ private extension AutoReelsTab {
                                   crossDissolve: crossDissolve, emojiOverlays: emojiOverlays,
                                   topicKeywords: opts.topicKeywords)
                 if aiHooks.count == reelGroups.count, !aiHooks[i].isEmpty { d.hookText = aiHooks[i] }
+                if aiKeywords.count == reelGroups.count, !aiKeywords[i].isEmpty { d.keywords = aiKeywords[i] }
+                if !kind.usesScripture { d.verseCards = false }
                 return d
             }
             let firstReelDur = drafts.first?.duration ?? 0
@@ -2512,6 +2520,7 @@ private extension AutoReelsTab {
             var rec = record
             rec.genParams = retryParams
             rec.sourceVideoPath = workingURL.path
+            rec.contentKind = kind.rawValue
             let finalRecord = rec
             await MainActor.run {
                 AutoReelsStore.shared.add(finalRecord)

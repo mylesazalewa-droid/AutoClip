@@ -26,6 +26,7 @@ struct CaptionEditorView: View {
                 wordsRow
                 motionRow
                 colorRow
+                emphasisRow
                 outlineRow
                 backgroundRow
             }
@@ -55,7 +56,8 @@ struct CaptionEditorView: View {
         let phrase = Array(sampleWords[(phraseIdx * n)..<min(sampleWords.count, phraseIdx * n + n)])
         let active = step % n < phrase.count ? step % n : phrase.count - 1
         let age = time - Double(step - step % n) * 0.45
-        let look = self.look
+        var look = self.look
+        look.keywords = ["captions"]   // shows what a key word looks like
 
         return NSImage(size: size, flipped: true) { rect in
             let bg = NSGradient(colors: [NSColor(white: 0.32, alpha: 1), NSColor(white: 0.12, alpha: 1)])
@@ -136,6 +138,18 @@ struct CaptionEditorView: View {
             Toggle("AA", isOn: $look.uppercase).toggleStyle(.button).font(.system(size: 11, weight: .bold))
                 .help("ALL CAPS")
         }
+    }
+
+    private var emphasisRow: some View {
+        HStack(spacing: 8) {
+            label("Key words")
+            Toggle("", isOn: $look.emphasis).toggleStyle(.switch).tint(Theme.action).labelsHidden()
+            if look.emphasis {
+                ColorPicker("", selection: $look.emphasisColor.color, supportsOpacity: false).labelsHidden()
+            }
+            Spacer(minLength: 0)
+        }
+        .help("The reel's key words (and Bible references) stand out in this colour")
     }
 
     private var outlineRow: some View {

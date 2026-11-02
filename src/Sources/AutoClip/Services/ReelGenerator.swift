@@ -220,12 +220,13 @@ enum ReelGenerator {
                     targetDuration: st.targetDuration, topic: st.topic.isEmpty ? nil : st.topic,
                     avoid: used, reelNumber: (record.drafts?.count ?? 0) + n + 1,
                     otherTitles: (record.drafts ?? []).map(\.title) + out.map(\.title),
-                    single: st.singleClip, provider: st.provider, apiKey: key)
+                    single: st.singleClip, kind: record.kind, provider: st.provider, apiKey: key)
                 let ranges = fit(plan.ranges, to: st.targetDuration, sentences: sentences)
                 used.formUnion(ranges.flatMap { Array($0) })
                 let title = plan.title.isEmpty ? "Reel \((record.drafts?.count ?? 0) + n + 1)" : plan.title
                 var d = draft(title: title, clips: clips(for: ranges, in: sentences, source: source), source: source, settings: st)
                 if !plan.hook.isEmpty { d.hookText = plan.hook }
+                if !plan.keywords.isEmpty { d.keywords = plan.keywords }
                 out.append(d)
             } else if st.singleClip {
                 let segs = VideoExportService.shared.autoSegmentsFromWords(words, sourceVideoPath: source)
@@ -277,7 +278,7 @@ enum ReelGenerator {
         return d
     }
 
-    private static func aiContext(_ record: AutoReelRecord, progress: @escaping (String) -> Void)
+    static func aiContext(_ record: AutoReelRecord, progress: @escaping (String) -> Void)
         async throws -> (source: String, st: Settings, key: String, sentences: [ReelDraft.Sentence]) {
         guard let source = sourceVideoPath(for: record) else { throw err("Can't find this reel's source video.") }
         let st = settings(for: record)
@@ -295,7 +296,7 @@ enum ReelGenerator {
         progress("AI is building your short…")
         let plan = try await LLMClipService.shared.composeRequested(
             request, sentences: c.sentences.map { ($0.start, $0.end, $0.text) },
-            targetDuration: c.st.targetDuration, provider: c.st.provider, apiKey: c.key)
+            targetDuration: c.st.targetDuration, kind: record.kind, provider: c.st.provider, apiKey: c.key)
         // A length named in the request ("a 30-second short") wins over the default target
         let asked = request.range(of: #"(\d{2,3})\s*(-|\s)?\s*(s|sec|second)"#, options: .regularExpression)
             .flatMap { Double(request[$0].prefix { $0.isNumber }) }
@@ -304,6 +305,7 @@ enum ReelGenerator {
                                    in: c.sentences, source: c.source),
                       source: c.source, settings: c.st)
         if !plan.hook.isEmpty { d.hookText = plan.hook }
+        if !plan.keywords.isEmpty { d.keywords = plan.keywords }
         return d
     }
 
@@ -321,7 +323,8 @@ enum ReelGenerator {
         let c = try await aiContext(record, progress: progress)
         progress("AI is picking quotes…")
         let plan = try await LLMClipService.shared.composeGraphics(
-            sentences: c.sentences.map { ($0.start, $0.end, $0.text) }, provider: c.st.provider, apiKey: c.key)
+            sentences: c.sentences.map { ($0.start, $0.end, $0.text) }, kind: record.kind,
+            provider: c.st.provider, apiKey: c.key)
         return (plan, c.sentences, c.source)
     }
 

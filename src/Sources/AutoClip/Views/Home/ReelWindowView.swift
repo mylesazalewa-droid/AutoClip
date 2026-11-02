@@ -71,7 +71,7 @@ struct DraftPreviewPane: View {
         default: return sourceAspect
         }
     }
-    private var look: CaptionLook { draft.look ?? CaptionLook.load() ?? CaptionLook(preset: CaptionStyle.all[0]) }
+    private var look: CaptionLook { draft.styledLook }
 
     var body: some View {
         VStack(spacing: 12) {

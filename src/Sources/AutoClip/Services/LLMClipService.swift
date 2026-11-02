@@ -207,6 +207,7 @@ Respond with ONLY valid JSON — no markdown fences, no explanation:
         var title: String
         var ranges: [ClosedRange<Int>]   // sentence index ranges, in playback order
         var hook: String = ""            // on-screen text for the first seconds
+        var keywords: [String] = []      // words the captions highlight
     }
 
     /// Sends the full numbered transcript and asks the model to build ONE self-contained
@@ -215,7 +216,9 @@ Respond with ONLY valid JSON — no markdown fences, no explanation:
     func composeStory(sentences: [(start: Double, end: Double, text: String)],
                       targetDuration: Double, topic: String?, avoid: Set<Int>,
                       reelNumber: Int, otherTitles: [String] = [], single: Bool = false,
+                      kind: ContentKind = .current,
                       provider: AIProvider, apiKey: String) async throws -> StoryPlan {
+        let taste = await TasteStore.promptBlock(for: kind)
         let othersLine = otherTitles.isEmpty ? "" : """
 
 Other reels from this talk ALREADY cover these ideas — pick a clearly DIFFERENT main idea, and write a title with different wording (don't reuse their key phrases):
@@ -232,14 +235,15 @@ Other reels from this talk ALREADY cover these ideas — pick a clearly DIFFEREN
 
         let singlePrompt = """
 You are an expert short-form video editor (Reels, TikTok, Shorts). Below is the full transcript of a talk, one numbered sentence per line with its timestamp and length.
-\(topicLine)
+\(kind.promptContext)
+\(topicLine)\(taste)
 Pick ONE single continuous passage (one run of CONSECUTIVE sentences, no jumps) of about \(target) seconds (acceptable: \(Int(Double(target) * 0.7))–\(Int(Double(target) * 1.2))s, or up to \(max(Int(Double(target) * 1.6), 90))s if that's what it takes to finish the thought) that works perfectly as a stand-alone short.
 
 Rules:
 - It must START on a line that grabs attention and makes sense with no context — never on a line that depends on what came before ("And so…", "That's why…", "He said…").
 - It must END where the speaker finishes this thought, on a strong, conclusive line (a punchline, takeaway or challenge) — never mid-thought.
-- The ending must be where the speaker himself lands THIS point: his own conclusion, application or punchline for the same thought. Never tack on a general uplifting line, blessing, prayer or encouragement that isn't about this point.
-- If it raises a struggle and the speaker resolves it (grace, forgiveness, a promise, a challenge), include his resolution — but only if it is clearly about the same struggle. Don't end on condemnation.
+- The ending must be where the speaker lands THIS point: their own conclusion, application or punchline for the same thought. Never tack on a general uplifting line, blessing, prayer or encouragement that isn't about this point.
+- \(kind.resolutionRule)
 - Prefer a complete story, illustration or one powerful point.
 - Skip greetings, announcements, housekeeping and anything referring to visuals the viewer can't see.
 - Never use sentences marked (USED) — they belong to other reels. This is reel #\(reelNumber).\(othersLine)
@@ -248,18 +252,19 @@ Transcript:
 \(lines)
 
 Respond with ONLY valid JSON, no markdown:
-{"title":"short catchy title (max 8 words)","hook":"3–7 word on-screen hook for the first 3 seconds that makes people stop scrolling (not the same as the title)","segments":[{"from":40,"to":52}]}
+{"title":"short catchy title (max 8 words)","hook":"3–7 word on-screen hook for the first 3 seconds that makes people stop scrolling (not the same as the title)","keywords":["3–6 single words from the chosen lines that carry the meaning, to highlight in captions"],"segments":[{"from":40,"to":52}]}
 """
         let prompt = single ? singlePrompt : """
 You are an expert short-form video editor (Reels, TikTok, Shorts). Below is the full transcript of a talk, one numbered sentence per line with its timestamp and length.
-\(topicLine)
+\(kind.promptContext)
+\(topicLine)\(taste)
 Build ONE coherent short of about \(target) seconds (acceptable: \(Int(Double(target) * 0.85))–\(Int(Double(target) * 1.15))s) by choosing runs of CONSECUTIVE sentences. It must make complete sense to someone who never saw the talk. Finishing the thought matters more than the length: if a really strong point needs it, you may run up to \(max(Int(Double(target) * 1.6), 90))s rather than cut it off.
 
 Structure:
 1. HOOK (first 3–8s): the most curiosity-grabbing or bold line. It may come from anywhere in the talk.
 2. CONTEXT: just enough setup for the main idea to land.
 3. CORE: one main idea or story — stay on a single thread, no topic jumps.
-4. CLOSER: end where the speaker himself finishes THIS thought — his own conclusion, application or punchline for the same point, usually the sentences right after the core. The last line must clearly complete what the hook and core set up, so a viewer feels the thought is finished. Never tack on a general uplifting line, blessing, prayer or encouragement from elsewhere in the talk that isn't about this exact point. If the point raises a struggle and the speaker resolves it with hope, include his resolution; a resolution from later in the talk is allowed ONLY when it plainly answers the same struggle (same idea and words). Don't end on condemnation.
+4. CLOSER: end where the speaker finishes THIS thought — their own conclusion, application or punchline for the same point, usually the sentences right after the core. The last line must clearly complete what the hook and core set up, so a viewer feels the thought is finished. Never tack on a general uplifting line, blessing, prayer or encouragement from elsewhere in the talk that isn't about this exact point. \(kind.resolutionRule) A resolution from later in the talk is allowed ONLY when it plainly answers the same struggle (same idea and words).
 Before answering, check the last run: is it about the same subject as the core? If not, drop it and end earlier.
 
 Rules:
@@ -273,7 +278,7 @@ Transcript:
 \(lines)
 
 Respond with ONLY valid JSON, no markdown:
-{"title":"short catchy title (max 8 words)","hook":"3–7 word on-screen hook for the first 3 seconds that makes people stop scrolling (not the same as the title)","segments":[{"from":12,"to":15},{"from":40,"to":47}]}
+{"title":"short catchy title (max 8 words)","hook":"3–7 word on-screen hook for the first 3 seconds that makes people stop scrolling (not the same as the title)","keywords":["3–6 single words from the chosen lines that carry the meaning, to highlight in captions"],"segments":[{"from":12,"to":15},{"from":40,"to":47}]}
 """
         var lastError: Error = llmError("AI returned no story")
         for _ in 1...2 {
@@ -317,17 +322,20 @@ Respond with ONLY valid JSON, no markdown:
     /// Builds one short that fulfils `request` ("a short about forgiveness") using only what
     /// the talk says. Throws with the model's explanation if the talk doesn't cover it.
     func composeRequested(_ request: String, sentences: [(start: Double, end: Double, text: String)],
-                          targetDuration: Double, provider: AIProvider, apiKey: String) async throws -> StoryPlan {
+                          targetDuration: Double, kind: ContentKind = .current,
+                          provider: AIProvider, apiKey: String) async throws -> StoryPlan {
         let target = Int(targetDuration)
+        let taste = await TasteStore.promptBlock(for: kind)
         let prompt = """
 You are an expert short-form video editor. Below is the full transcript of a talk, one numbered sentence per line with timestamp and length.
-
+\(kind.promptContext)
+\(taste)
 The creator asks: "\(request)"
 
 Build ONE coherent short of about \(target) seconds (acceptable \(Int(Double(target) * 0.8))–\(Int(Double(target) * 1.15))s) that does exactly what they asked, using ONLY what is said in this talk, from runs of CONSECUTIVE sentences.
 - Open with a strong hook related to the request, then build to a clear, conclusive ending.
-- The ending must be where the speaker himself lands THIS point: his own conclusion, application or punchline for the same thought. Never tack on a general uplifting line, blessing, prayer or encouragement that isn't about this point.
-- If it raises a struggle and the speaker resolves it (grace, forgiveness, a promise, a challenge), include his resolution — but only if it is clearly about the same struggle. Don't end on condemnation.
+- The ending must be where the speaker lands THIS point: their own conclusion, application or punchline for the same thought. Never tack on a general uplifting line, blessing, prayer or encouragement that isn't about this point.
+- \(kind.resolutionRule)
 - Every run must make sense on its own; skip greetings, announcements and visual references.
 - Keep runs in their original order after the hook. Prefer 2–6 runs.
 - If the request asks for a different length (e.g. "30 seconds"), use that length instead.
@@ -337,7 +345,7 @@ Transcript:
 \(numbered(sentences))
 
 Respond with ONLY valid JSON, no markdown:
-{"title":"short catchy title (max 8 words)","hook":"3–7 word on-screen hook for the first 3 seconds that makes people stop scrolling (not the same as the title)","segments":[{"from":12,"to":15},{"from":40,"to":47}]}
+{"title":"short catchy title (max 8 words)","hook":"3–7 word on-screen hook for the first 3 seconds that makes people stop scrolling (not the same as the title)","keywords":["3–6 single words from the chosen lines that carry the meaning, to highlight in captions"],"segments":[{"from":12,"to":15},{"from":40,"to":47}]}
 """
         var lastError: Error = llmError("AI returned nothing")
         for _ in 1...2 {
@@ -384,7 +392,7 @@ Respond with ONLY valid JSON: {"topics":["...","..."]}
             return "[\(i)] \(m):\(String(format: "%02d", sec)) \(s.text)"
         }.joined(separator: "\n")
         let prompt = """
-You are an experienced preaching and public-speaking coach. Below is the transcript of a sermon (numbered sentences with timestamps) and measurements of the speaker's delivery. Give honest, warm, specific coaching that helps this speaker grow. Reference sentence numbers so the speaker can jump to the moment.
+You are an experienced \(ContentKind.current == .sermon ? "preaching and public-speaking" : "public-speaking and on-camera") coach. Below is the transcript of a \(ContentKind.current.noun) (numbered sentences with timestamps) and measurements of the speaker's delivery. Give honest, warm, specific coaching that helps this speaker grow. Reference sentence numbers so the speaker can jump to the moment.
 
 MEASURED DELIVERY:
 \(stats)
@@ -453,24 +461,26 @@ Respond with ONLY valid JSON, no markdown:
     /// Small-group / website notes for a sermon. `verses` are the references found in the
     /// transcript, so the AI doesn't have to guess them from garbled speech.
     func sermonNotes(sentences: [(start: Double, end: Double, text: String)], title: String, verses: [String],
+                     kind: ContentKind = .sermon,
                      provider: AIProvider, apiKey: String) async throws -> SpeakerReport.Notes {
+        let sermon = kind == .sermon
         let lines = sentences.enumerated().map { i, s -> String in
             let m = Int(s.start) / 60, sec = Int(s.start) % 60
             return "[\(i)] \(m):\(String(format: "%02d", sec)) \(s.text)"
         }.joined(separator: "\n")
         let prompt = """
-You write sermon notes for a church's small groups and website. Below is the transcript of a sermon (numbered sentences with timestamps). The video is titled "\(title)". Scripture references detected in the audio: \(verses.isEmpty ? "none" : verses.joined(separator: "; ")).
+\(sermon ? "You write sermon notes for a church's small groups and website." : "You write companion notes for a \(kind.noun) — for a blog, newsletter or website.") Below is the transcript of a \(kind.noun) (numbered sentences with timestamps). The video is titled "\(title)".\(sermon ? " Scripture references detected in the audio: \(verses.isEmpty ? "none" : verses.joined(separator: "; "))." : "")
 
-Write notes that someone who missed the sermon could follow, in the preacher's own ideas and tone. Don't invent points the preacher didn't make. Fix obvious transcription errors in Bible references.
+Write notes that someone who missed it could follow, in the speaker's own ideas and tone. Don't invent points the speaker didn't make. Fix obvious transcription errors\(sermon ? " in Bible references" : " in names").\(sermon ? "" : " Don't add a spiritual angle that isn't there; leave \"verses\" empty and \"prayer\" as \"\" unless the speaker quotes Scripture or prays.")
 
 Return:
-- "title": a clear sermon title (use the video title if it fits).
+- "title": a clear title (use the video title if it fits).
 - "bigIdea": the one main idea, one sentence.
 - "summary": 3–4 sentences.
 - "points": the main points in order (usually 3–5): {title (max 8 words), summary (2–3 sentences), sentence (where the point starts), verses (references used for this point)}.
 - "verses": every Scripture passage referenced, in order.
 - "quotes": 3–5 memorable lines, verbatim or lightly cleaned up, max 25 words each.
-- "questions": 5 small-group discussion questions, from easy/personal to deeper/application.
+- "questions": 5 \(sermon ? "small-group discussion" : "reflection or discussion") questions, from easy/personal to deeper/application.
 - "application": 2–3 concrete things to try this week.
 - "prayer": a short closing prayer (2–3 sentences) based on the message.
 
@@ -729,15 +739,16 @@ Respond with ONLY valid JSON: {"hook":"..."}
         var thumbnailSentence: Int
     }
 
-    func composeGraphics(sentences: [(start: Double, end: Double, text: String)],
+    func composeGraphics(sentences: [(start: Double, end: Double, text: String)], kind: ContentKind = .current,
                          provider: AIProvider, apiKey: String) async throws -> GraphicsPlan {
         let prompt = """
-You are a social media designer for a church. Below is the transcript of a sermon/talk, one numbered sentence per line.
+You are a social media designer\(kind == .sermon ? " for a church" : ""). Below is the transcript of a \(kind.noun), one numbered sentence per line.
+\(kind.promptContext)
 
 Write content for still graphics:
 1. "quotes": the 5 most shareable, stand-alone quotes. Use the speaker's own words (you may trim filler or join two adjacent sentences, but never invent). Each max 25 words, must make sense with no context. "sentence" = the index of the line it comes from.
 2. "carousel": an Instagram carousel that teaches the heart of the message. "title" = a scroll-stopping hook (max 8 words). "slides" = 4–6 key points, each max 22 words, in the speaker's voice, building to the main truth. Do not include a final call-to-action slide.
-3. "thumbnail": for the full sermon video. "headline" = 2–5 bold words that create curiosity (not the sermon title). "sentence" = index of a line where the speaker is likely most animated/emotional (a strong moment), used for the photo.
+3. "thumbnail": for the full \(kind.noun) video. "headline" = 2–5 bold words that create curiosity (not the \(kind.noun) title). "sentence" = index of a line where the speaker is likely most animated/emotional (a strong moment), used for the photo.
 
 Transcript:
 \(numbered(sentences))
@@ -765,6 +776,44 @@ Respond with ONLY valid JSON, no markdown:
                                 carouselSlides: car["slides"] as? [String] ?? [],
                                 thumbnailHeadline: thumb["headline"] as? String ?? "",
                                 thumbnailSentence: clamp(thumb["sentence"] as? Int))
+        }
+        throw lastError
+    }
+
+    /// A caption and hashtags for each reel, ready to paste into Instagram, TikTok or YouTube.
+    /// `reels` is (title, what's said). Returns one SEO per reel, in order.
+    func postCopy(reels: [(title: String, text: String)], videoTitle: String, kind: ContentKind,
+                  provider: AIProvider, apiKey: String) async throws -> [ReelDraft.SEO] {
+        let list = reels.enumerated().map { i, r in "[\(i)] \"\(r.title)\": \(r.text.prefix(1200))" }.joined(separator: "\n\n")
+        let prompt = """
+You write social posts for short videos cut from a \(kind.noun) called "\(videoTitle)". \(kind.promptContext)
+
+For each reel below, write:
+- "title": a YouTube Shorts title, max 70 characters, curiosity-driven but honest.
+- "caption": an Instagram/TikTok caption: a first line that stops the scroll, 1–3 short lines that add to (not repeat) the video, then a gentle call to action. Max 450 characters. No hashtags in the caption.
+- "hashtags": 5–8 relevant hashtags (with #), mixing broad and specific.
+Use the speaker's own ideas; don't invent claims.
+
+Reels:
+\(list)
+
+Respond with ONLY valid JSON, no markdown:
+{"posts":[{"reel":0,"title":"...","caption":"...","hashtags":["#..."]}]}
+"""
+        var lastError: Error = llmError("AI returned no posts")
+        for _ in 1...2 {
+            let text = try await ask(prompt, provider: provider, apiKey: apiKey)
+            guard let a = text.firstIndex(of: "{"), let b = text.lastIndex(of: "}"),
+                  let obj = try? JSONSerialization.jsonObject(with: Data(String(text[a...b]).utf8)) as? [String: Any],
+                  let posts = obj["posts"] as? [[String: Any]] else { lastError = llmError("AI posts weren't valid JSON"); continue }
+            var out = reels.map { ReelDraft.SEO(title: $0.title, description: "", hashtags: [], hookText: "") }
+            for p in posts {
+                guard let i = (p["reel"] as? Int) ?? (p["reel"] as? Double).map({ Int($0) }), out.indices.contains(i) else { continue }
+                out[i] = .init(title: p["title"] as? String ?? reels[i].title, description: p["caption"] as? String ?? "",
+                               hashtags: (p["hashtags"] as? [String] ?? []).map { $0.hasPrefix("#") ? $0 : "#" + $0 }, hookText: "")
+            }
+            guard out.contains(where: { !$0.description.isEmpty }) else { lastError = llmError("AI posts came back empty"); continue }
+            return out
         }
         throw lastError
     }
@@ -860,7 +909,9 @@ Respond with ONLY valid JSON, no markdown:
             ranges.append(r); taken.formUnion(r)
         }
         guard !ranges.isEmpty else { throw llmError("AI story had no usable segments.") }
-        return StoryPlan(title: (obj["title"] as? String) ?? "", ranges: ranges, hook: (obj["hook"] as? String) ?? "")
+        let keywords = (obj["keywords"] as? [String] ?? []).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        return StoryPlan(title: (obj["title"] as? String) ?? "", ranges: ranges, hook: (obj["hook"] as? String) ?? "",
+                         keywords: Array(keywords.prefix(8)))
     }
 
     // MARK: - Anthropic

@@ -37,6 +37,21 @@ struct CaptionLook: Codable, Equatable {
     var wordsPerCaption: Int = 1         // 1 – 4
     var uppercase: Bool = false
     var motion: Motion = .highlight
+    /// Key words (and Bible references) drawn in their own colour, slightly larger
+    var emphasis: Bool = true
+    var emphasisColor: RGBA = RGBA(r: 0.851, g: 0.765, b: 0.627)   // sand
+    /// This reel's key words, as `key(_:)` forms. Set per reel at render time; never saved.
+    var keywords: Set<String> = []
+
+    enum CodingKeys: String, CodingKey {
+        case fontName, sizeScale, textColor, highlightColor, strokeColor, strokeWidth, bgEnabled, bgColor,
+             bgOpacity, position, wordsPerCaption, uppercase, motion, emphasis, emphasisColor
+    }
+
+    /// How a word is matched against `keywords`: lowercased, outer punctuation stripped.
+    static func key(_ w: String) -> String {
+        w.lowercased().trimmingCharacters(in: CharacterSet.punctuationCharacters.union(.whitespaces).union(.symbols))
+    }
 
     /// How captions move: the spoken word changes colour, the phrase pops or slides in,
     /// words appear as they're said, or a box sits behind the spoken word.
@@ -109,9 +124,10 @@ struct CaptionLook: Codable, Equatable {
         let out = NSMutableAttributedString()
         for (i, w) in words.enumerated() {
             let text = (uppercase ? w.uppercased() : w) + (i < words.count - 1 ? " " : "")
+            let key = emphasis && !keywords.isEmpty && keywords.contains(Self.key(w))
             var attrs: [NSAttributedString.Key: Any] = [
-                .font: f,
-                .foregroundColor: (i == active ? activeTextColor : textColor).nsColor,
+                .font: key ? font(size: fontSize * 1.08) : f,
+                .foregroundColor: (i == active ? activeTextColor : key ? emphasisColor : textColor).nsColor,
                 .paragraphStyle: para
             ]
             if strokeWidth > 0 {
@@ -279,5 +295,7 @@ extension CaptionLook {
         wordsPerCaption = try c.decodeIfPresent(Int.self, forKey: .wordsPerCaption) ?? wordsPerCaption
         uppercase = try c.decodeIfPresent(Bool.self, forKey: .uppercase) ?? uppercase
         motion = (try? c.decodeIfPresent(Motion.self, forKey: .motion)) ?? .highlight
+        emphasis = try c.decodeIfPresent(Bool.self, forKey: .emphasis) ?? emphasis
+        emphasisColor = try c.decodeIfPresent(RGBA.self, forKey: .emphasisColor) ?? emphasisColor
     }
 }

@@ -526,7 +526,7 @@ struct AssessTab: View {
                 }
                 let n = try await LLMClipService.shared.sermonNotes(
                     sentences: sentences.map { ($0.start, $0.end, $0.text) }, title: r.title, verses: verses,
-                    provider: provider, apiKey: key)
+                    kind: ContentKind.current, provider: provider, apiKey: key)
                 guard selected == path else { return }
                 report?.notes = n
                 if let r = report { SpeakerReportStore.save(r) }
@@ -553,7 +553,7 @@ struct AssessTab: View {
                     VStack(alignment: .leading, spacing: 6) {
                         HStack(spacing: 7) {
                             Image(systemName: "diamond.fill").font(.system(size: 5)).foregroundColor(Theme.sand)
-                            Text(report?.isPractice == true ? "PRACTICE RUN" : "SERMON ASSESSMENT").font(.system(size: 10, weight: .semibold)).tracking(2).foregroundColor(Theme.sand)
+                            Text(report?.isPractice == true ? "PRACTICE RUN" : ContentKind.current == .sermon ? "SERMON ASSESSMENT" : "TALK ASSESSMENT").font(.system(size: 10, weight: .semibold)).tracking(2).foregroundColor(Theme.sand)
                         }
                         Text(YTDLP.title(fromFile: URL(fileURLWithPath: selected ?? "")))
                             .font(Theme.display(28)).foregroundColor(Theme.cream).lineLimit(2)
