@@ -17,45 +17,133 @@ struct PodcastTab: View {
     @State private var showNew = false
 
     var body: some View {
-        HStack(spacing: 0) {
-            list
+        Group {
             if let e = store.episode(selected) {
-                PodcastEpisodeView(id: e.id).id(e.id)
+                VStack(spacing: 0) {
+                    HStack {
+                        Button { selected = "" } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "chevron.left").font(.system(size: 11, weight: .semibold))
+                                Text("All episodes").font(.system(size: 12, weight: .medium))
+                            }
+                            .foregroundColor(Theme.sand)
+                        }
+                        .buttonStyle(.plain)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 20).padding(.top, 14)
+                    PodcastEpisodeView(id: e.id).id(e.id)
+                }
             } else {
-                empty
+                library
             }
         }
         .background(Theme.bg)
         .sheet(isPresented: $showNew) { NewEpisodeSheet { selected = $0 } }
     }
 
-    private var list: some View {
-        SidebarPanel(title: "Episodes") {
-            IconPillButton(icon: "plus", help: "New episode") { showNew = true }
-        } content: {
+    /// The page you land on: every episode as a card. Click one to open it.
+    private var library: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            PageHeader(eyebrow: "Podcast", title: "Episodes",
+                       subtitle: "\(store.episodes.count) episode\(store.episodes.count == 1 ? "" : "s") · edited, levelled and cut for every platform") {
+                Button { showNew = true } label: { Label("New Episode", systemImage: "plus") }.buttonStyle(PrimaryButtonStyle())
+            }
             ScrollView {
-                VStack(spacing: 3) {
-                    ForEach(store.episodes) { e in
-                        Button { selected = e.id } label: {
-                            SidebarRow(thumb: e.isAudioOnly ? nil : e.angles.first?.path,
-                                       icon: e.isAudioOnly ? "mic.fill" : "video.fill",
-                                       title: e.title,
-                                       detail: store.status[e.id] ?? (e.duration > 0 ? "\(podcastTime(e.duration)) → \(podcastTime(e.editedDuration))" : nil),
-                                       selected: selected == e.id)
-                        }
-                        .buttonStyle(.plain)
+                if store.episodes.isEmpty {
+                    EmptyState(icon: "mic.and.signal.meter.fill", title: "Make a podcast",
+                               message: "Add a video or audio recording, plus any other camera angles or each person's own recording. AutoClip cuts the long pauses and “um”s, cleans up and evens out the voices, follows whoever is talking, and exports every size plus podcast audio with chapters, show notes and a transcript.") {
+                        Button { showNew = true } label: { Label("New episode", systemImage: "plus") }.buttonStyle(PrimaryButtonStyle())
                     }
+                } else {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 200, maximum: 240), spacing: 18, alignment: .top)],
+                              alignment: .leading, spacing: 22) {
+                        ForEach(store.episodes) { e in
+                            EpisodeCard(episode: e, status: store.status[e.id]) { selected = e.id }
+                                .contextMenu {
+                                    Button("Open") { selected = e.id }
+                                    Button("Show working files in Finder") { NSWorkspace.shared.activateFileViewerSelecting([e.folder]) }
+                                    Divider()
+                                    Button("Delete episode", role: .destructive) { store.cancel(e.id); store.delete(e.id) }
+                                }
+                        }
+                    }
+                    .padding(.horizontal, 28).padding(.top, 4).padding(.bottom, 30)
                 }
-                .padding(.horizontal, 10).padding(.bottom, 12)
             }
         }
     }
+}
 
-    private var empty: some View {
-        EmptyState(icon: "mic.and.signal.meter.fill", title: "Make a podcast",
-                   message: "Add a video or audio recording, plus any other camera angles or each person's own recording. AutoClip cuts the long pauses and “um”s, cleans up and evens out the voices, follows whoever is talking, and exports every size plus podcast audio with chapters, show notes and a transcript.") {
-            Button { showNew = true } label: { Label("New episode", systemImage: "plus") }.buttonStyle(PrimaryButtonStyle())
+/// One episode in the Podcast library: a poster framed on whoever is in it.
+private struct EpisodeCard: View {
+    let episode: PodcastEpisode
+    let status: String?
+    let open: () -> Void
+    @State private var hover = false
+
+    var body: some View {
+        let e = episode
+        VStack(alignment: .leading, spacing: 8) {
+            ZStack(alignment: .topLeading) {
+                Group {
+                    if e.isAudioOnly || e.angles.first == nil {
+                        LinearGradient(colors: [Theme.navy, Theme.charcoal], startPoint: .topLeading, endPoint: .bottomTrailing)
+                            .overlay(Image(systemName: "mic.fill").font(.system(size: 34)).foregroundColor(Theme.sand.opacity(0.5)))
+                    } else {
+                        Color.clear.overlay(ReelThumbnailView(path: e.angles[0].path, faceAspect: 9 / 16))
+                    }
+                }
+                .aspectRatio(9 / 16, contentMode: .fit)
+                .frame(minWidth: 0, maxWidth: .infinity)
+                .clipped()
+                LinearGradient(colors: [.black.opacity(0.45), .clear, .clear, .black.opacity(0.65)], startPoint: .top, endPoint: .bottom)
+                HStack(spacing: 6) {
+                    Text(e.isAudioOnly ? "AUDIO" : e.separateTracks ? "REMOTE" : e.angles.count > 1 ? "\(e.angles.count) CAMERAS" : "VIDEO")
+                        .font(.system(size: 9, weight: .bold)).tracking(1).foregroundColor(Theme.bg)
+                        .padding(.horizontal, 7).padding(.vertical, 3).background(Capsule().fill(Theme.sand))
+                    Spacer()
+                    if e.duration > 0 {
+                        Text(podcastTime(e.editedDuration)).font(.system(size: 9, weight: .semibold)).foregroundColor(Theme.cream)
+                            .padding(.horizontal, 7).padding(.vertical, 3).background(Capsule().fill(Color.black.opacity(0.55)))
+                    }
+                }
+                .padding(9)
+                VStack {
+                    Spacer()
+                    if let status {
+                        HStack(spacing: 6) {
+                            ProgressView().controlSize(.mini)
+                            Text(status).font(.system(size: 10)).foregroundColor(Theme.cream).lineLimit(1)
+                        }
+                        .padding(8).frame(maxWidth: .infinity, alignment: .leading).background(Color.black.opacity(0.6))
+                    } else if e.people.count > 1 {
+                        Text(e.people.map(\.name).joined(separator: " · ")).font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(Theme.cream).lineLimit(1).padding(10).frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                if hover && status == nil {
+                    Image(systemName: "play.fill").font(.system(size: 18)).foregroundColor(Theme.cream)
+                        .frame(width: 48, height: 48).background(Circle().fill(Theme.terracotta.opacity(0.95)))
+                        .shadow(color: .black.opacity(0.4), radius: 8, y: 3)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(hover ? Theme.sand.opacity(0.6) : Theme.line, lineWidth: hover ? 1.5 : 1))
+            .shadow(color: .black.opacity(hover ? 0.45 : 0.25), radius: hover ? 16 : 8, y: hover ? 8 : 4)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(e.title).font(.system(size: 12, weight: .semibold)).foregroundColor(Theme.text)
+                    .lineLimit(2).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+                Text(e.created.formatted(.relative(presentation: .named))).font(.system(size: 10)).foregroundColor(Theme.muted)
+            }
+            .padding(.horizontal, 2)
         }
+        .scaleEffect(hover ? 1.02 : 1)
+        .animation(.easeOut(duration: 0.15), value: hover)
+        .contentShape(Rectangle())
+        .onTapGesture(perform: open)
+        .onHover { hover = $0 }
     }
 }
 

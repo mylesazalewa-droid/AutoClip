@@ -120,14 +120,16 @@ enum ReelGenerator {
     }
 
     /// Keep an AI story near the target without losing its shape: the opening hook and the
-    /// final run (where the hopeful resolution lands) stay; middle runs are dropped or trimmed
-    /// first. Only a single passage is trimmed at its end, and then only well over the target.
+    /// final run (where the speaker lands the point) stay; middle runs are dropped or trimmed
+    /// first. Stories may run well past the target to finish a thought, so only clearly
+    /// overlong ones (over 1.6× the target, at least 96 s) are trimmed.
     static func fit(_ ranges: [ClosedRange<Int>], to target: Double, sentences: [ReelDraft.Sentence]) -> [ClosedRange<Int>] {
         var rs = ranges
         func total() -> Double { rs.reduce(0) { $0 + (sentences[$1.upperBound].end - sentences[$1.lowerBound].start) } }
         // Trim sentence by sentence from the end of the longest middle run, so the middle
         // shrinks evenly; whole middle runs only go once they're down to one sentence
-        while total() > target * 1.2 {
+        let limit = max(target * 1.6, 96)
+        while total() > limit {
             if let k = (1..<max(1, rs.count - 1)).filter({ rs[$0].count > 1 }).max(by: { rs[$0].count < rs[$1].count }) {
                 rs[k] = rs[k].lowerBound...(rs[k].upperBound - 1)
             } else if rs.count > 2 {
@@ -137,7 +139,7 @@ enum ReelGenerator {
                 rs[1] = (rs[1].lowerBound + 1)...rs[1].upperBound
             } else if rs.count == 2, rs[0].count > 1 {
                 rs[0] = rs[0].lowerBound...(rs[0].upperBound - 1)
-            } else if rs.count == 1, rs[0].count > 1, total() > target * 1.35 {
+            } else if rs.count == 1, rs[0].count > 1 {
                 rs[0] = rs[0].lowerBound...(rs[0].upperBound - 1)
             } else { break }
         }

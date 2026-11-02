@@ -284,6 +284,26 @@ class AutoReelsStore: ObservableObject {
         guard let data = UserDefaults.standard.data(forKey: key),
               let saved = try? JSONDecoder().decode([AutoReelRecord].self, from: data) else { return }
         reels = saved.filter { FileManager.default.fileExists(atPath: $0.path) }
+        // Projects named after their first spoken words ("He's speaking to us… – 10 Reels")
+        // take their video's title instead, once
+        if !UserDefaults.standard.bool(forKey: "autoReels_titlesFromVideo") {
+            UserDefaults.standard.set(true, forKey: "autoReels_titlesFromVideo")
+            var changed = false
+            for i in reels.indices where reels[i].title.range(of: #" – (\d+ Reels|Reel)$"#, options: .regularExpression) != nil {
+                if let src = ReelGenerator.sourceVideoPath(for: reels[i]) {
+                    reels[i].title = YTDLP.title(fromFile: URL(fileURLWithPath: src)); changed = true
+                }
+            }
+            if changed { save() }
+        }
+    }
+
+    /// Renames a reel project.
+    func rename(id: UUID, to title: String) {
+        let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty, let i = reels.firstIndex(where: { $0.id == id }) else { return }
+        reels[i].title = t
+        save()
     }
 
     private func saveFailedJobs() {
@@ -1289,6 +1309,9 @@ private struct ReelCard: View {
     var onDelete: () -> Void
 
     @State private var isHovered = false
+    @State private var renaming = false
+    @State private var newTitle = ""
+    @FocusState private var titleFocused: Bool
 
     private var isMulti: Bool { reel.paths.count > 1 }
     private var primaryURL: URL { URL(fileURLWithPath: reel.path) }
@@ -1381,8 +1404,28 @@ private struct ReelCard: View {
             .onTapGesture { onSelect() }
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(reel.title).font(.system(size: 12, weight: .semibold)).foregroundColor(Theme.text)
-                    .lineLimit(2).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+                if renaming {
+                    TextField("Title", text: $newTitle)
+                        .textFieldStyle(.plain).font(.system(size: 12, weight: .semibold)).foregroundColor(Theme.cream)
+                        .padding(.horizontal, 6).padding(.vertical, 3)
+                        .background(RoundedRectangle(cornerRadius: 5).fill(Color.white.opacity(0.08)))
+                        .focused($titleFocused)
+                        .onSubmit { AutoReelsStore.shared.rename(id: reel.id, to: newTitle); renaming = false }
+                        .onExitCommand { renaming = false }
+                        .onAppear { titleFocused = true }
+                } else {
+                    HStack(alignment: .top, spacing: 4) {
+                        Text(reel.title).font(.system(size: 12, weight: .semibold)).foregroundColor(Theme.text)
+                            .lineLimit(2).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+                            .onTapGesture(count: 2) { newTitle = reel.title; renaming = true }
+                        if isHovered {
+                            Button { newTitle = reel.title; renaming = true } label: {
+                                Image(systemName: "pencil").font(.system(size: 10)).foregroundColor(Theme.muted)
+                            }
+                            .buttonStyle(.plain).help("Rename")
+                        }
+                    }
+                }
                 Text("\(reel.format) · \(relativeDate(reel.dateCreated))").font(.system(size: 10)).foregroundColor(Theme.muted)
             }
             .padding(.horizontal, 2)
@@ -1390,6 +1433,12 @@ private struct ReelCard: View {
         .scaleEffect(isHovered ? 1.02 : 1)
         .animation(.easeOut(duration: 0.15), value: isHovered)
         .onHover { isHovered = $0 }
+        .contextMenu {
+            Button("Rename…") { newTitle = reel.title; renaming = true }
+            Button("Show in Finder") { onFinder(reel.paths.map { URL(fileURLWithPath: $0) }) }
+            Divider()
+            Button("Delete", role: .destructive, action: onDelete)
+        }
     }
 
     private func formatReelDur(_ s: Double) -> String {
@@ -2451,8 +2500,8 @@ private extension AutoReelsTab {
             }
             let firstReelDur = drafts.first?.duration ?? 0
             let transcriptText = reelGroups.flatMap { $0.flatMap { $0.words.map(\.word) } }.joined(separator: " ")
-            let reelLabel = retryParams?.sourceTitle
-                ?? (reelGroups.count == 1 ? "\(finalReelTitle) – Reel" : "\(finalReelTitle) – \(reelGroups.count) Reels")
+            // Named after the video (its YouTube title, or the file's name); the card shows how many reels
+            let reelLabel = retryParams?.sourceTitle ?? YTDLP.title(fromFile: videoURL)
             let record = AutoReelRecord(id: UUID(), title: reelLabel,
                                         path: workingURL.path, paths: [workingURL.path],
                                         format: fmtLabel(format), duration: firstReelDur,

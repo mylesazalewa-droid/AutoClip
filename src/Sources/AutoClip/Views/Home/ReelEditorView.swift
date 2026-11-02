@@ -441,6 +441,7 @@ struct ReelEditorView: View {
     @State private var hookStatus: String?
     @State private var fillerNote: String?
     @State private var endingStatus: String?
+    @State private var neighbourNote: (piece: UUID, text: String)?
 
     /// The sentence being spoken at the playhead, and which of its words.
     private var playing: (id: UUID, word: Int)? {
@@ -885,6 +886,8 @@ struct ReelEditorView: View {
                 Button { draft.pieces.remove(at: i) } label: { Image(systemName: "trash") }
                     .buttonStyle(.plain).foregroundColor(Theme.danger).help("Remove this clip")
             }
+            framingRow(i)
+            neighbourButton(i, before: true)
             ForEach(Array(piece.sentences.enumerated()), id: \.element.id) { j, s in
                 let startsRun = s.included && (j == 0 || !piece.sentences[j - 1].included)
                 let endsRun = s.included && (j == piece.sentences.count - 1 || !piece.sentences[j + 1].included)
@@ -928,11 +931,79 @@ struct ReelEditorView: View {
                 .id(s.id)
                 if endsRun { nudgeRow(piece: i, sentence: j, isStart: false) }
             }
+            neighbourButton(i, before: false)
+            Text("Words in red were cut — click one to put it back. Untick a sentence to drop it.")
+                .font(.system(size: 9)).foregroundColor(Color.white.opacity(0.35))
         }
         .padding(12)
         .background(Color.white.opacity(0.04))
         .cornerRadius(10)
         .opacity(kept.isEmpty ? 0.5 : 1)
+    }
+
+    /// Brings in the sentence just before or after this clip from the full message.
+    private func neighbourButton(_ i: Int, before: Bool) -> some View {
+        HStack(spacing: 8) {
+        Button {
+            if draft.addNeighbour(piece: i, before: before) == nil {
+                neighbourNote = (draft.pieces[i].id, before ? "This clip already starts at the beginning of the message." : "This clip already runs to the end of the message.")
+            } else {
+                neighbourNote = nil
+                if let s = before ? draft.pieces[i].sentences.first : draft.pieces[i].sentences.last {
+                    // Let the new words settle into the preview, then play them
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { play(from: s.id) }
+                }
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: before ? "plus.circle" : "plus.circle")
+                Text(before ? "Add the sentence before" : "Add the sentence after")
+            }
+            .font(.system(size: 10, weight: .medium)).foregroundColor(gold.opacity(0.85))
+            .padding(.horizontal, 8).padding(.vertical, 3)
+            .background(Capsule().stroke(gold.opacity(0.3), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .help(before ? "Bring back what was said just before this clip" : "Bring back what was said just after this clip")
+        if let note = neighbourNote, note.piece == draft.pieces[i].id, note.text.contains("beginning") == before {
+            Text(note.text).font(.system(size: 9)).foregroundColor(Color.white.opacity(0.45))
+        }
+        }
+    }
+
+    /// How the vertical crop follows the speaker in this clip.
+    private func framingRow(_ i: Int) -> some View {
+        let f = draft.pieces[i].framing ?? ReelDraft.Framing(mode: "auto")
+        let mode = Binding<String>(get: { f.mode }, set: { m in
+            var nf = draft.pieces[i].framing ?? ReelDraft.Framing(mode: m)
+            nf.mode = m
+            draft.pieces[i].framing = m == "auto" ? nil : nf
+        })
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                Image(systemName: "person.crop.rectangle").font(.system(size: 10)).foregroundColor(gold.opacity(0.8))
+                Text("Framing").font(.system(size: 10, weight: .semibold)).foregroundColor(Color.white.opacity(0.5))
+                PillTabs(selection: mode, items: [("auto", "Follow speaker"), ("careful", "Look closer"), ("fixed", "Hold still")], compact: true)
+                Spacer(minLength: 0)
+            }
+            if f.mode == "careful" {
+                Text("Checks this clip twice as often and catches smaller faces. Use it where the frame drifted off the person.")
+                    .font(.system(size: 9)).foregroundColor(Color.white.opacity(0.4))
+            } else if f.mode == "fixed" {
+                HStack(spacing: 6) {
+                    Text("Left").font(.system(size: 9)).foregroundColor(Color.white.opacity(0.4))
+                    Slider(value: Binding(get: { f.x }, set: { v in
+                        draft.pieces[i].framing = ReelDraft.Framing(mode: "fixed", x: (v * 100).rounded() / 100)
+                    }), in: 0...1)
+                    .controlSize(.mini)
+                    Text("Right").font(.system(size: 9)).foregroundColor(Color.white.opacity(0.4))
+                }
+                Text("The frame stays put on this part of the video for the whole clip.")
+                    .font(.system(size: 9)).foregroundColor(Color.white.opacity(0.4))
+            }
+        }
+        .padding(.vertical, 3).padding(.horizontal, 6)
+        .background(Color.white.opacity(0.03)).cornerRadius(5)
     }
 
     /// The sentence as clickable words. Click a word to cut it (click again to restore);

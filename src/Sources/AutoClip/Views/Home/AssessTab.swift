@@ -116,8 +116,12 @@ struct AssessTab: View {
     private var shown: [FillerReport.Hit] { hits.filter { !hidden.contains($0.kind) } }
 
     var body: some View {
-        HStack(spacing: 0) {
-            videoList
+        Group {
+          if selected == nil && mode != .progress {
+            library
+          } else {
+          VStack(spacing: 0) {
+            backBar
             Group {
                 if selected == nil && mode == .progress {
                     ScrollView {
@@ -150,8 +154,26 @@ struct AssessTab: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+          }
+          }
         }
         .background(Theme.bg)
+        .confirmationDialog(deleteTitle, isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
+                            titleVisibility: .visible) {
+            if let path = pendingDelete {
+                if reelsUsing(path) == 0 {
+                    Button("Move Video to Trash", role: .destructive) { trash(path) }
+                }
+                Button("Remove from This List") { hide(path) }
+                Button("Cancel", role: .cancel) { pendingDelete = nil }
+            }
+        } message: {
+            if let path = pendingDelete {
+                let n = reelsUsing(path)
+                Text(n > 0 ? "\(n) Auto Reels project\(n == 1 ? " uses" : "s use") this video, so the file stays on your Mac."
+                           : "Moving it to the Trash removes the video file. You can put it back from the Trash.")
+            }
+        }
         .onAppear {
             allReports = SpeakerReportStore.all()
             if let p = HomeNav.shared.assessPath { HomeNav.shared.assessPath = nil; mode = .fillers; select(p) }
@@ -245,90 +267,89 @@ struct AssessTab: View {
 
     // MARK: Video list
 
-    private var videoList: some View {
-        SidebarPanel(title: "Sermons") {
-            IconPillButton(icon: "mic.fill", help: "Record a practice run") { showPractice = true }
-            IconPillButton(icon: "plus", help: "Choose a video") { chooseVideo() }
-        } content: {
-            speakerMenu.padding(.horizontal, 14).padding(.bottom, 8)
-            // Import from YouTube
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Image(systemName: "link").font(.system(size: 11)).foregroundColor(gold)
-                    TextField("Paste a YouTube link", text: $ytURL)
-                        .textFieldStyle(.plain).font(.system(size: 11)).foregroundColor(.white)
-                        .onSubmit { importYouTube() }
-                    Button("Import") { importYouTube() }
-                        .controlSize(.small)
-                        .disabled(ytURL.trimmingCharacters(in: .whitespaces).isEmpty || ytStatus != nil)
+    /// The page you land on: every sermon as a card. Click one to open its assessment.
+    private var library: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            PageHeader(eyebrow: "Assess", title: "Sermons",
+                       subtitle: "\(videos.count) message\(videos.count == 1 ? "" : "s") · filler words, pace, delivery and coaching for each one") {
+                speakerMenu.fixedSize()
+                if !sermonReports.isEmpty {
+                    Button { mode = .progress } label: { Label("Progress", systemImage: "chart.line.uptrend.xyaxis") }
+                        .buttonStyle(SecondaryButtonStyle())
                 }
-                .padding(.horizontal, 10).padding(.vertical, 6)
-                .background(Capsule().fill(Color.white.opacity(0.05))).overlay(Capsule().stroke(Theme.line, lineWidth: 1))
-                if let ytStatus {
-                    HStack(spacing: 5) { ProgressView().scaleEffect(0.45).frame(width: 12, height: 12)
-                        Text(ytStatus).font(.system(size: 10)).foregroundColor(Color.white.opacity(0.55)) }
-                } else if let ytError {
-                    Text(ytError).font(.system(size: 10)).foregroundColor(Theme.danger)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                IconPillButton(icon: "mic.fill", help: "Record a practice run") { showPractice = true }
+                Button { chooseVideo() } label: { Label("Add video", systemImage: "plus") }
+                    .buttonStyle(PrimaryButtonStyle())
             }
-            .padding(.horizontal, 14).padding(.bottom, 10)
+            youTubeField.frame(maxWidth: 520).padding(.horizontal, 28).padding(.bottom, 18)
             ScrollView {
-                VStack(alignment: .leading, spacing: 3) {
-                    ForEach(videos, id: \.self) { path in
-                        Button { select(path) } label: {
-                            let practice = PracticeRecorder.isPractice(path)
-                            let audioOnly = ["m4a", "mp3", "wav"].contains(URL(fileURLWithPath: path).pathExtension.lowercased())
-                            SidebarRow(thumb: audioOnly ? nil : path, icon: practice ? "mic.fill" : "film",
-                                       title: YTDLP.title(fromFile: URL(fileURLWithPath: path)),
-                                       detail: practice ? "Practice run" : TranscriptCache.load(for: path) != nil ? "Transcribed" : "Not assessed yet",
-                                       selected: selected == path)
-                                .padding(.trailing, hoveredVideo == path || selected == path ? 24 : 0)
-                        }
-                        .buttonStyle(.plain)
-                        .overlay(alignment: .trailing) {
-                            if hoveredVideo == path || selected == path {
-                                Button { pendingDelete = path } label: {
-                                    Image(systemName: "trash").font(.system(size: 11))
-                                        .foregroundColor(Theme.muted)
-                                        .frame(width: 24, height: 24).contentShape(Rectangle())
+                if videos.isEmpty {
+                    EmptyState(icon: "waveform.badge.magnifyingglass", title: "No sermons yet",
+                               message: "Add a video or paste a YouTube link. AutoClip measures filler words, pace, pauses, voice and stage presence, and the AI coach adds strengths, things to work on and a sermon map.") {
+                        Button { chooseVideo() } label: { Label("Add video", systemImage: "plus") }.buttonStyle(PrimaryButtonStyle())
+                    }
+                } else {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 200, maximum: 240), spacing: 18, alignment: .top)],
+                              alignment: .leading, spacing: 22) {
+                        ForEach(videos, id: \.self) { path in
+                            SermonCard(path: path, report: allReports.first { $0.videoPath == path },
+                                       speaker: profiles.speakers.count > 1 ? profiles.speaker(for: path).name : nil,
+                                       open: { select(path) }, delete: { pendingDelete = path })
+                                .contextMenu {
+                                    speakerAssignMenu(path)
+                                    Divider()
+                                    Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)]) }
+                                    Button("Delete…") { pendingDelete = path }
                                 }
-                                .buttonStyle(.plain).padding(.trailing, 4)
-                                .help("Delete or remove from this list")
-                            }
-                        }
-                        .onHover { inside in hoveredVideo = inside ? path : (hoveredVideo == path ? nil : hoveredVideo) }
-                        .contextMenu {
-                            speakerAssignMenu(path)
-                            Divider()
-                            Button("Delete…") { pendingDelete = path }
-                            Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)]) }
                         }
                     }
-                    if videos.isEmpty {
-                        Text("No videos yet. Choose one, or import from YouTube in Auto Reels.")
-                            .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.4)).padding(10)
-                    }
+                    .padding(.horizontal, 28).padding(.top, 4).padding(.bottom, 30)
                 }
-                .padding(.horizontal, 10).padding(.bottom, 12)
             }
         }
-        .confirmationDialog(deleteTitle, isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
-                            titleVisibility: .visible) {
-            if let path = pendingDelete {
-                if reelsUsing(path) == 0 {
-                    Button("Move Video to Trash", role: .destructive) { trash(path) }
-                }
-                Button("Remove from This List") { hide(path) }
-                Button("Cancel", role: .cancel) { pendingDelete = nil }
+    }
+
+    /// Paste a YouTube link to add a sermon.
+    private var youTubeField: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                Image(systemName: "link").font(.system(size: 11)).foregroundColor(gold)
+                TextField("Paste a YouTube link to add a sermon", text: $ytURL)
+                    .textFieldStyle(.plain).font(.system(size: 12)).foregroundColor(Theme.text)
+                    .onSubmit { importYouTube() }
+                Button("Import") { importYouTube() }
+                    .buttonStyle(SecondaryButtonStyle(compact: true))
+                    .disabled(ytURL.trimmingCharacters(in: .whitespaces).isEmpty || ytStatus != nil)
             }
-        } message: {
-            if let path = pendingDelete {
-                let n = reelsUsing(path)
-                Text(n > 0 ? "\(n) Auto Reels project\(n == 1 ? " uses" : "s use") this video, so the file stays on your Mac."
-                           : "Moving it to the Trash removes the video file. You can put it back from the Trash.")
+            .padding(.leading, 14).padding(.trailing, 5).padding(.vertical, 4)
+            .background(Capsule().fill(Color.white.opacity(0.05))).overlay(Capsule().stroke(Theme.line, lineWidth: 1))
+            if let ytStatus {
+                HStack(spacing: 5) { ProgressView().scaleEffect(0.45).frame(width: 12, height: 12)
+                    Text(ytStatus).font(.system(size: 10)).foregroundColor(Theme.muted) }
+            } else if let ytError {
+                Text(ytError).font(.system(size: 10)).foregroundColor(Theme.danger).fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+
+    /// Back to the sermon cards from an assessment or the progress page.
+    private var backBar: some View {
+        HStack {
+            Button {
+                player.pause()
+                selected = nil
+                mode = .fillers
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "chevron.left").font(.system(size: 11, weight: .semibold))
+                    Text("All sermons").font(.system(size: 12, weight: .medium))
+                }
+                .foregroundColor(Theme.sand)
+            }
+            .buttonStyle(.plain)
+            Spacer()
+        }
+        .padding(.horizontal, 28).padding(.top, 16)
     }
 
     private var deleteTitle: String {
@@ -547,13 +568,15 @@ struct AssessTab: View {
                     }
                     Spacer()
                     if let r = report {
-                        Menu {
-                            Button("Save as PDF…") { SpeakerReportDocument.savePDF(r, speaker: speakerName(r), history: sermons(of: profiles.speaker(for: r.videoPath)), fillers: hits.map { ($0.kind, $0.time) }) }
-                            Button("Email as PDF…") { SpeakerReportDocument.email(r, speaker: speakerName(r), history: sermons(of: profiles.speaker(for: r.videoPath)), fillers: hits.map { ($0.kind, $0.time) }) }
-                        } label: { Label("Share report", systemImage: "square.and.arrow.up") }
-                        .menuStyle(.borderlessButton).fixedSize()
-                        .padding(.horizontal, 12).padding(.vertical, 6)
-                        .background(Capsule().fill(Theme.terracotta))
+                        Button { SpeakerReportDocument.savePDF(r, speaker: speakerName(r), history: sermons(of: profiles.speaker(for: r.videoPath)), fillers: hits.map { ($0.kind, $0.time) }) } label: {
+                            Label("Save PDF", systemImage: "arrow.down.doc")
+                        }
+                        .buttonStyle(PrimaryButtonStyle(compact: true))
+                        .help("A PDF of this assessment to keep or send to a mentor or coach")
+                        Button { SpeakerReportDocument.email(r, speaker: speakerName(r), history: sermons(of: profiles.speaker(for: r.videoPath)), fillers: hits.map { ($0.kind, $0.time) }) } label: {
+                            Label("Email", systemImage: "envelope")
+                        }
+                        .buttonStyle(SecondaryButtonStyle(compact: true))
                         .help("A PDF of this assessment to send to a mentor or coach")
                     }
                     IconPillButton(icon: "trash", help: "Delete or remove from the list") { pendingDelete = selected }
@@ -745,4 +768,92 @@ struct AssessTab: View {
         let i = Int(max(0, s)); return i >= 3600 ? String(format: "%d:%02d:%02d", i / 3600, i / 60 % 60, i % 60)
                                                  : String(format: "%d:%02d", i / 60, i % 60)
     }
+}
+
+/// One sermon in the Assess library: a poster framed on the preacher, with its filler-word
+/// count once it has been assessed.
+private struct SermonCard: View {
+    let path: String
+    let report: SpeakerReport?
+    let speaker: String?
+    let open: () -> Void
+    let delete: () -> Void
+    @State private var hover = false
+
+    private var title: String { YTDLP.title(fromFile: URL(fileURLWithPath: path)) }
+    private var audioOnly: Bool { ["m4a", "mp3", "wav"].contains(URL(fileURLWithPath: path).pathExtension.lowercased()) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ZStack(alignment: .topLeading) {
+                Group {
+                    if audioOnly {
+                        LinearGradient(colors: [Theme.olive, Theme.charcoal], startPoint: .topLeading, endPoint: .bottomTrailing)
+                            .overlay(Image(systemName: "mic.fill").font(.system(size: 34)).foregroundColor(Theme.sand.opacity(0.5)))
+                    } else {
+                        Color.clear.overlay(ReelThumbnailView(path: path, faceAspect: 9 / 16))
+                    }
+                }
+                .aspectRatio(9 / 16, contentMode: .fit)
+                .frame(minWidth: 0, maxWidth: .infinity)
+                .clipped()
+                LinearGradient(colors: [.black.opacity(0.45), .clear, .clear, .black.opacity(0.65)], startPoint: .top, endPoint: .bottom)
+                HStack(spacing: 6) {
+                    if let r = report {
+                        Text("\(r.fillerCount) FILLERS").font(.system(size: 9, weight: .bold)).tracking(1).foregroundColor(Theme.bg)
+                            .padding(.horizontal, 7).padding(.vertical, 3).background(Capsule().fill(Theme.sand))
+                    } else {
+                        Text(PracticeRecorder.isPractice(path) ? "PRACTICE" : "NOT ASSESSED").font(.system(size: 9, weight: .bold)).tracking(1)
+                            .foregroundColor(Theme.cream).padding(.horizontal, 7).padding(.vertical, 3)
+                            .background(Capsule().fill(Color.black.opacity(0.55)))
+                    }
+                    Spacer()
+                    if hover {
+                        Button(action: delete) {
+                            Image(systemName: "trash").font(.system(size: 10)).foregroundColor(Theme.danger)
+                                .frame(width: 24, height: 24).background(Circle().fill(Color.black.opacity(0.6)))
+                        }
+                        .buttonStyle(.plain).help("Delete or remove from the list")
+                    }
+                }
+                .padding(9)
+                if let r = report, r.speakingMinutes > 0 {
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Text("\(Int(Double(r.wordCount) / r.speakingMinutes)) wpm · \(String(format: "%.1f", Double(r.fillerCount) / r.speakingMinutes))/min")
+                                .font(.system(size: 10, weight: .semibold)).foregroundColor(Theme.cream)
+                            Spacer()
+                        }
+                        .padding(10)
+                    }
+                }
+                if hover {
+                    Image(systemName: "chart.bar.doc.horizontal").font(.system(size: 17)).foregroundColor(Theme.cream)
+                        .frame(width: 46, height: 46).background(Circle().fill(Theme.terracotta.opacity(0.95)))
+                        .shadow(color: .black.opacity(0.4), radius: 8, y: 3)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(hover ? Theme.sand.opacity(0.6) : Theme.line, lineWidth: hover ? 1.5 : 1))
+            .shadow(color: .black.opacity(hover ? 0.45 : 0.25), radius: hover ? 16 : 8, y: hover ? 8 : 4)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.system(size: 12, weight: .semibold)).foregroundColor(Theme.text)
+                    .lineLimit(2).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+                Text([speaker, report.map { $0.videoDate.formatted(date: .abbreviated, time: .omitted) }].compactMap { $0 }.joined(separator: " · ").ifEmpty("Click to assess"))
+                    .font(.system(size: 10)).foregroundColor(Theme.muted)
+            }
+            .padding(.horizontal, 2)
+        }
+        .scaleEffect(hover ? 1.02 : 1)
+        .animation(.easeOut(duration: 0.15), value: hover)
+        .contentShape(Rectangle())
+        .onTapGesture(perform: open)
+        .onHover { hover = $0 }
+    }
+}
+
+private extension String {
+    func ifEmpty(_ other: String) -> String { isEmpty ? other : self }
 }

@@ -28,6 +28,15 @@ struct ReelDraft: Identifiable, Codable, Equatable {
         var id = UUID()
         var sourceVideoPath: String
         var sentences: [Sentence]
+        /// How the vertical crop follows the speaker in this clip (nil = automatic)
+        var framing: Framing?
+    }
+
+    /// "auto" follows the speaker, "careful" re-checks the tracking more closely, "fixed" holds
+    /// the crop still at `x` (0 = left edge of the video, 1 = right edge).
+    struct Framing: Codable, Equatable {
+        var mode: String
+        var x: Double = 0.5
     }
 
     var id = UUID()
@@ -141,6 +150,31 @@ struct ReelDraft: Identifiable, Codable, Equatable {
         return out
     }
 
+    // MARK: Growing a clip
+
+    /// Adds the sentence that comes right before (or after) this clip in the original message,
+    /// for when the reel cut off words that should have stayed. Returns the added text, or nil
+    /// when there's nothing more in that direction.
+    @discardableResult
+    mutating func addNeighbour(piece i: Int, before: Bool) -> String? {
+        guard pieces.indices.contains(i), let first = pieces[i].sentences.first, let last = pieces[i].sentences.last,
+              let words = TranscriptCache.load(for: pieces[i].sourceVideoPath) else { return nil }
+        let all = Self.sentences(from: words)
+        let pick: Sentence?
+        if before {
+            pick = all.last { $0.start < first.start - 0.05 && $0.end <= first.start + 0.3 }
+        } else {
+            pick = all.first { $0.end > last.end + 0.05 && $0.start >= last.end - 0.3 }
+        }
+        guard var add = pick else { return nil }
+        // Never take a word twice where the clip's sentences already overlap it
+        let have = Set(pieces[i].sentences.flatMap(\.words).map { ($0.startTime * 100).rounded() })
+        add.words.removeAll { have.contains(($0.startTime * 100).rounded()) }
+        guard !add.words.isEmpty else { return nil }
+        if before { pieces[i].sentences.insert(add, at: 0) } else { pieces[i].sentences.append(add) }
+        return add.text
+    }
+
     // MARK: Caption text editing
 
     /// Replace a sentence's caption text (fixing transcription mistakes). Timing stays the same:
@@ -224,6 +258,10 @@ struct ReelDraft: Identifiable, Codable, Equatable {
                              score: 0, scoreReason: "", words: words, isLiked: false, starRating: 0,
                              captionStyleName: "Karaoke", aspectRatio: "9:16", notes: "", thumbnailData: nil)
                 c.sourceVideoPath = piece.sourceVideoPath
+                if let f = piece.framing {
+                    if f.mode == "fixed" { c.frameX = f.x }
+                    if f.mode == "careful" { c.carefulFraming = true }
+                }
                 runs.append(Run(clip: c, firstSentenceID: firstS.id, lastSentenceID: lastS.id,
                                 startsAtSentence: startsAtSentence && firstIsSentStart,
                                 endsAtSentence: endsAtSentence && lastIsSentEnd))

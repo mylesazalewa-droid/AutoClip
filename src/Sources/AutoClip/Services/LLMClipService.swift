@@ -233,12 +233,13 @@ Other reels from this talk ALREADY cover these ideas — pick a clearly DIFFEREN
         let singlePrompt = """
 You are an expert short-form video editor (Reels, TikTok, Shorts). Below is the full transcript of a talk, one numbered sentence per line with its timestamp and length.
 \(topicLine)
-Pick ONE single continuous passage (one run of CONSECUTIVE sentences, no jumps) of about \(target) seconds (acceptable: \(Int(Double(target) * 0.7))–\(Int(Double(target) * 1.2))s) that works perfectly as a stand-alone short.
+Pick ONE single continuous passage (one run of CONSECUTIVE sentences, no jumps) of about \(target) seconds (acceptable: \(Int(Double(target) * 0.7))–\(Int(Double(target) * 1.2))s, or up to \(max(Int(Double(target) * 1.6), 90))s if that's what it takes to finish the thought) that works perfectly as a stand-alone short.
 
 Rules:
 - It must START on a line that grabs attention and makes sense with no context — never on a line that depends on what came before ("And so…", "That's why…", "He said…").
-- It must END on a strong, conclusive line (a punchline, takeaway or challenge) — never mid-thought.
-- If it raises a struggle, sin, guilt, pain or a problem, it MUST turn to hope before it ends — a \"But God…\" moment: grace, forgiveness, a promise of God, what Jesus has done, or a hopeful challenge. Never end on the problem, condemnation or a downer; the final line should leave viewers encouraged.
+- It must END where the speaker finishes this thought, on a strong, conclusive line (a punchline, takeaway or challenge) — never mid-thought.
+- The ending must be where the speaker himself lands THIS point: his own conclusion, application or punchline for the same thought. Never tack on a general uplifting line, blessing, prayer or encouragement that isn't about this point.
+- If it raises a struggle and the speaker resolves it (grace, forgiveness, a promise, a challenge), include his resolution — but only if it is clearly about the same struggle. Don't end on condemnation.
 - Prefer a complete story, illustration or one powerful point.
 - Skip greetings, announcements, housekeeping and anything referring to visuals the viewer can't see.
 - Never use sentences marked (USED) — they belong to other reels. This is reel #\(reelNumber).\(othersLine)
@@ -252,20 +253,21 @@ Respond with ONLY valid JSON, no markdown:
         let prompt = single ? singlePrompt : """
 You are an expert short-form video editor (Reels, TikTok, Shorts). Below is the full transcript of a talk, one numbered sentence per line with its timestamp and length.
 \(topicLine)
-Build ONE coherent short of about \(target) seconds (acceptable: \(Int(Double(target) * 0.85))–\(Int(Double(target) * 1.15))s) by choosing runs of CONSECUTIVE sentences. It must make complete sense to someone who never saw the talk.
+Build ONE coherent short of about \(target) seconds (acceptable: \(Int(Double(target) * 0.85))–\(Int(Double(target) * 1.15))s) by choosing runs of CONSECUTIVE sentences. It must make complete sense to someone who never saw the talk. Finishing the thought matters more than the length: if a really strong point needs it, you may run up to \(max(Int(Double(target) * 1.6), 90))s rather than cut it off.
 
 Structure:
 1. HOOK (first 3–8s): the most curiosity-grabbing or bold line. It may come from anywhere in the talk.
 2. CONTEXT: just enough setup for the main idea to land.
 3. CORE: one main idea or story — stay on a single thread, no topic jumps.
-4. RESOLUTION + PAYOFF: end on a strong, conclusive line (a punchline, takeaway or challenge) — never mid-thought. If it raises a struggle, sin, guilt, pain or a problem, it MUST turn to hope before it ends — a \"But God…\" moment: grace, forgiveness, a promise of God, what Jesus has done, or a hopeful challenge. Never end on the problem, condemnation or a downer; the final line should leave viewers encouraged. The hopeful turn may come from later in the talk.
+4. CLOSER: end where the speaker himself finishes THIS thought — his own conclusion, application or punchline for the same point, usually the sentences right after the core. The last line must clearly complete what the hook and core set up, so a viewer feels the thought is finished. Never tack on a general uplifting line, blessing, prayer or encouragement from elsewhere in the talk that isn't about this exact point. If the point raises a struggle and the speaker resolves it with hope, include his resolution; a resolution from later in the talk is allowed ONLY when it plainly answers the same struggle (same idea and words). Don't end on condemnation.
+Before answering, check the last run: is it about the same subject as the core? If not, drop it and end earlier.
 
 Rules:
 - Each run starts where a thought starts — never with a line that depends on what came before ("And so that's why…", "This is…", "He said…" without who).
 - Keep runs in their original order after the hook. Prefer fewer, longer runs (2–5) over many tiny jumps.
 - Skip greetings, announcements, housekeeping, "turn to page…", jokes that need context, and anything referring to visuals the viewer can't see.
 - Never use sentences marked (USED) — they belong to other reels. This is reel #\(reelNumber); pick a different idea from the other reels.\(othersLine)
-- Count the seconds: the sum of the chosen sentences' lengths must be within the range above.
+- Count the seconds: the sum of the chosen sentences' lengths should be within the range above (or up to \(max(Int(Double(target) * 1.6), 90))s only to finish a strong thought).
 
 Transcript:
 \(lines)
@@ -324,7 +326,8 @@ The creator asks: "\(request)"
 
 Build ONE coherent short of about \(target) seconds (acceptable \(Int(Double(target) * 0.8))–\(Int(Double(target) * 1.15))s) that does exactly what they asked, using ONLY what is said in this talk, from runs of CONSECUTIVE sentences.
 - Open with a strong hook related to the request, then build to a clear, conclusive ending.
-- If it raises a struggle, sin, guilt, pain or a problem, it MUST turn to hope before it ends — a \"But God…\" moment: grace, forgiveness, a promise of God, what Jesus has done, or a hopeful challenge. Never end on the problem, condemnation or a downer; the final line should leave viewers encouraged.
+- The ending must be where the speaker himself lands THIS point: his own conclusion, application or punchline for the same thought. Never tack on a general uplifting line, blessing, prayer or encouragement that isn't about this point.
+- If it raises a struggle and the speaker resolves it (grace, forgiveness, a promise, a challenge), include his resolution — but only if it is clearly about the same struggle. Don't end on condemnation.
 - Every run must make sense on its own; skip greetings, announcements and visual references.
 - Keep runs in their original order after the hook. Prefer 2–6 runs.
 - If the request asks for a different length (e.g. "30 seconds"), use that length instead.

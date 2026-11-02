@@ -325,12 +325,14 @@ class VideoExportService {
     /// One person: follow them smoothly. Several people: follow whoever is talking (mouth movement),
     /// cutting to the new speaker once they've clearly taken over; when everyone fits in the frame,
     /// frame them together.
+    /// `careful` looks twice as often (6 frames a second) and counts smaller faces, for moments
+    /// where the normal pass lost the person.
     func detectFaces(in asset: AVAsset, clipRange: CMTimeRange, videoSize: CGSize,
-                     cropFraction: Double = 0.32) async -> [FaceSample] {
+                     cropFraction: Double = 0.32, careful: Bool = false) async -> [FaceSample] {
         let startSec = CMTimeGetSeconds(clipRange.start)
         let endSec = startSec + CMTimeGetSeconds(clipRange.duration)
         let path = (asset as? AVURLAsset)?.url.path ?? "\(ObjectIdentifier(asset))"
-        let key = String(format: "%@|%.2f|%.2f|%.3f", path, startSec, endSec, cropFraction)
+        let key = String(format: "%@|%.2f|%.2f|%.3f|%d", path, startSec, endSec, cropFraction, careful ? 1 : 0)
         if let cached = Self.cachedFaces(key) { return cached }
 
         let generator = AVAssetImageGenerator(asset: asset)
@@ -339,19 +341,21 @@ class VideoExportService {
         generator.requestedTimeToleranceBefore = CMTime(seconds: 0.1, preferredTimescale: 600)
         generator.requestedTimeToleranceAfter = CMTime(seconds: 0.1, preferredTimescale: 600)
 
-        let interval = 1.0 / 3.0
+        if careful { generator.maximumSize = CGSize(width: 1280, height: 720) }
+        let interval = careful ? 1.0 / 6.0 : 1.0 / 3.0
         var frames: [(time: Double, faces: [DetectedFace])] = []
         var t = startSec
         while t <= endSec {
             var faces: [DetectedFace] = []
             if let img = try? generator.copyCGImage(at: CMTime(seconds: t, preferredTimescale: 600), actualTime: nil) {
-                faces = detectFacesWithMouths(in: img)
+                faces = detectFacesWithMouths(in: img, minHeight: careful ? 0.06 : 0.07)
             }
             frames.append((t - startSec, faces))
             t += interval
         }
 
-        let result = Self.planFraming(frames, frameWidth: Double(videoSize.width), cropFraction: cropFraction)
+        let result = Self.planFraming(frames, frameWidth: Double(videoSize.width), cropFraction: cropFraction,
+                                      perSecond: careful ? 6 : 3)
         Self.cacheFaces(result, key)
         return result
     }
@@ -363,14 +367,14 @@ class VideoExportService {
         var mouth: Double?
     }
 
-    private func detectFacesWithMouths(in image: CGImage) -> [DetectedFace] {
+    private func detectFacesWithMouths(in image: CGImage, minHeight: Double = 0.07) -> [DetectedFace] {
         let request = VNDetectFaceLandmarksRequest()
         let handler = VNImageRequestHandler(cgImage: image, options: [:])
         try? handler.perform([request])
         return (request.results ?? []).compactMap { f in
             let box = f.boundingBox
             // Tiny faces are the back of the room, a screen, or a false hit
-            guard box.height > 0.07 else { return nil }
+            guard box.height > minHeight else { return nil }
             var mouth: Double? = nil
             if let lips = f.landmarks?.innerLips?.normalizedPoints, lips.count > 2 {
                 let ys = lips.map { Double($0.y) }
@@ -382,29 +386,32 @@ class VideoExportService {
 
     /// Turns per-frame faces into framing samples (pure function, so it can be unit tested).
     static func planFraming(_ frames: [(time: Double, faces: [DetectedFace])],
-                            frameWidth: Double, cropFraction: Double) -> [FaceSample] {
+                            frameWidth: Double, cropFraction: Double, perSecond: Int = 3) -> [FaceSample] {
         guard !frames.isEmpty else { return [] }
 
-        // 1. Link faces across frames into people, by horizontal position
-        struct Person { var x: Double; var seen = 0; var xs: [Double?]; var mouths: [Double?] }
+        // 1. Link faces across frames into people, by where each was last seen (so someone
+        //    walking across the stage stays one person)
+        struct Person { var x: Double; var seen = 0; var xs: [Double?]; var mouths: [Double?]; var hs: [Double?] }
         var people: [Person] = []
         for (i, fr) in frames.enumerated() {
             var used = Set<Int>()
             for f in fr.faces.sorted(by: { $0.height > $1.height }) {
                 let match = people.indices
-                    .filter { !used.contains($0) && abs(people[$0].x - f.x) < 0.12 }
+                    .filter { !used.contains($0) && abs(people[$0].x - f.x) < 0.15 }
                     .min(by: { abs(people[$0].x - f.x) < abs(people[$1].x - f.x) })
                 let p: Int
                 if let match { p = match } else {
                     people.append(Person(x: f.x, xs: Array(repeating: nil, count: frames.count),
-                                         mouths: Array(repeating: nil, count: frames.count)))
+                                         mouths: Array(repeating: nil, count: frames.count),
+                                         hs: Array(repeating: nil, count: frames.count)))
                     p = people.count - 1
                 }
                 used.insert(p)
-                people[p].x = people[p].x * 0.7 + f.x * 0.3
+                people[p].x = f.x
                 people[p].seen += 1
                 people[p].xs[i] = f.x
                 people[p].mouths[i] = f.mouth
+                people[p].hs[i] = f.height
             }
         }
         // Only people on screen for a good part of the clip count
@@ -424,7 +431,7 @@ class VideoExportService {
         // 2. Who is talking: mouth movement (std-dev of openness) over about one second
         let n = frames.count
         func talk(_ p: Int, _ i: Int) -> Double {
-            let win = cast[p].mouths[max(0, i - 3)...min(n - 1, i + 3)].compactMap { $0 }
+            let win = cast[p].mouths[max(0, i - perSecond)...min(n - 1, i + perSecond)].compactMap { $0 }
             guard win.count >= 3 else { return 0 }
             let mean = win.reduce(0, +) / Double(win.count)
             return sqrt(win.map { ($0 - mean) * ($0 - mean) }.reduce(0, +) / Double(win.count))
@@ -437,8 +444,10 @@ class VideoExportService {
             current = (0..<cast.count).max(by: { talk($0, 0) < talk($1, 0) }) ?? 0
         }
         var challenger = -1, streak = 0, held = 0
-        let holdMin = 6        // ≥ 2s on a shot before cutting away
-        let takeOver = 3       // someone else must clearly lead for ~1s
+        let holdMin = 2 * perSecond        // ≥ 2s on a shot before cutting away
+        let takeOver = perSecond           // someone else must clearly lead for ~1s
+        let grace = perSecond              // how long to wait for someone who stepped out of shot
+        var missing = 0
         for i in 0..<n {
             held += 1
             if cast.count > 1 {
@@ -455,18 +464,35 @@ class VideoExportService {
                     }
                 } else { streak = 0; challenger = -1 }
             }
+            // The person being framed has gone (walked off, turned away, or was really someone
+            // else): after a moment, move to whoever is on screen instead of an empty spot
+            if cast[current].xs[i] == nil {
+                missing += 1
+                let visible = (0..<cast.count).filter { cast[$0].xs[i] != nil }
+                if missing > grace, let other = visible.max(by: { (cast[$0].hs[i] ?? 0) < (cast[$1].hs[i] ?? 0) }) {
+                    current = other; held = 0; missing = 0; streak = 0; challenger = -1
+                }
+            } else { missing = 0 }
             target[i] = current
         }
 
         // 4. Group shot when everyone on screen fits inside the crop
         var out: [FaceSample] = []
         var prevTarget = -2
+        var absent = 0
         for i in 0..<n {
             let visible = (0..<cast.count).filter { cast[$0].xs[i] != nil }.map { tracks[$0][i] }
             var x = tracks[target[i]][i]
             var tgt = target[i]
             if visible.count > 1, let lo = visible.min(), let hi = visible.max(), hi - lo < cropFraction * 0.8 {
                 x = (lo + hi) / 2; tgt = -1
+            }
+            // Nobody we're tracking is on screen, but someone is (they walked somewhere new, or
+            // were only briefly seen): after a moment, frame whoever is there rather than the
+            // empty spot where the last person stood
+            if visible.isEmpty { absent += 1 } else { absent = 0 }
+            if absent > perSecond, let face = frames[i].faces.max(by: { $0.height < $1.height }) {
+                x = face.x; tgt = 1000
             }
             out.append(FaceSample(time: frames[i].time, centerX: x * frameWidth, cut: i > 0 && tgt != prevTarget && tgt >= 0 && prevTarget >= 0))
             prevTarget = tgt
@@ -476,7 +502,7 @@ class VideoExportService {
         var smoothed: [FaceSample] = []
         var segStart = 0
         for i in 1...n where i == n || out[i].cut {
-            var seg = smoothSamples(Array(out[segStart..<i]), frameWidth: frameWidth)
+            var seg = smoothSamples(Array(out[segStart..<i]), frameWidth: frameWidth, perSecond: perSecond)
             if segStart > 0 { seg[0].cut = true }
             smoothed += seg
             segStart = i
@@ -484,13 +510,14 @@ class VideoExportService {
         return smoothed
     }
 
-    private static func smoothSamples(_ samples: [FaceSample], frameWidth: Double) -> [FaceSample] {
+    private static func smoothSamples(_ samples: [FaceSample], frameWidth: Double, perSecond: Int = 3) -> [FaceSample] {
         guard samples.count > 2 else { return samples }
 
-        // Pass 1: median (window 7 ≈ 2.3s) removes one-off misdetections without lagging
+        // Pass 1: median (≈ 2.3s window) removes one-off misdetections without lagging
         var pass1 = samples
+        let r = perSecond
         for i in samples.indices {
-            let win = samples[max(0, i - 3)...min(samples.count - 1, i + 3)].map(\.centerX).sorted()
+            let win = samples[max(0, i - r)...min(samples.count - 1, i + r)].map(\.centerX).sorted()
             pass1[i].centerX = win[win.count / 2]
         }
 
@@ -505,7 +532,7 @@ class VideoExportService {
 
         // Pass 3: ease into each new position over ~1.5s; ramps interpolate between samples
         var out = held
-        let alpha = 0.22
+        let alpha = perSecond > 3 ? 0.12 : 0.22
         for i in 1..<held.count {
             out[i].centerX = out[i - 1].centerX * (1 - alpha) + held[i].centerX * alpha
         }
@@ -547,9 +574,13 @@ class VideoExportService {
                                     end: CMTime(seconds: clip.endTime, preferredTimescale: 600))
             let seg = CMTimeRange(start: insertAt, duration: range.duration)
             let li = AVMutableVideoCompositionLayerInstruction(assetTrack: compTrack)
-            if vs.width > vs.height {
+            if vs.width > vs.height, let fx = clip.frameX {
+                // Held still where the editor put it
+                li.setTransform(cropTransform(centerX: fx * vs.width, videoSize: vs, renderSize: renderSize, preferredTransform: pt), at: seg.start)
+            } else if vs.width > vs.height {
                 let faces = await detectFaces(in: a, clipRange: range, videoSize: vs,
-                                              cropFraction: cropFraction(videoSize: vs, renderSize: renderSize))
+                                              cropFraction: cropFraction(videoSize: vs, renderSize: renderSize),
+                                              careful: clip.carefulFraming ?? false)
                 if faces.isEmpty {
                     li.setTransform(cropTransform(centerX: vs.width / 2, videoSize: vs, renderSize: renderSize, preferredTransform: pt), at: seg.start)
                 } else {
@@ -1523,10 +1554,14 @@ class VideoExportService {
 
                 let li = AVMutableVideoCompositionLayerInstruction(assetTrack: compVideo)
 
-                if needsFace && clipVideoSize.width > clipVideoSize.height {
+                if needsFace && clipVideoSize.width > clipVideoSize.height, let fx = clip.frameX {
+                    let t = cropTransform(centerX: fx * clipVideoSize.width, videoSize: clipVideoSize, renderSize: renderSize, preferredTransform: clipTransform)
+                    li.setTransform(t, at: segStart)
+                } else if needsFace && clipVideoSize.width > clipVideoSize.height {
                     let srcRange = CMTimeRange(start: CMTime(seconds: clip.startTime, preferredTimescale: 600), duration: segDur)
                     let faces    = await detectFaces(in: clipAsset, clipRange: srcRange, videoSize: clipVideoSize,
-                                                     cropFraction: cropFraction(videoSize: clipVideoSize, renderSize: renderSize))
+                                                     cropFraction: cropFraction(videoSize: clipVideoSize, renderSize: renderSize),
+                                                     careful: clip.carefulFraming ?? false)
 
                     if faces.isEmpty {
                         let t = cropTransform(centerX: clipVideoSize.width / 2, videoSize: clipVideoSize, renderSize: renderSize, preferredTransform: clipTransform)

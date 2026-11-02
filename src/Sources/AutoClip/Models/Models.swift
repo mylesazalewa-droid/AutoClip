@@ -58,6 +58,10 @@ struct Clip: Identifiable, Codable {
     var notes: String
     var thumbnailData: String?
     var sourceVideoPath: String = ""  // empty = use the reel's primary source video
+    /// Framing chosen in the reel editor: hold the crop still at this horizontal centre (0…1)
+    var frameX: Double?
+    /// Re-check the face tracking more closely for this clip
+    var carefulFraming: Bool?
 
     var duration: TimeInterval { endTime - startTime }
 
