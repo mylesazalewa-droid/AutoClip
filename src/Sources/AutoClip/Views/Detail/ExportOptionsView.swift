@@ -20,7 +20,7 @@ struct ExportOptionsView: View {
     @State private var exportDone = false
     @State private var exportError: String?
 
-    private let gold = Color(red: 1.0, green: 0.75, blue: 0.0)
+    private let gold = Theme.sand
 
     var selectedStyle: CaptionStyle {
         CaptionStyle.named(selectedStyleName)
@@ -119,7 +119,7 @@ struct ExportOptionsView: View {
                 if isExporting {
                     VStack(spacing: 6) {
                         ProgressView(value: exportProgress)
-                            .accentColor(gold)
+                            .accentColor(Theme.action)
                         Text(exportStatus)
                             .font(.system(size: 12))
                             .foregroundColor(Color.white.opacity(0.5))
@@ -127,16 +127,16 @@ struct ExportOptionsView: View {
                 } else if exportDone {
                     HStack(spacing: 6) {
                         Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(Color(red: 0.2, green: 0.8, blue: 0.4))
+                            .foregroundColor(Theme.good)
                         Text("Exported successfully!")
                             .font(.system(size: 13))
-                            .foregroundColor(Color(red: 0.2, green: 0.8, blue: 0.4))
+                            .foregroundColor(Theme.good)
                     }
                 } else {
                     if let err = exportError {
                         Text(err)
                             .font(.system(size: 11))
-                            .foregroundColor(Color(red: 1, green: 0.4, blue: 0.4))
+                            .foregroundColor(Theme.danger)
                             .multilineTextAlignment(.center)
                     }
 
@@ -160,7 +160,7 @@ struct ExportOptionsView: View {
             .padding(.vertical, 14)
         }
         .frame(width: 600, height: 720)
-        .background(Color(red: 0.09, green: 0.10, blue: 0.15))
+        .background(Theme.surface)
         .onAppear {
             selectedStyleName = clip.captionStyleName
         }

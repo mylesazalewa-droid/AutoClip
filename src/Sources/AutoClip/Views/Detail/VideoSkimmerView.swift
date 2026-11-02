@@ -14,7 +14,7 @@ struct VideoSkimmerView: View {
     @State private var thumbnailFraction: Double = -1
     private let generator = ThumbnailGenerator()
 
-    private var gold = Color(red: 1.0, green: 0.75, blue: 0.0)
+    private var gold = Theme.sand
 
     init(clip: Clip, project: Project, progress: Double, onSeek: @escaping (Double) -> Void) {
         self.clip = clip

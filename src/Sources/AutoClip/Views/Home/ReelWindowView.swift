@@ -8,7 +8,7 @@ struct ReelWindowView: View {
     @ObservedObject private var store = AutoReelsStore.shared
     @Environment(\.dismiss) private var dismiss
     @State private var previewID: UUID?
-    private let gold = Color(red: 1.0, green: 0.75, blue: 0.0)
+    private let gold = Theme.sand
 
     private var record: AutoReelRecord? { store.reels.first { $0.id == recordID } }
     private var previewDraft: ReelDraft? {
@@ -40,7 +40,7 @@ struct ReelWindowView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .background(Color(red: 0.07, green: 0.08, blue: 0.12))
+        .background(Theme.bg)
         .preferredColorScheme(.dark)
         .navigationTitle(record?.title ?? "Reels")
         .frame(minWidth: 940, minHeight: 600)
@@ -100,7 +100,7 @@ struct DraftPreviewPane: View {
                     .buttonStyle(.plain).keyboardShortcut(.space, modifiers: [])
                 Slider(value: Binding(get: { time }, set: { t in
                     time = t; player.seek(to: CMTime(seconds: t, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
-                }), in: 0...max(total, 0.1)).tint(gold)
+                }), in: 0...max(total, 0.1)).tint(Theme.action)
                 Text("\(fmt(time)) / \(fmt(total))").font(.system(size: 11, design: .monospaced)).foregroundColor(Color.white.opacity(0.5))
             }
             .frame(maxWidth: 520)

@@ -104,7 +104,7 @@ struct ClipCard: View {
 
                 Image(systemName: clip.isLiked ? "heart.fill" : "heart")
                     .font(.system(size: 12))
-                    .foregroundColor(clip.isLiked ? Color(red: 1, green: 0.3, blue: 0.4) : Color.white.opacity(0.35))
+                    .foregroundColor(clip.isLiked ? Theme.danger : Color.white.opacity(0.35))
                     .frame(width: 28, height: 28)
                     .contentShape(Rectangle())
                     .onTapGesture {
@@ -125,14 +125,14 @@ struct ClipCard: View {
         }
         .background(
             isSelected
-                ? Color(red: 0.18, green: 0.20, blue: 0.28)
+                ? Theme.raised2
                 : Color(red: 0.12, green: 0.14, blue: 0.19)
         )
         .cornerRadius(10)
         .overlay(
             RoundedRectangle(cornerRadius: 10)
                 .stroke(
-                    isSelected ? Color(red: 1.0, green: 0.75, blue: 0.0).opacity(0.6) : Color.white.opacity(0.07),
+                    isSelected ? Theme.sand.opacity(0.6) : Color.white.opacity(0.07),
                     lineWidth: isSelected ? 1.5 : 1
                 )
         )
@@ -147,7 +147,7 @@ struct ClipCard: View {
                 .aspectRatio(contentMode: .fill)
         } else {
             Rectangle()
-                .fill(Color(red: 0.12, green: 0.14, blue: 0.20))
+                .fill(Theme.raised)
                 .overlay(
                     Image(systemName: "film")
                         .font(.system(size: 28))

@@ -96,7 +96,7 @@ struct ProjectDetailView: View {
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
-                    .background(Color(red: 0.09, green: 0.10, blue: 0.15))
+                    .background(Theme.surface)
 
                     Divider().background(Color.white.opacity(0.08))
 
@@ -105,13 +105,13 @@ struct ProjectDetailView: View {
                     }
                 }
                 .frame(minWidth: 300, idealWidth: 340, maxWidth: 400)
-                .background(Color(red: 0.07, green: 0.08, blue: 0.12))
+                .background(Theme.bg)
             } else if let _ = selectedClip {
                 ClipDetailPanel(clip: selectedClipBinding, project: project)
                     .frame(minWidth: 300, idealWidth: 320, maxWidth: 360)
             }
         }
-        .background(Color(red: 0.07, green: 0.08, blue: 0.12))
+        .background(Theme.bg)
         .sheet(isPresented: $showHistory) {
             ExportHistoryView()
         }
@@ -220,10 +220,10 @@ struct ProjectDetailView: View {
                         Text("Best Quotes")
                             .font(.system(size: 12))
                     }
-                    .foregroundColor(showProjectQuotes ? Color(red: 1.0, green: 0.75, blue: 0.0) : Color.white.opacity(0.7))
+                    .foregroundColor(showProjectQuotes ? Theme.sand : Color.white.opacity(0.7))
                     .padding(.horizontal, 8)
                     .padding(.vertical, 5)
-                    .background(showProjectQuotes ? Color(red: 1.0, green: 0.75, blue: 0.0).opacity(0.15) : Color.white.opacity(0.07))
+                    .background(showProjectQuotes ? Theme.sand.opacity(0.15) : Color.white.opacity(0.07))
                     .cornerRadius(6)
                 }
                 .buttonStyle(.plain)
@@ -255,7 +255,7 @@ struct ProjectDetailView: View {
                     .foregroundColor(.black)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 5)
-                    .background(Color(red: 1.0, green: 0.75, blue: 0.0))
+                    .background(Theme.sand)
                     .cornerRadius(6)
                 }
                 .buttonStyle(.plain)
@@ -279,7 +279,7 @@ struct ProjectDetailView: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .background(Color(red: 0.09, green: 0.10, blue: 0.15))
+            .background(Theme.surface)
 
             // Stats bar
             statsBar
@@ -346,7 +346,7 @@ struct ProjectDetailView: View {
                 }
             }
         }
-        .background(Color(red: 0.07, green: 0.08, blue: 0.12))
+        .background(Theme.bg)
     }
 
     var statsBar: some View {
@@ -372,7 +372,7 @@ struct ProjectDetailView: View {
             Spacer()
         }
         .padding(.vertical, 10)
-        .background(Color(red: 0.09, green: 0.10, blue: 0.14))
+        .background(Theme.surface)
     }
 
     func statItem(icon: String, value: String, label: String) -> some View {
@@ -413,14 +413,14 @@ struct ProjectDetailView: View {
                 Text(label)
                     .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
             }
-            .foregroundColor(isSelected ? Color(red: 1.0, green: 0.75, blue: 0.0) : Color.white.opacity(0.5))
+            .foregroundColor(isSelected ? Theme.sand : Color.white.opacity(0.5))
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
-            .background(isSelected ? Color(red: 1.0, green: 0.75, blue: 0.0).opacity(0.12) : Color.clear)
+            .background(isSelected ? Theme.sand.opacity(0.12) : Color.clear)
             .cornerRadius(6)
             .overlay(
                 RoundedRectangle(cornerRadius: 6)
-                    .stroke(isSelected ? Color(red: 1.0, green: 0.75, blue: 0.0).opacity(0.4) : Color.clear, lineWidth: 1)
+                    .stroke(isSelected ? Theme.sand.opacity(0.4) : Color.clear, lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -469,7 +469,7 @@ struct ProjectDetailView: View {
         VStack(spacing: 16) {
             Spacer()
             ProgressView(value: appState.analyzeProgress)
-                .accentColor(Color(red: 1.0, green: 0.75, blue: 0.0))
+                .accentColor(Theme.sand)
                 .padding(.horizontal, 60)
             Text(appState.analyzeStatus)
                 .font(.system(size: 13))
@@ -561,6 +561,6 @@ struct ExportHistoryView: View {
             }
         }
         .frame(width: 560, height: 480)
-        .background(Color(red: 0.09, green: 0.10, blue: 0.15))
+        .background(Theme.surface)
     }
 }

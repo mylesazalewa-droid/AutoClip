@@ -56,12 +56,12 @@ struct AssessTab: View {
     private var extraVideos: [String] { extraRaw.split(separator: "\n").map(String.init) }
     private var hiddenVideos: Set<String> { Set(hiddenRaw.split(separator: "\n").map(String.init)) }
 
-    private let gold = Color(red: 1.0, green: 0.75, blue: 0.0)
+    private let gold = Theme.sand
 
     static let colors: [String: Color] = [
-        "like": Color(red: 1.0, green: 0.42, blue: 0.42), "um": Color(red: 1.0, green: 0.75, blue: 0.0),
-        "uh": Color(red: 1.0, green: 0.58, blue: 0.2), "ah": Color(red: 0.95, green: 0.45, blue: 0.85),
-        "well": Color(red: 0.4, green: 0.8, blue: 1.0), "so": Color(red: 0.45, green: 0.9, blue: 0.55),
+        "like": Theme.danger, "um": Theme.sand,
+        "uh": Theme.warn, "ah": Color(red: 0.95, green: 0.45, blue: 0.85),
+        "well": Color(red: 0.4, green: 0.8, blue: 1.0), "so": Theme.good,
         "you see": Color(red: 0.7, green: 0.6, blue: 1.0), "i mean": Color(red: 0.95, green: 0.95, blue: 0.95)
     ]
     private func color(_ k: String) -> Color { Self.colors[k] ?? .white }
@@ -136,7 +136,7 @@ struct AssessTab: View {
                                 .buttonStyle(.bordered)
                             if !sermonReports.isEmpty {
                                 Button("📈 See \(progressOwner) progress across \(sermonReports.count) message\(sermonReports.count == 1 ? "" : "s")") { mode = .progress }
-                                    .buttonStyle(.borderedProminent).tint(gold)
+                                    .buttonStyle(PrimaryButtonStyle())
                             }
                         }
                     }
@@ -152,8 +152,15 @@ struct AssessTab: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .background(Color(red: 0.07, green: 0.08, blue: 0.12))
-        .onAppear { allReports = SpeakerReportStore.all() }
+        .background(Theme.bg)
+        .onAppear {
+            allReports = SpeakerReportStore.all()
+            if let p = HomeNav.shared.assessPath { HomeNav.shared.assessPath = nil; mode = .fillers; select(p) }
+        }
+        // A sermon picked on Home
+        .onReceive(HomeNav.shared.$assessPath) { p in
+            if let p { HomeNav.shared.assessPath = nil; mode = .fillers; select(p) }
+        }
         .sheet(isPresented: $showSpeakers) { SpeakersSheet(reports: allReports) }
         .sheet(isPresented: $showPractice) {
             PracticeSheet { url in
@@ -272,7 +279,7 @@ struct AssessTab: View {
                     HStack(spacing: 5) { ProgressView().scaleEffect(0.45).frame(width: 12, height: 12)
                         Text(ytStatus).font(.system(size: 10)).foregroundColor(Color.white.opacity(0.55)) }
                 } else if let ytError {
-                    Text(ytError).font(.system(size: 10)).foregroundColor(Color(red: 1, green: 0.45, blue: 0.45))
+                    Text(ytError).font(.system(size: 10)).foregroundColor(Theme.danger)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -322,7 +329,7 @@ struct AssessTab: View {
                 .padding(.horizontal, 8)
             }
         }
-        .background(Color(red: 0.09, green: 0.10, blue: 0.15))
+        .background(Theme.surface)
         .confirmationDialog(deleteTitle, isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
                             titleVisibility: .visible) {
             if let path = pendingDelete {

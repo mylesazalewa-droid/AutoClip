@@ -72,7 +72,7 @@ struct TranscriptPanel: View {
                 if !sentence.trimmingCharacters(in: .whitespaces).isEmpty {
                     HStack(alignment: .top, spacing: 8) {
                         Circle()
-                            .fill(Color(red: 1.0, green: 0.75, blue: 0.0))
+                            .fill(Theme.sand)
                             .frame(width: 5, height: 5)
                             .padding(.top, 6)
                         Text(sentence.trimmingCharacters(in: .whitespaces))
@@ -115,8 +115,8 @@ struct TranscriptPanel: View {
                 }) {
                     Text(word.word)
                         .font(.system(size: 13))
-                        .foregroundColor(isFiller ? Color(red: 1, green: 0.5, blue: 0.1) : Color.white.opacity(0.8))
-                        .background(isFiller ? Color(red: 1, green: 0.5, blue: 0.1).opacity(0.15) : Color.clear)
+                        .foregroundColor(isFiller ? Theme.warn : Color.white.opacity(0.8))
+                        .background(isFiller ? Theme.warn.opacity(0.15) : Color.clear)
                         .cornerRadius(2)
                 }
                 .buttonStyle(.plain)

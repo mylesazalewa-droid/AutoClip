@@ -33,7 +33,7 @@ struct SocialGraphicsView: View {
                 if !cards.isEmpty {
                     Button("Rewrite with AI") { generate() }.disabled(status != nil)
                     Button("Export all…") { exportAll() }
-                        .buttonStyle(.borderedProminent).tint(gold).disabled(status != nil)
+                        .buttonStyle(PrimaryButtonStyle()).disabled(status != nil)
                 }
                 Button("Done") { dismiss() }
             }
@@ -50,10 +50,10 @@ struct SocialGraphicsView: View {
                         Image(systemName: "photo.on.rectangle.angled").font(.system(size: 38)).foregroundColor(gold)
                         Text("AI reads the message and writes 5 quote cards, a carousel and a thumbnail headline.")
                             .font(.system(size: 12)).foregroundColor(Color.white.opacity(0.6))
-                        Button("Create graphics") { generate() }.buttonStyle(.borderedProminent).tint(gold)
+                        Button("Create graphics") { generate() }.buttonStyle(PrimaryButtonStyle())
                     }
                     if let error {
-                        Text(error).font(.system(size: 11)).foregroundColor(Color(red: 1, green: 0.45, blue: 0.45))
+                        Text(error).font(.system(size: 11)).foregroundColor(Theme.danger)
                             .multilineTextAlignment(.center).frame(maxWidth: 420)
                     }
                     Spacer()

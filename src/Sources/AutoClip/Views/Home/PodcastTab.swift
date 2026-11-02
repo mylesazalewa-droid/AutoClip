@@ -2,9 +2,9 @@ import SwiftUI
 import AVKit
 import UniformTypeIdentifiers
 
-private let gold = Color(red: 1.0, green: 0.75, blue: 0.0)
-private let warn = Color(red: 1.0, green: 0.6, blue: 0.25)
-private let panel = Color(red: 0.09, green: 0.10, blue: 0.15)
+private let gold = Theme.sand
+private let warn = Theme.warn
+private let panel = Theme.surface
 
 func podcastTime(_ s: Double) -> String { PodcastExports.stamp(s) }
 
@@ -26,7 +26,7 @@ struct PodcastTab: View {
                 empty
             }
         }
-        .background(Color(red: 0.07, green: 0.08, blue: 0.12))
+        .background(Theme.bg)
         .sheet(isPresented: $showNew) { NewEpisodeSheet { selected = $0 } }
     }
 
@@ -77,7 +77,7 @@ struct PodcastTab: View {
             Text("Add a video or audio recording (and any other camera angles). AutoClip cuts the long pauses and “um”s, cleans up and evens out the voices, switches cameras to whoever is talking (or zooms in to make new shots from one camera), and exports YouTube, vertical, square and feed sizes plus a podcast audio file with chapters, show notes and a transcript.")
                 .font(.system(size: 12)).foregroundColor(Color.white.opacity(0.6)).multilineTextAlignment(.center).frame(maxWidth: 460)
             Button { showNew = true } label: { Label("New episode", systemImage: "plus") }
-                .buttonStyle(.borderedProminent).tint(gold).controlSize(.large)
+                .buttonStyle(PrimaryButtonStyle())
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -142,7 +142,7 @@ struct NewEpisodeSheet: View {
                     onCreate(id)
                     dismiss()
                 }
-                .keyboardShortcut(.defaultAction).buttonStyle(.borderedProminent).tint(gold)
+                .keyboardShortcut(.defaultAction).buttonStyle(PrimaryButtonStyle())
                 .disabled(files.isEmpty || downloading != nil || (perPerson && files.count < 2))
             }
         }
@@ -181,11 +181,13 @@ struct PodcastEpisodeView: View {
     @State private var player = AVPlayer()
     @State private var format = "16:9"
     @State private var section: Section = .edit
-    @State private var now = 0.0             // edited time
+    @State private var now = 0.0             // edited time (4 times a second, for the timeline)
+    @StateObject private var clock = PlaybackClock()   // 10 times a second, for the transcript
     @State private var observer: Any?
     @State private var building = false
     @State private var title = ""
     @State private var confirmDelete = false
+    @State private var editingTitle = false
     enum Section: String, CaseIterable { case edit = "Edit", camera = "Camera", sound = "Sound", notes = "Show notes", export = "Export" }
 
     private var e: PodcastEpisode? { store.episode(id) }
@@ -218,7 +220,7 @@ struct PodcastEpisodeView: View {
                         }
                         .pickerStyle(.segmented).labelsHidden()
                         switch section {
-                        case .edit: PodcastEditSection(id: id, seek: seek)
+                        case .edit: PodcastEditSection(id: id, seek: seek, clock: clock)
                         case .camera: PodcastCameraSection(id: id)
                         case .sound: PodcastSoundSection(id: id)
                         case .notes: PodcastNotesSection(id: id, seek: seek)
@@ -231,8 +233,10 @@ struct PodcastEpisodeView: View {
             .task(id: previewKey) { await rebuildPreview() }
             .onAppear {
                 title = e.title
-                observer = player.addPeriodicTimeObserver(forInterval: CMTime(value: 1, timescale: 4), queue: .main) { t in
-                    now = CMTimeGetSeconds(t)
+                observer = player.addPeriodicTimeObserver(forInterval: CMTime(value: 1, timescale: 10), queue: .main) { t in
+                    let s = CMTimeGetSeconds(t)
+                    clock.now = s
+                    if abs(s - now) >= 0.25 { now = s }
                 }
             }
             .onDisappear {
@@ -244,10 +248,18 @@ struct PodcastEpisodeView: View {
 
     private func header(_ e: PodcastEpisode) -> some View {
         HStack(spacing: 10) {
-            TextField("Title", text: $title)
-                .textFieldStyle(.plain).font(.system(size: 18, weight: .semibold)).foregroundColor(.white)
-                .onSubmit { store.update(id) { $0.title = title } }
-                .onChange(of: title) { t in store.update(id) { $0.title = t } }
+            // The title is text until you choose to rename it, so it isn't selected on arrival
+            if editingTitle {
+                TextField("Title", text: $title)
+                    .textFieldStyle(.plain).font(Theme.display(24)).foregroundColor(Theme.cream)
+                    .onSubmit { store.update(id) { $0.title = title }; editingTitle = false }
+                    .onChange(of: title) { t in store.update(id) { $0.title = t } }
+            } else {
+                Text(e.title).font(Theme.display(24)).foregroundColor(Theme.cream).lineLimit(1)
+                    .onTapGesture(count: 2) { title = e.title; editingTitle = true }
+                Button { title = e.title; editingTitle = true } label: { Image(systemName: "pencil").font(.system(size: 12)) }
+                    .buttonStyle(.plain).foregroundColor(Theme.faint).help("Rename")
+            }
             Spacer()
             Menu {
                 Button("Read the recording again") { store.analyze(id) }
@@ -284,7 +296,7 @@ struct PodcastEpisodeView: View {
                 .font(.system(size: 12)).foregroundColor(Color.white.opacity(0.7)).fixedSize(horizontal: false, vertical: true)
             statusLine()
             if store.status[id] == nil {
-                Button("Start") { store.analyze(id) }.buttonStyle(.borderedProminent).tint(gold)
+                Button("Start") { store.analyze(id) }.buttonStyle(PrimaryButtonStyle())
             }
         }
     }
@@ -316,7 +328,7 @@ struct PodcastEpisodeView: View {
         VStack(alignment: .leading, spacing: 10) {
             statusLine()
             VStack(alignment: .leading, spacing: 2) {
-                Text(podcastTime(e.editedDuration)).font(.system(size: 34, weight: .bold, design: .rounded)).foregroundColor(gold)
+                Text(podcastTime(e.editedDuration)).font(Theme.display(38)).foregroundColor(Theme.sand)
                 Text("after the edit · was \(podcastTime(e.duration))").font(.system(size: 11)).foregroundColor(Color.white.opacity(0.55))
             }
             let pauses = e.enabledCuts.filter { $0.kind == .pause }, fillers = e.enabledCuts.filter { $0.kind == .filler }
@@ -327,9 +339,10 @@ struct PodcastEpisodeView: View {
             }
             HStack(spacing: 8) {
                 Button { section = .export } label: { Label("Export", systemImage: "square.and.arrow.up") }
-                    .buttonStyle(.borderedProminent).tint(gold)
+                    .buttonStyle(PrimaryButtonStyle())
                 if !e.isAudioOnly {
                     Button { makeClips(e) } label: { Label("Make clips", systemImage: "scissors") }
+                        .buttonStyle(SecondaryButtonStyle())
                         .help("Open Auto Reels with this episode (the exported 16:9 video if there is one) to cut short clips")
                 }
             }
@@ -470,6 +483,7 @@ struct PodcastTimeline: View {
 struct PodcastEditSection: View {
     let id: String
     let seek: (Double) -> Void
+    let clock: PlaybackClock
     @ObservedObject private var store = PodcastStore.shared
     @State private var showAll = false
 
@@ -501,7 +515,7 @@ struct PodcastEditSection: View {
                     Text("Cuts \(pauses.count) pause\(pauses.count == 1 ? "" : "s") (\(podcastTime(pauses.reduce(0) { $0 + $1.length }))) and \(fillers.count) filler word\(fillers.count == 1 ? "" : "s") — the episode goes from \(podcastTime(e.duration)) to \(podcastTime(e.editedDuration)).")
                         .font(.system(size: 12, weight: .medium)).foregroundColor(.white).fixedSize(horizontal: false, vertical: true)
                 }
-                PodcastTranscriptEditor(id: id, seek: seek)
+                PodcastTranscriptEditor(id: id, seek: seek, clock: clock)
                 AssessCard(title: "Every cut", subtitle: "Untick any you want to keep. ▶ plays across the cut.") {
                     HStack {
                         Button("Cut all") { store.update(id) { e in for i in e.cuts.indices { e.cuts[i].enabled = true } } }
@@ -800,7 +814,7 @@ struct PodcastNotesSection: View {
                     Text("The AI reads the episode and writes three title ideas, a description, chapters with timestamps, keywords, quotes and a social post. Chapters are added to the podcast audio file. Costs a few cents.")
                         .font(.system(size: 12)).foregroundColor(Color.white.opacity(0.7)).fixedSize(horizontal: false, vertical: true)
                     Button { store.writeNotes(id) } label: { Label("Write show notes", systemImage: "sparkles") }
-                        .buttonStyle(.borderedProminent).tint(gold).disabled(store.status[id] != nil)
+                        .buttonStyle(PrimaryButtonStyle()).disabled(store.status[id] != nil)
                     if let err = store.errors[id] { Text(err).font(.system(size: 11)).foregroundColor(warn) }
                 }
             }
@@ -870,7 +884,7 @@ struct PodcastExportSection: View {
                 }
                 HStack(spacing: 10) {
                     Button { store.export(id) } label: { Label("Export", systemImage: "square.and.arrow.up") }
-                        .buttonStyle(.borderedProminent).tint(gold).controlSize(.large)
+                        .buttonStyle(PrimaryButtonStyle())
                         .disabled(store.status[id] != nil || (e.settings.formats.isEmpty && !e.settings.exportAudio && !e.isAudioOnly))
                     if let st = store.status[id] {
                         if let p = store.progress[id] { ProgressView(value: p).frame(width: 160) } else { ProgressView().controlSize(.small) }

@@ -15,7 +15,7 @@ struct HomeView: View {
     @AppStorage("home_tab") private var activeTab: HomeTab = .projects
     @State private var showAutoClipsSettings = false
 
-    private let gold = Color(red: 1.0, green: 0.75, blue: 0.0)
+    private let gold = Theme.sand
 
     var filteredProjects: [Project] {
         var list = library.projects
@@ -34,13 +34,10 @@ struct HomeView: View {
 
     var body: some View {
         ZStack {
-            Color(red: 0.07, green: 0.08, blue: 0.12).ignoresSafeArea()
+            Theme.bg.ignoresSafeArea()
 
             VStack(spacing: 0) {
                 toolbar
-
-                // Tab bar
-                tabBar
 
                 // Tab content
                 switch activeTab {
@@ -59,9 +56,16 @@ struct HomeView: View {
                         projectsContent
                     }
                 case .projects:
-                    CombinedProjectsView(
-                        onSwitchToAutoClips: { activeTab = .autoClips },
-                        onSwitchToAutoReels: { activeTab = .autoReels }
+                    HomeFeed(
+                        onOpenProject: { project in
+                            AppState.shared.selectedProject = project
+                            AppState.shared.selectedClip = nil
+                            activeTab = .autoClips
+                        },
+                        onOpenReel: { reel in
+                            AutoReelsStore.shared.navigateToReelID = reel.id
+                            activeTab = .autoReels
+                        }
                     )
                 }
             }
@@ -84,138 +88,102 @@ struct HomeView: View {
         .onReceive(AutoReelsHandoff.shared.$showTab) { show in
             if show { activeTab = .autoReels; AutoReelsHandoff.shared.showTab = false }
         }
-    }
-
-    var tabBar: some View {
-        HStack(spacing: 0) {
-            tabButton(title: "Projects", icon: "square.grid.2x2.fill", tab: .projects)
-            tabButton(title: "Auto Reels", icon: "play.rectangle.on.rectangle.fill", tab: .autoReels)
-            tabButton(title: "Podcast", icon: "mic.and.signal.meter.fill", tab: .podcast)
-            tabButton(title: "Assess", icon: "waveform.badge.magnifyingglass", tab: .assess)
-            tabButton(title: "Search", icon: "magnifyingglass", tab: .search)
-            Spacer()
+        // Cards and tiles on Home open other tabs
+        .onReceive(HomeNav.shared.$tab) { tab in
+            if let tab { withAnimation(.easeInOut(duration: 0.15)) { activeTab = tab }; HomeNav.shared.tab = nil }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 0)
-        .background(Color(red: 0.09, green: 0.10, blue: 0.15))
-        .overlay(Divider().background(Color.white.opacity(0.08)), alignment: .bottom)
     }
 
-    func tabButton(title: String, icon: String, tab: HomeTab) -> some View {
-        Button(action: { activeTab = tab }) {
-            HStack(spacing: 5) {
-                Image(systemName: icon).font(.system(size: 11))
-                Text(title).font(.system(size: 13, weight: activeTab == tab ? .semibold : .regular))
-            }
-            .foregroundColor(activeTab == tab ? gold : Color.white.opacity(0.45))
-            .padding(.horizontal, 14)
-            .padding(.vertical, 9)
-            .overlay(
-                Rectangle()
-                    .fill(activeTab == tab ? gold : Color.clear)
-                    .frame(height: 2),
-                alignment: .bottom
-            )
-        }
-        .buttonStyle(.plain)
+    func tabButton(title: String, tab: HomeTab) -> some View {
+        TabLink(title: title, active: activeTab == tab || (tab == .projects && activeTab == .autoClips)) { activeTab = tab }
     }
 
-    // MARK: - Toolbar
+    // MARK: - Header
 
+    /// One bar like a streaming site: the name, the sections, then search and actions.
     var toolbar: some View {
-        HStack(spacing: 12) {
-            HStack(spacing: 8) {
-                Image(systemName: "scissors")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(gold)
-                Text("AutoClip")
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(.white)
-            }
-            .padding(.leading, 16)
-
-            Spacer()
-
-            HStack(spacing: 6) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(Color.white.opacity(0.4))
-                    .font(.system(size: 13))
-                TextField("Search projects & clips...", text: $searchText)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 13))
-                    .foregroundColor(.white)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .background(Color.white.opacity(0.07))
-            .cornerRadius(8)
-            .frame(width: 260)
-
-            Spacer()
-
-            Menu {
-                ForEach(SortOrder.allCases, id: \.self) { order in
-                    Button(order.rawValue) { sortOrder = order }
+        HStack(spacing: 22) {
+            Button { activeTab = .projects } label: {
+                HStack(spacing: 9) {
+                    Image(systemName: "scissors")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(Theme.bg)
+                        .frame(width: 28, height: 28)
+                        .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Theme.sand))
+                    Text("AUTOCLIP").font(Theme.display(17, weight: .medium)).tracking(3).foregroundColor(Theme.cream)
                 }
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "arrow.up.arrow.down").font(.system(size: 11))
-                    Text(sortOrder.rawValue).font(.system(size: 13))
-                    Image(systemName: "chevron.down").font(.system(size: 9))
-                }
-                .foregroundColor(Color.white.opacity(0.8))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(Color.white.opacity(0.08))
-                .cornerRadius(7)
             }
             .buttonStyle(.plain)
+            .padding(.leading, 20)
+
+            HStack(spacing: 4) {
+                tabButton(title: "Home", tab: .projects)
+                tabButton(title: "Auto Reels", tab: .autoReels)
+                tabButton(title: "Podcast", tab: .podcast)
+                tabButton(title: "Assess", tab: .assess)
+                tabButton(title: "Search", tab: .search)
+            }
+
+            Spacer()
 
             if activeTab == .autoClips {
-                Button(action: { appState.triggerImport() }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "plus").font(.system(size: 13, weight: .semibold))
-                        Text("New Clip").font(.system(size: 13, weight: .semibold))
-                    }
-                    .foregroundColor(.black)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 7)
-                    .background(gold)
-                    .cornerRadius(8)
+                HStack(spacing: 7) {
+                    Image(systemName: "magnifyingglass").foregroundColor(Theme.faint).font(.system(size: 12))
+                    TextField("Search projects & clips", text: $searchText)
+                        .textFieldStyle(.plain).font(.system(size: 12)).foregroundColor(Theme.text)
                 }
-                .buttonStyle(.plain)
+                .padding(.horizontal, 12).padding(.vertical, 7)
+                .background(Capsule().fill(Color.white.opacity(0.06)))
+                .overlay(Capsule().stroke(Theme.line, lineWidth: 1))
+                .frame(width: 230)
 
-                Button(action: { appState.showYouTubeSheet = true }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "link").font(.system(size: 12))
-                        Text("YouTube URL").font(.system(size: 13))
+                Menu {
+                    ForEach(SortOrder.allCases, id: \.self) { order in
+                        Button(order.rawValue) { sortOrder = order }
                     }
-                    .foregroundColor(Color.white.opacity(0.8))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 7)
-                    .background(Color.white.opacity(0.08))
-                    .cornerRadius(8)
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.up.arrow.down").font(.system(size: 10))
+                        Text(sortOrder.rawValue).font(.system(size: 12))
+                    }
+                    .foregroundColor(Theme.muted)
                 }
-                .buttonStyle(.plain)
+                .menuStyle(.borderlessButton).fixedSize()
+
+                Button(action: { appState.triggerImport() }) { Label("New Clip", systemImage: "plus") }
+                    .buttonStyle(PrimaryButtonStyle(compact: true))
+
+                Button(action: { appState.showYouTubeSheet = true }) { Label("YouTube", systemImage: "link") }
+                    .buttonStyle(SecondaryButtonStyle(compact: true))
 
                 Button(action: { showAutoClipsSettings = true }) {
-                    Image(systemName: "gearshape")
-                        .font(.system(size: 14))
-                        .foregroundColor(Color.white.opacity(0.5))
-                        .padding(.horizontal, 8).padding(.vertical, 7)
-                        .background(Color.white.opacity(0.06))
-                        .cornerRadius(7)
+                    Image(systemName: "gearshape").font(.system(size: 13)).foregroundColor(Theme.muted)
                 }
                 .buttonStyle(.plain)
                 .help("Auto Clips Settings")
                 .sheet(isPresented: $showAutoClipsSettings) {
                     AutoClipsSettingsSheet()
                 }
+            } else {
+                Button { activeTab = .search } label: {
+                    HStack(spacing: 7) {
+                        Image(systemName: "magnifyingglass").font(.system(size: 12))
+                        Text("Search every video…").font(.system(size: 12))
+                    }
+                    .foregroundColor(Theme.faint)
+                    .padding(.horizontal, 12).padding(.vertical, 7)
+                    .frame(width: 230, alignment: .leading)
+                    .background(Capsule().fill(Color.white.opacity(0.06)))
+                    .overlay(Capsule().stroke(Theme.line, lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .opacity(activeTab == .search ? 0 : 1)
             }
-            Color.clear.frame(width: 16, height: 1)
+            Color.clear.frame(width: 8, height: 1)
         }
-        .padding(.vertical, 10)
-        .background(Color(red: 0.09, green: 0.10, blue: 0.15))
+        .frame(height: 58)
+        .background(Theme.surface.opacity(0.96))
+        .overlay(Rectangle().fill(Theme.line).frame(height: 1), alignment: .bottom)
     }
 
     // MARK: - Landing Page (empty state)
@@ -279,7 +247,7 @@ struct HomeView: View {
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 20)
                                 .padding(.vertical, 10)
-                                .background(Color(red: 0.85, green: 0.18, blue: 0.18))
+                                .background(Theme.terracotta)
                                 .cornerRadius(9)
                             }
                             .buttonStyle(.plain)
@@ -409,7 +377,7 @@ struct CombinedProjectsView: View {
     @ObservedObject private var reelsStore = AutoReelsStore.shared
     var onSwitchToAutoClips: (() -> Void)?
     var onSwitchToAutoReels: (() -> Void)?
-    private let gold = Color(red: 1.0, green: 0.75, blue: 0.0)
+    private let gold = Theme.sand
 
     var body: some View {
         VStack(spacing: 0) {
@@ -465,7 +433,7 @@ struct CombinedProjectsView: View {
                 .padding(.top, 16)
             }
         }
-        .background(Color(red: 0.07, green: 0.08, blue: 0.12))
+        .background(Theme.bg)
     }
 
     func sectionHeader(title: String, count: Int, icon: String) -> some View {
@@ -497,7 +465,7 @@ struct CombinedProjectsView: View {
             }
             .padding(.horizontal, 8).padding(.top, 6).padding(.bottom, 8)
         }
-        .background(Color(red: 0.11, green: 0.12, blue: 0.17))
+        .background(Theme.raised)
         .cornerRadius(10)
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white.opacity(0.07), lineWidth: 1))
     }
@@ -517,7 +485,7 @@ struct YouTubeURLSheet: View {
     @State private var error: String?
     @State private var downloadProgress: Double = 0
 
-    private let gold = Color(red: 1.0, green: 0.75, blue: 0.0)
+    private let gold = Theme.sand
 
     var body: some View {
         VStack(spacing: 20) {
@@ -548,7 +516,7 @@ struct YouTubeURLSheet: View {
             if isDownloading {
                 VStack(spacing: 6) {
                     ProgressView(value: downloadProgress > 0 ? downloadProgress : nil)
-                        .accentColor(gold)
+                        .accentColor(Theme.action)
                     Text(statusText)
                         .font(.system(size: 11))
                         .foregroundColor(Color.white.opacity(0.5))
@@ -558,7 +526,7 @@ struct YouTubeURLSheet: View {
                 ScrollView {
                     Text(err)
                         .font(.system(size: 12))
-                        .foregroundColor(Color(red: 1, green: 0.4, blue: 0.4))
+                        .foregroundColor(Theme.danger)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .frame(maxHeight: 70)
@@ -581,7 +549,7 @@ struct YouTubeURLSheet: View {
         }
         .padding(24)
         .frame(width: 460)
-        .background(Color(red: 0.1, green: 0.11, blue: 0.16))
+        .background(Theme.surface)
     }
 
     private func ytDlpPath() -> String? {
@@ -747,7 +715,7 @@ struct AutoClipsSettingsSheet: View {
     @State private var apiKeys: [LLMClipService.AIProvider: String] = [:]
     @State private var showKey = false
 
-    private let gold = Color(red: 1.0, green: 0.75, blue: 0.0)
+    private let gold = Theme.sand
 
     private var aiProvider: LLMClipService.AIProvider {
         get { LLMClipService.AIProvider(rawValue: providerRaw) ?? .anthropic }
@@ -801,7 +769,7 @@ struct AutoClipsSettingsSheet: View {
                             Text("AI Clip Ranking")
                                 .font(.system(size: 13, weight: .semibold)).foregroundColor(.white)
                             Spacer()
-                            Toggle("", isOn: $useAI).toggleStyle(.switch).tint(gold)
+                            Toggle("", isOn: $useAI).toggleStyle(.switch).tint(Theme.action)
                         }
                         if useAI {
                             Text("After local analysis, an LLM re-ranks clips for viral potential.")
@@ -850,7 +818,7 @@ struct AutoClipsSettingsSheet: View {
                 }
                 .padding(20)
             }
-            .background(Color(red: 0.07, green: 0.08, blue: 0.12))
+            .background(Theme.bg)
             .navigationTitle("Auto Clips Settings")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -876,5 +844,29 @@ struct AutoClipsSettingsSheet: View {
         case .openai:    return "GPT-4o"
         case .google:    return "Gemini"
         }
+    }
+}
+
+/// A section link in the header: text that brightens on hover, with a sand underline when open.
+struct TabLink: View {
+    let title: String
+    let active: Bool
+    let action: () -> Void
+    @State private var hover = false
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 13, weight: active ? .semibold : .regular))
+                .foregroundColor(active ? Theme.cream : hover ? Theme.text : Theme.muted)
+                .padding(.horizontal, 10).padding(.vertical, 8)
+                .overlay(alignment: .bottom) {
+                    Capsule().fill(Theme.sand).frame(width: active ? 22 : 0, height: 2).offset(y: 9)
+                }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hover = $0 }
+        .animation(.easeOut(duration: 0.15), value: active)
     }
 }

@@ -33,7 +33,7 @@ struct AutoReelSheet: View {
     @State private var reelPlayer: AVPlayer?
     @State private var reelIsPlaying = false
 
-    private let gold = Color(red: 1.0, green: 0.75, blue: 0.0)
+    private let gold = Theme.sand
     private let svc = VideoExportService.shared
     private let captionStyles = CaptionStyle.all
 
@@ -67,7 +67,7 @@ struct AutoReelSheet: View {
                 .buttonStyle(.plain)
             }
             .padding(20)
-            .background(Color(red: 0.09, green: 0.10, blue: 0.15))
+            .background(Theme.surface)
 
             Divider().background(Color.white.opacity(0.08))
 
@@ -98,7 +98,7 @@ struct AutoReelSheet: View {
             }
         }
         .frame(width: 520)
-        .background(Color(red: 0.11, green: 0.12, blue: 0.17))
+        .background(Theme.raised)
         .onAppear { buildTranscriptSegments() }
         .onChange(of: targetDuration) { _, _ in if !isLoadingSegments { refreshSelection() } }
     }
@@ -211,7 +211,7 @@ struct AutoReelSheet: View {
                 .foregroundColor(Color.white.opacity(0.7))
                 .frame(width: 90, alignment: .leading)
             Slider(value: value, in: range, step: 1)
-                .accentColor(gold)
+                .accentColor(Theme.action)
             Text(display)
                 .font(.system(size: 12, design: .monospaced))
                 .foregroundColor(gold)
@@ -456,7 +456,7 @@ struct AutoReelSheet: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            .background(Color(red: 0.09, green: 0.10, blue: 0.14))
+            .background(Theme.surface)
 
             Divider().background(Color.white.opacity(0.08))
 
@@ -477,7 +477,7 @@ struct AutoReelSheet: View {
                     ProgressView()
                         .progressViewStyle(.circular)
                         .scaleEffect(0.8)
-                        .tint(gold)
+                        .tint(Theme.action)
                 }
 
                 // Play/pause tap overlay

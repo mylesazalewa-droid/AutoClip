@@ -48,7 +48,7 @@ struct CaptionsPanel: View {
                                 .font(.system(size: 12))
                                 .foregroundColor(Color.white.opacity(0.5))
                             Slider(value: $bgOpacity, in: 0...1)
-                                .accentColor(Color(red: 1.0, green: 0.75, blue: 0.0))
+                                .accentColor(Theme.sand)
                             Text("\(Int(bgOpacity * 100))%")
                                 .font(.system(size: 12, design: .monospaced))
                                 .foregroundColor(Color.white.opacity(0.6))
@@ -87,7 +87,7 @@ struct CaptionStyleCard: View {
                     .fill(Color(red: 0.05, green: 0.06, blue: 0.10))
                     .overlay(
                         RoundedRectangle(cornerRadius: 8)
-                            .stroke(isSelected ? Color(red: 1.0, green: 0.75, blue: 0.0) : Color.white.opacity(0.1), lineWidth: isSelected ? 2 : 1)
+                            .stroke(isSelected ? Theme.sand : Color.white.opacity(0.1), lineWidth: isSelected ? 2 : 1)
                     )
 
                 // Caption preview
@@ -115,7 +115,7 @@ struct CaptionStyleCard: View {
 
             Text(style.name)
                 .font(.system(size: 11))
-                .foregroundColor(isSelected ? Color(red: 1.0, green: 0.75, blue: 0.0) : Color.white.opacity(0.6))
+                .foregroundColor(isSelected ? Theme.sand : Color.white.opacity(0.6))
         }
     }
 }
@@ -125,7 +125,7 @@ struct CheckboxToggleStyle: ToggleStyle {
         HStack(spacing: 8) {
             ZStack {
                 RoundedRectangle(cornerRadius: 3)
-                    .fill(configuration.isOn ? Color(red: 1.0, green: 0.75, blue: 0.0) : Color.white.opacity(0.1))
+                    .fill(configuration.isOn ? Theme.sand : Color.white.opacity(0.1))
                     .frame(width: 16, height: 16)
                 if configuration.isOn {
                     Image(systemName: "checkmark")

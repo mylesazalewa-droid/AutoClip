@@ -6,9 +6,9 @@ import UniformTypeIdentifiers
 // Sections of the Assess tab beyond filler words: delivery, AI coach, stage presence, progress.
 // Each takes the saved SpeakerReport plus a `play` closure that jumps the video to a moment.
 
-private let gold = Color(red: 1.0, green: 0.75, blue: 0.0)
-private let good = Color(red: 0.45, green: 0.9, blue: 0.55)
-private let warn = Color(red: 1.0, green: 0.6, blue: 0.25)
+private let gold = Theme.sand
+private let good = Theme.good
+private let warn = Theme.warn
 
 func assessTime(_ s: Double) -> String {
     let i = Int(max(0, s))
@@ -20,16 +20,20 @@ struct AssessCard<Content: View>: View {
     var subtitle: String? = nil
     @ViewBuilder var content: Content
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title.uppercased()).font(.system(size: 10, weight: .semibold)).foregroundColor(Color.white.opacity(0.4)).tracking(1)
-                if let subtitle { Text(subtitle).font(.system(size: 11)).foregroundColor(Color.white.opacity(0.5)) }
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 7) {
+                    Image(systemName: "diamond.fill").font(.system(size: 5)).foregroundColor(Theme.sand.opacity(0.8))
+                    Text(title.uppercased()).font(.system(size: 10, weight: .semibold)).foregroundColor(Theme.sand.opacity(0.85)).tracking(1.6)
+                }
+                if let subtitle { Text(subtitle).font(.system(size: 11)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true) }
             }
             content
         }
-        .padding(14)
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.white.opacity(0.04)).cornerRadius(10)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.surface))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Theme.line, lineWidth: 1))
     }
 }
 
@@ -239,7 +243,7 @@ struct CoachSection: View {
 
     static let kindColors: [String: Color] = [
         "intro": Color(red: 0.6, green: 0.6, blue: 0.65), "point": gold, "story": Color(red: 0.95, green: 0.45, blue: 0.85),
-        "scripture": Color(red: 0.45, green: 0.75, blue: 1.0), "application": good, "close": Color(red: 1.0, green: 0.45, blue: 0.4),
+        "scripture": Color(red: 0.45, green: 0.75, blue: 1.0), "application": good, "close": Theme.danger,
         "other": Color(red: 0.4, green: 0.4, blue: 0.45)]
 
     var body: some View {
@@ -294,11 +298,11 @@ struct CoachSection: View {
                     .font(.system(size: 12)).foregroundColor(Color.white.opacity(0.75)).fixedSize(horizontal: false, vertical: true)
                 HStack {
                     Button(status == nil ? "Run AI coach" : "Working…") { run() }
-                        .buttonStyle(.borderedProminent).tint(gold).disabled(status != nil)
+                        .buttonStyle(PrimaryButtonStyle()).disabled(status != nil)
                     if let status { ProgressView().controlSize(.small); Text(status).font(.system(size: 11)).foregroundColor(Color.white.opacity(0.6)) }
                 }
                 Text("Uses your AI key — about 1–3¢ per sermon.").font(.system(size: 10)).foregroundColor(Color.white.opacity(0.35))
-                if let error { Text(error).font(.system(size: 11)).foregroundColor(Color(red: 1, green: 0.45, blue: 0.45)) }
+                if let error { Text(error).font(.system(size: 11)).foregroundColor(Theme.danger) }
             }
         }
     }
@@ -602,7 +606,7 @@ struct NotesSection: View {
                         Text(status).font(.system(size: 12)).foregroundColor(Color.white.opacity(0.7))
                     } else {
                         Button { run() } label: { Label("Write sermon notes", systemImage: "sparkles") }
-                            .buttonStyle(.borderedProminent).tint(gold)
+                            .buttonStyle(PrimaryButtonStyle())
                     }
                 }
                 if let error { Text(error).font(.system(size: 11)).foregroundColor(warn).fixedSize(horizontal: false, vertical: true) }

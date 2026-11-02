@@ -9,7 +9,7 @@ struct ProjectCard: View {
         appState.isAnalyzing && appState.selectedProject?.id == project.id
     }
 
-    private let gold = Color(red: 1.0, green: 0.75, blue: 0.0)
+    private let gold = Theme.sand
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -96,7 +96,7 @@ struct ProjectCard: View {
                                     Text("Delete")
                                         .font(.system(size: 11, weight: .medium))
                                 }
-                                .foregroundColor(Color(red: 1.0, green: 0.35, blue: 0.35))
+                                .foregroundColor(Theme.danger)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 5)
                                 .background(Color.black.opacity(0.65))
@@ -137,13 +137,13 @@ struct ProjectCard: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
-            .background(Color(red: 0.13, green: 0.15, blue: 0.20))
+            .background(Theme.raised)
         }
-        .background(Color(red: 0.13, green: 0.15, blue: 0.20))
+        .background(Theme.raised)
         .cornerRadius(8)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(isHovered ? Color(red: 1.0, green: 0.75, blue: 0.0).opacity(0.4) : Color.white.opacity(0.06), lineWidth: 1)
+                .stroke(isHovered ? Theme.sand.opacity(0.4) : Color.white.opacity(0.06), lineWidth: 1)
         )
         .onHover { isHovered = $0 }
     }

@@ -1,17 +1,26 @@
 import SwiftUI
 import AppKit
 
-private let gold = Color(red: 1.0, green: 0.75, blue: 0.0)
+private let gold = Theme.sand
+
+/// Where playback is in the edited episode, updated ten times a second. Only the views that
+/// follow the playhead watch it, so the rest of the episode page doesn't redraw that often.
+@MainActor
+final class PlaybackClock: ObservableObject {
+    @Published var now = 0.0
+}
 
 /// Edit the episode by editing its transcript: select words and delete them, and the video and
-/// sound are cut to match. Words already cut are struck out; click one to put it back.
+/// sound are cut to match. Words already cut are struck out; click one to put it back. While it
+/// plays, the word being said is highlighted and the text scrolls along.
 struct PodcastTranscriptEditor: View {
     let id: String
     let seek: (Double) -> Void
+    @ObservedObject var clock: PlaybackClock
     @ObservedObject private var store = PodcastStore.shared
     @State private var anchor: Int?
     @State private var selection: ClosedRange<Int>?
-    @State private var shown = 40
+    @AppStorage("podcast_follow") private var follow = true
     @FocusState private var focused: Bool
 
     struct Paragraph: Identifiable { var id: Int { range.lowerBound }; var range: Range<Int>; var speaker: Int?; var start: Double }
@@ -22,14 +31,15 @@ struct PodcastTranscriptEditor: View {
             let paras = paragraphs(e, words)
             let cutBy = cutIndex(e, words)
             AssessCard(title: "Edit by text", subtitle: "Click a word, shift-click another to select everything between, then press Delete. Struck-out words are cut — click one to put it back.") {
-                HStack(spacing: 8) {
-                    if let sel = selection {
-                        Text("\(sel.count) word\(sel.count == 1 ? "" : "s") selected").font(.system(size: 11, weight: .medium)).foregroundColor(gold)
-                        Button { cutSelection() } label: { Label("Cut", systemImage: "scissors") }
+                HStack(spacing: 10) {
+                    if let sel = selection, sel.upperBound < words.count {
+                        Text("\(sel.count) word\(sel.count == 1 ? "" : "s") selected").font(.system(size: 11, weight: .medium)).foregroundColor(Theme.terracottaLight)
+                        Button { cutSelection() } label: { Label("Cut", systemImage: "scissors") }.buttonStyle(PrimaryButtonStyle(compact: true))
                         Button { seek(e.editedTime(words[sel.lowerBound].startTime) - 0.5) } label: { Label("Play", systemImage: "play.fill") }
-                        Button("Clear") { selection = nil; anchor = nil }
+                            .buttonStyle(SecondaryButtonStyle(compact: true))
+                        Button("Clear") { selection = nil; anchor = nil }.buttonStyle(.plain).font(.system(size: 11)).foregroundColor(Theme.muted)
                     } else {
-                        Text("\(cutBy.count) of \(words.count) words cut").font(.system(size: 11)).foregroundColor(Color.white.opacity(0.5))
+                        Text("\(cutBy.count) of \(words.count) words cut").font(.system(size: 11)).foregroundColor(Theme.muted)
                     }
                     Spacer()
                     let manual = e.cuts.filter { $0.kind == .manual }
@@ -37,31 +47,19 @@ struct PodcastTranscriptEditor: View {
                         Button("Put back all \(manual.count) text cut\(manual.count == 1 ? "" : "s")") {
                             store.update(id) { $0.cuts.removeAll { $0.kind == .manual } }
                         }
+                        .buttonStyle(SecondaryButtonStyle(compact: true))
                     }
+                    Toggle(isOn: $follow) { Label("Follow along", systemImage: "text.line.first.and.arrowtriangle.forward") }
+                        .toggleStyle(.switch).controlSize(.mini).font(.system(size: 11)).foregroundColor(Theme.muted)
+                        .help("Highlight the word being said and keep it in view while the episode plays")
                 }
-                .controlSize(.small)
-                .frame(minHeight: 22)
-                LazyVStack(alignment: .leading, spacing: 12) {
-                    ForEach(paras.prefix(shown)) { p in
-                        VStack(alignment: .leading, spacing: 3) {
-                            HStack(spacing: 6) {
-                                if let sp = p.speaker, let person = e.person(sp) {
-                                    Circle().fill(PodcastStore.palette[person.id % PodcastStore.palette.count]).frame(width: 7, height: 7)
-                                    Text(person.name).font(.system(size: 10, weight: .semibold)).foregroundColor(Color.white.opacity(0.7))
-                                }
-                                Button(podcastTime(e.editedTime(p.start))) { seek(e.editedTime(p.start)) }
-                                    .buttonStyle(.borderless).font(.system(size: 10, design: .monospaced)).foregroundColor(Color.white.opacity(0.4))
-                            }
-                            PodcastFlow(spacing: 0, lineSpacing: 3) {
-                                ForEach(Array(p.range), id: \.self) { i in word(words[i], i, cutBy: cutBy) }
-                            }
-                        }
-                    }
+                .frame(minHeight: 26)
+                if words.isEmpty {
+                    Text("The transcript isn't ready yet.").font(.system(size: 12)).foregroundColor(Theme.muted)
+                } else {
+                    TranscriptText(episode: e, words: words, paras: paras, cutBy: cutBy, clock: clock,
+                                   selection: selection, follow: follow, seek: seek) { i, cutID in tap(i, cutID: cutID) }
                 }
-                if paras.count > shown {
-                    Button("Show more (\(paras.count - shown) paragraphs left)") { shown += 60 }.controlSize(.small)
-                }
-                if words.isEmpty { Text("The transcript isn't ready yet.").font(.system(size: 12)).foregroundColor(Color.white.opacity(0.5)) }
             }
             .focusable()
             .focusEffectDisabled()
@@ -72,20 +70,6 @@ struct PodcastTranscriptEditor: View {
                 return .handled
             }
         }
-    }
-
-    private func word(_ w: Word, _ i: Int, cutBy: [Int: String]) -> some View {
-        let cut = cutBy[i] != nil
-        let selected = selection?.contains(i) ?? false
-        return Text(w.word.trimmingCharacters(in: .whitespaces) + " ")
-            .font(.system(size: 13))
-            .strikethrough(cut, color: Color.red.opacity(0.8))
-            .foregroundColor(selected ? .black : cut ? Color.white.opacity(0.3) : Color.white.opacity(0.9))
-            .padding(.vertical, 1)
-            .background(selected ? gold : Color.clear)
-            .contentShape(Rectangle())
-            .onTapGesture { tap(i, cutID: cutBy[i]) }
-            .help(cut ? "Cut — click to put back" : podcastTime(w.startTime))
     }
 
     // MARK: Actions
@@ -162,6 +146,94 @@ struct PodcastTranscriptEditor: View {
         }
         if start < words.count { out.append(.init(range: start..<words.count, speaker: e.people.count > 1 ? who : nil, start: words[start].startTime)) }
         return out
+    }
+}
+
+/// The words themselves, redrawn as playback moves: the word being said gets a sand highlight,
+/// and the text scrolls to keep the current paragraph in the middle.
+private struct TranscriptText: View {
+    let episode: PodcastEpisode
+    let words: [Word]
+    let paras: [PodcastTranscriptEditor.Paragraph]
+    let cutBy: [Int: String]
+    @ObservedObject var clock: PlaybackClock
+    let selection: ClosedRange<Int>?
+    let follow: Bool
+    let seek: (Double) -> Void
+    let tap: (Int, String?) -> Void
+
+    var body: some View {
+        let e = episode
+        let current = currentWord()
+        let currentPara = current.flatMap { c in paras.last { $0.range.lowerBound <= c }?.id }
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 14) {
+                    ForEach(paras) { p in
+                        let live = p.id == currentPara
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 6) {
+                                if let sp = p.speaker, let person = e.person(sp) {
+                                    Circle().fill(PodcastStore.palette[person.id % PodcastStore.palette.count]).frame(width: 7, height: 7)
+                                    Text(person.name.uppercased()).font(.system(size: 9, weight: .semibold)).tracking(1).foregroundColor(Theme.muted)
+                                }
+                                Button(podcastTime(e.editedTime(p.start))) { seek(e.editedTime(p.start)) }
+                                    .buttonStyle(.plain).font(.system(size: 10, design: .monospaced)).foregroundColor(live ? Theme.sand : Theme.faint)
+                            }
+                            PodcastFlow(spacing: 0, lineSpacing: 4) {
+                                ForEach(Array(p.range), id: \.self) { i in
+                                    word(words[i], i, current: i == current, spoken: live && current.map { i < $0 } == true)
+                                }
+                            }
+                        }
+                        .padding(.leading, 10)
+                        .overlay(alignment: .leading) {
+                            Capsule().fill(live ? Theme.sand.opacity(0.8) : Color.clear).frame(width: 2)
+                        }
+                        .id(p.id)
+                    }
+                }
+                .padding(.vertical, 6).padding(.trailing, 10)
+            }
+            .frame(height: 420)
+            .background(RoundedRectangle(cornerRadius: 8).fill(Color.black.opacity(0.18)))
+            .onChange(of: currentPara) { _, para in
+                guard follow, let para else { return }
+                withAnimation(.easeInOut(duration: 0.4)) { proxy.scrollTo(para, anchor: UnitPoint(x: 0, y: 0.35)) }
+            }
+        }
+    }
+
+    private func word(_ w: Word, _ i: Int, current: Bool, spoken: Bool) -> some View {
+        let cut = cutBy[i] != nil
+        let selected = selection?.contains(i) ?? false
+        let color: Color = selected ? Theme.cream : current ? Theme.bg : cut ? Color.white.opacity(0.28) : spoken ? Theme.cream : Theme.text.opacity(0.78)
+        return Text(w.word.trimmingCharacters(in: .whitespaces))
+            .font(.system(size: 14, weight: current ? .semibold : .regular))
+            .strikethrough(cut, color: Theme.terracottaLight.opacity(0.9))
+            .foregroundColor(color)
+            .padding(.horizontal, 3).padding(.vertical, 1)
+            .background(
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(selected ? Theme.terracotta : current ? Theme.sand : Color.clear)
+            )
+            .contentShape(Rectangle())
+            .onTapGesture { tap(i, cutBy[i]) }
+            .help(cut ? "Cut — click to put back" : podcastTime(w.startTime))
+            .animation(.easeOut(duration: 0.12), value: current)
+    }
+
+    /// The word at the playhead (nil in a pause).
+    private func currentWord() -> Int? {
+        guard !words.isEmpty else { return nil }
+        let t = episode.sourceTime(clock.now)
+        var lo = 0, hi = words.count - 1
+        guard t >= words[0].startTime - 0.05 else { return nil }
+        while lo < hi {
+            let mid = (lo + hi + 1) / 2
+            if words[mid].startTime <= t + 0.05 { lo = mid } else { hi = mid - 1 }
+        }
+        return t <= words[lo].endTime + 0.5 ? lo : nil
     }
 }
 

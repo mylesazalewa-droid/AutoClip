@@ -1,9 +1,9 @@
 import SwiftUI
 import AppKit
 
-private let gold = Color(red: 1.0, green: 0.75, blue: 0.0)
-private let good = Color(red: 0.45, green: 0.9, blue: 0.55)
-private let warn = Color(red: 1.0, green: 0.6, blue: 0.25)
+private let gold = Theme.sand
+private let good = Theme.good
+private let warn = Theme.warn
 
 /// Assess tab → Series: whether a series taught over several weeks holds together.
 /// `open` jumps to a message (and optionally a moment in it).
@@ -53,7 +53,7 @@ struct SeriesSection: View {
                     }
                     HStack {
                         Button { editing = sug } label: { Label("Make this a series", systemImage: "square.stack.3d.up.fill") }
-                            .buttonStyle(.borderedProminent).tint(gold)
+                            .buttonStyle(PrimaryButtonStyle())
                         Button("Choose the messages myself…") { editing = SermonSeries(name: SeriesStore.seriesName(title(path)), videos: [path]) }
                     }
                     .padding(.top, 4)
@@ -63,7 +63,7 @@ struct SeriesSection: View {
                 Button { editing = SermonSeries(name: SeriesStore.seriesName(title(path)), videos: [path]) } label: {
                     Label("Make a series with this message…", systemImage: "square.stack.3d.up.fill")
                 }
-                .buttonStyle(.borderedProminent).tint(gold)
+                .buttonStyle(PrimaryButtonStyle())
             }
         }
     }
@@ -102,7 +102,7 @@ struct SeriesSection: View {
                         Button { store.analyze(s.id) } label: {
                             Label(s.analysis == nil ? "Assess the series" : "Assess again", systemImage: "sparkles")
                         }
-                        .buttonStyle(.borderedProminent).tint(gold)
+                        .buttonStyle(PrimaryButtonStyle())
                     }
                 }
                 .controlSize(.small).padding(.top, 4)
@@ -327,6 +327,6 @@ struct SeriesEditSheet: View {
         }
         .padding(20)
         .frame(width: 520)
-        .background(Color(red: 0.09, green: 0.10, blue: 0.15))
+        .background(Theme.surface)
     }
 }

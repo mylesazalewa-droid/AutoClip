@@ -46,7 +46,7 @@ struct ReelDraftsView: View {
             footer
         }
         .frame(minWidth: 560, minHeight: 520)
-        .background(Color(red: 0.07, green: 0.08, blue: 0.12))
+        .background(Theme.bg)
         .preferredColorScheme(.dark)
         .sheet(item: Binding(get: { editingID.map { EditTarget(id: $0) } }, set: { editingID = $0?.id })) { t in
             if let draft = drafts.first(where: { $0.id == t.id }) {
@@ -140,7 +140,7 @@ struct ReelDraftsView: View {
             if let st = genStatus {
                 HStack(spacing: 6) { ProgressView().scaleEffect(0.5); Text(st).font(.system(size: 11)).foregroundColor(Color.white.opacity(0.6)) }
             } else if let e = genError {
-                Text(e).font(.system(size: 11)).foregroundColor(Color(red: 1, green: 0.45, blue: 0.45))
+                Text(e).font(.system(size: 11)).foregroundColor(Theme.danger)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -266,9 +266,9 @@ struct ReelDraftsView: View {
                     statusPill(d)
                 }
                 if let p = exporting[d.id] {
-                    ProgressView(value: p).tint(gold).frame(height: 4)
+                    ProgressView(value: p).tint(Theme.action).frame(height: 4)
                 } else if let err = exportErrors[d.id] {
-                    Text(err).font(.system(size: 10)).foregroundColor(Color(red: 1, green: 0.45, blue: 0.45)).lineLimit(2)
+                    Text(err).font(.system(size: 10)).foregroundColor(Theme.danger).lineLimit(2)
                 }
             }
             Spacer()
@@ -529,7 +529,7 @@ struct ReelEditorView: View {
             .padding(16)
         }
         .frame(minWidth: 860, minHeight: 640)
-        .background(Color(red: 0.07, green: 0.08, blue: 0.12))
+        .background(Theme.bg)
         .preferredColorScheme(.dark)
         .task(id: reloadToken) { await reloadPreview() }
         .onChange(of: draft.pieces) { _ in reloadToken += 1 }
@@ -568,7 +568,7 @@ struct ReelEditorView: View {
                 }.buttonStyle(.plain)
                 Slider(value: Binding(get: { time }, set: { t in
                     time = t; player.seek(to: CMTime(seconds: t, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
-                }), in: 0...max(total, 0.1)).tint(gold)
+                }), in: 0...max(total, 0.1)).tint(Theme.action)
                 Text(formatDur(time)).font(.system(size: 10, design: .monospaced)).foregroundColor(Color.white.opacity(0.5))
             }
             Text(following ? "Finding the speaker…" : "The preview follows the speaker like the export does.")
@@ -696,7 +696,7 @@ struct ReelEditorView: View {
                                        : "Found: " + found.joined(separator: ", "))
                         .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.4)).lineLimit(2)
                 }
-            }.toggleStyle(.switch).tint(gold)
+            }.toggleStyle(.switch).tint(Theme.action)
 
             Toggle(isOn: Binding(get: { draft.pausesTight }, set: { draft.tightenPauses = $0 })) {
                 VStack(alignment: .leading, spacing: 1) {
@@ -704,7 +704,7 @@ struct ReelEditorView: View {
                     Text("Trims silences longer than half a second for a faster pace")
                         .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.4))
                 }
-            }.toggleStyle(.switch).tint(gold)
+            }.toggleStyle(.switch).tint(Theme.action)
 
             HStack {
                 let n = draft.fillerWordIDs.count
@@ -792,11 +792,11 @@ struct ReelEditorView: View {
                     Text("Removes room echo, hum and background noise")
                         .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.4))
                 }
-            }.toggleStyle(.switch).tint(gold)
+            }.toggleStyle(.switch).tint(Theme.action)
             if audio.wrappedValue.cleanVoice {
                 HStack {
                     Text("Strength").font(.system(size: 11)).foregroundColor(Color.white.opacity(0.6))
-                    Slider(value: audio.strength, in: 0.3...1).tint(gold)
+                    Slider(value: audio.strength, in: 0.3...1).tint(Theme.action)
                 }
             }
             Toggle(isOn: audio.levelVoice) {
@@ -805,7 +805,7 @@ struct ReelEditorView: View {
                     Text("Evens out loud and quiet moments and sets a steady volume")
                         .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.4))
                 }
-            }.toggleStyle(.switch).tint(gold)
+            }.toggleStyle(.switch).tint(Theme.action)
             HStack {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Background music").font(.system(size: 12)).foregroundColor(.white)
@@ -822,7 +822,7 @@ struct ReelEditorView: View {
             if audio.wrappedValue.musicPath != nil {
                 HStack {
                     Text("Music volume").font(.system(size: 11)).foregroundColor(Color.white.opacity(0.6))
-                    Slider(value: audio.musicVolume, in: 0.03...0.35).tint(gold)
+                    Slider(value: audio.musicVolume, in: 0.03...0.35).tint(Theme.action)
                 }
             }
             Text("Audio changes are applied when you export.")
@@ -845,7 +845,7 @@ struct ReelEditorView: View {
             HStack {
                 Text("CAPTIONS").font(.system(size: 10, weight: .semibold)).foregroundColor(Color.white.opacity(0.35)).tracking(1)
                 Spacer()
-                Toggle("", isOn: $draft.captions).toggleStyle(.switch).tint(gold).labelsHidden()
+                Toggle("", isOn: $draft.captions).toggleStyle(.switch).tint(Theme.action).labelsHidden()
             }
             if draft.captions {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -883,7 +883,7 @@ struct ReelEditorView: View {
                     .buttonStyle(.plain).foregroundColor(Color.white.opacity(i == draft.pieces.count - 1 ? 0.15 : 0.6))
                     .disabled(i == draft.pieces.count - 1)
                 Button { draft.pieces.remove(at: i) } label: { Image(systemName: "trash") }
-                    .buttonStyle(.plain).foregroundColor(Color(red: 1, green: 0.45, blue: 0.45)).help("Remove this clip")
+                    .buttonStyle(.plain).foregroundColor(Theme.danger).help("Remove this clip")
             }
             ForEach(Array(piece.sentences.enumerated()), id: \.element.id) { j, s in
                 let startsRun = s.included && (j == 0 || !piece.sentences[j - 1].included)
@@ -947,12 +947,12 @@ struct ReelEditorView: View {
                 Text(w.word)
                     .font(.system(size: 12, weight: isActive ? .bold : .regular))
                     .foregroundColor(!s.included ? Color.white.opacity(0.3)
-                                     : cut ? Color(red: 1, green: 0.45, blue: 0.45).opacity(0.7)
+                                     : cut ? Theme.danger.opacity(0.7)
                                      : isActive ? gold
                                      : (activeWord.map { k < $0 } ?? false) ? .white : Color.white.opacity(0.85))
-                    .strikethrough(!s.included || cut, color: cut ? Color(red: 1, green: 0.45, blue: 0.45) : nil)
+                    .strikethrough(!s.included || cut, color: cut ? Theme.danger : nil)
                     .padding(.horizontal, 1)
-                    .background(cut ? Color(red: 1, green: 0.3, blue: 0.3).opacity(0.12) : Color.clear)
+                    .background(cut ? Theme.danger.opacity(0.12) : Color.clear)
                     .cornerRadius(2)
                     .contentShape(Rectangle())
                     .onTapGesture { toggleWord(i, j, k) }

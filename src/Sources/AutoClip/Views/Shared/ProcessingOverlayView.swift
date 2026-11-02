@@ -16,7 +16,7 @@ struct ProcessingOverlayView: View {
     private let glowTimer = Timer.publish(every: 1.4, on: .main, in: .common).autoconnect()
     private let barTimer = Timer.publish(every: 0.12, on: .main, in: .common).autoconnect()
 
-    private let gold = Color(red: 1.0, green: 0.75, blue: 0.0)
+    private let gold = Theme.sand
 
     private var phase: AnalyzePhase {
         if appState.analyzeProgress < 0.25 { return .transcribing }
@@ -54,7 +54,7 @@ struct ProcessingOverlayView: View {
 
     var body: some View {
         ZStack {
-            Color(red: 0.07, green: 0.08, blue: 0.12)
+            Theme.bg
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
 

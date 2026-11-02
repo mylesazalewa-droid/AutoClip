@@ -142,7 +142,7 @@ struct CaptionEditorView: View {
         HStack(spacing: 10) {
             label("Outline")
             ColorPicker("", selection: $look.strokeColor.color, supportsOpacity: false).labelsHidden()
-            Slider(value: $look.strokeWidth, in: 0...10).tint(gold)
+            Slider(value: $look.strokeWidth, in: 0...10).tint(Theme.action)
             Text(look.strokeWidth < 0.5 ? "Off" : "\(Int(look.strokeWidth))")
                 .font(.system(size: 11, design: .monospaced)).foregroundColor(gold).frame(width: 28)
         }
@@ -151,10 +151,10 @@ struct CaptionEditorView: View {
     private var backgroundRow: some View {
         HStack(spacing: 10) {
             label("Box")
-            Toggle("", isOn: $look.bgEnabled).toggleStyle(.switch).tint(gold).labelsHidden()
+            Toggle("", isOn: $look.bgEnabled).toggleStyle(.switch).tint(Theme.action).labelsHidden()
             if look.bgEnabled {
                 ColorPicker("", selection: $look.bgColor.color, supportsOpacity: false).labelsHidden()
-                Slider(value: $look.bgOpacity, in: 0.1...1).tint(gold)
+                Slider(value: $look.bgOpacity, in: 0.1...1).tint(Theme.action)
             }
             Spacer(minLength: 0)
         }
@@ -163,7 +163,7 @@ struct CaptionEditorView: View {
     private func sliderRow(_ title: String, value: Binding<Double>, range: ClosedRange<Double>, label text: String) -> some View {
         HStack(spacing: 10) {
             label(title)
-            Slider(value: value, in: range).tint(gold)
+            Slider(value: value, in: range).tint(Theme.action)
             Text(text).font(.system(size: 11, design: .monospaced)).foregroundColor(gold).frame(width: 48, alignment: .trailing)
         }
     }

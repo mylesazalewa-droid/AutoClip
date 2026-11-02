@@ -110,7 +110,7 @@ struct PracticeSheet: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var rec = PracticeRecorder()
     @AppStorage("practice_camera") private var useCamera = true
-    private let gold = Color(red: 1.0, green: 0.75, blue: 0.0)
+    private let gold = Theme.sand
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -149,7 +149,7 @@ struct PracticeSheet: View {
             }
 
             HStack {
-                Toggle("Use camera", isOn: $useCamera).toggleStyle(.switch).tint(gold)
+                Toggle("Use camera", isOn: $useCamera).toggleStyle(.switch).tint(Theme.action)
                     .disabled(rec.isRecording)
                     .onChange(of: useCamera) { on in Task { await rec.configure(camera: on) } }
                 Spacer()
@@ -160,7 +160,7 @@ struct PracticeSheet: View {
                         .keyboardShortcut(.defaultAction)
                 } else {
                     Button { rec.start() } label: { Label("Start recording", systemImage: "record.circle") }
-                        .buttonStyle(.borderedProminent).tint(gold)
+                        .buttonStyle(PrimaryButtonStyle())
                         .disabled(!rec.ready)
                         .keyboardShortcut(.defaultAction)
                 }
@@ -170,7 +170,7 @@ struct PracticeSheet: View {
         }
         .padding(20)
         .frame(width: 520)
-        .background(Color(red: 0.09, green: 0.10, blue: 0.15))
+        .background(Theme.surface)
         .task {
             rec.onFinished = { url in
                 rec.shutdown()

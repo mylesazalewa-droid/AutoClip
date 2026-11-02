@@ -56,7 +56,7 @@ struct ActionsPanel: View {
                     .foregroundColor(.black)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 13)
-                    .background(Color(red: 1.0, green: 0.75, blue: 0.0))
+                    .background(Theme.sand)
                     .cornerRadius(10)
                 }
                 .buttonStyle(.plain)
@@ -67,10 +67,10 @@ struct ActionsPanel: View {
                 if showExportSuccess {
                     HStack {
                         Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(Color(red: 0.2, green: 0.8, blue: 0.4))
+                            .foregroundColor(Theme.good)
                         Text("Exported successfully!")
                             .font(.system(size: 12))
-                            .foregroundColor(Color(red: 0.2, green: 0.8, blue: 0.4))
+                            .foregroundColor(Theme.good)
                     }
                 }
 

@@ -41,7 +41,7 @@ struct ClipDetailPanel: View {
             // Tab content
             tabContent
         }
-        .background(Color(red: 0.09, green: 0.10, blue: 0.14))
+        .background(Theme.surface)
         .onChange(of: clip.id) { _, _ in
             playerVM.loadClip(clip, project: project)
         }
@@ -125,7 +125,7 @@ struct ClipDetailPanel: View {
                 Button(action: { playerVM.togglePlay() }) {
                     Image(systemName: playerVM.isPlaying ? "pause.circle.fill" : "play.circle.fill")
                         .font(.system(size: 28))
-                        .foregroundColor(Color(red: 1.0, green: 0.75, blue: 0.0))
+                        .foregroundColor(Theme.sand)
                 }
                 .buttonStyle(.plain)
 
@@ -240,7 +240,7 @@ struct ClipDetailPanel: View {
                     let h = pattern[i % pattern.count]
                     let isActive = Double(i) / 48.0 < (playerVM.currentTime.seconds / max(clip.duration, 1))
                     RoundedRectangle(cornerRadius: 1)
-                        .fill(isActive ? Color(red: 1.0, green: 0.75, blue: 0.0).opacity(0.8) : Color.white.opacity(0.2))
+                        .fill(isActive ? Theme.sand.opacity(0.8) : Color.white.opacity(0.2))
                         .frame(width: 2, height: h)
                 }
             }

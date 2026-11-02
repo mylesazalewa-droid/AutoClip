@@ -15,7 +15,7 @@ struct SearchTab: View {
     @State private var player = AVPlayer()
     @State private var includePractice = false
     @FocusState private var focused: Bool
-    private let gold = Color(red: 1.0, green: 0.75, blue: 0.0)
+    private let gold = Theme.sand
 
     struct Talk {
         let path: String
@@ -43,7 +43,7 @@ struct SearchTab: View {
             Divider().background(Color.white.opacity(0.08))
             sidePanel.frame(width: 380)
         }
-        .background(Color(red: 0.07, green: 0.08, blue: 0.12))
+        .background(Theme.bg)
         .task { await load() }
         .onDisappear { stopTranscribing = true; player.pause() }
     }
@@ -224,7 +224,7 @@ struct SearchTab: View {
             Spacer()
         }
         .padding(16)
-        .background(Color(red: 0.09, green: 0.10, blue: 0.15))
+        .background(Theme.surface)
     }
 
     private func play(_ talk: Talk, at t: Double) {

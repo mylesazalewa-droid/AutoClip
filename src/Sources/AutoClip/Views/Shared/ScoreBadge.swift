@@ -8,7 +8,7 @@ struct ScoreBadge: View {
         switch score {
         case 90...100: return Color(red: 0.18, green: 0.82, blue: 0.42)
         case 75..<90:  return Color(red: 0.55, green: 0.85, blue: 0.25)
-        case 60..<75:  return Color(red: 1.0, green: 0.7, blue: 0.0)
+        case 60..<75:  return Theme.sand
         default:       return Color(red: 1.0, green: 0.4, blue: 0.2)
         }
     }
@@ -34,7 +34,7 @@ struct ScoreBadge: View {
 
 struct TagBadge: View {
     let text: String
-    var color: Color = Color(red: 1.0, green: 0.5, blue: 0.1)
+    var color: Color = Theme.warn
 
     var body: some View {
         HStack(spacing: 3) {
@@ -61,7 +61,7 @@ struct StarRatingView: View {
             ForEach(1...5, id: \.self) { star in
                 Image(systemName: star <= rating ? "star.fill" : "star")
                     .font(.system(size: 10))
-                    .foregroundColor(star <= rating ? Color(red: 1, green: 0.8, blue: 0) : Color.white.opacity(0.3))
+                    .foregroundColor(star <= rating ? Theme.sand : Color.white.opacity(0.3))
                     .onTapGesture {
                         if interactive { onRate?(star) }
                     }

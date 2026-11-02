@@ -15,7 +15,7 @@ struct ClipListRow: View {
                         .resizable()
                         .aspectRatio(contentMode: .fill)
                 } else {
-                    Color(red: 0.12, green: 0.14, blue: 0.20)
+                    Theme.raised
                     Image(systemName: "film")
                         .font(.system(size: 14))
                         .foregroundColor(Color.white.opacity(0.2))
@@ -43,10 +43,10 @@ struct ClipListRow: View {
                     if !clip.tags.isEmpty, let tag = clip.tags.first {
                         Text(tag)
                             .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(Color(red: 1.0, green: 0.5, blue: 0.1))
+                            .foregroundColor(Theme.warn)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(Color(red: 1.0, green: 0.5, blue: 0.1).opacity(0.15))
+                            .background(Theme.warn.opacity(0.15))
                             .cornerRadius(4)
                     }
                 }
@@ -68,7 +68,7 @@ struct ClipListRow: View {
 
             Image(systemName: clip.isLiked ? "heart.fill" : "heart")
                 .font(.system(size: 12))
-                .foregroundColor(clip.isLiked ? Color(red: 1, green: 0.3, blue: 0.4) : Color.white.opacity(0.3))
+                .foregroundColor(clip.isLiked ? Theme.danger : Color.white.opacity(0.3))
                 .frame(width: 28, height: 28)
                 .contentShape(Rectangle())
                 .onTapGesture {
@@ -80,11 +80,11 @@ struct ClipListRow: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(isSelected ? Color(red: 0.18, green: 0.20, blue: 0.28) : Color.clear)
+        .background(isSelected ? Theme.raised2 : Color.clear)
         .cornerRadius(8)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(isSelected ? Color(red: 1.0, green: 0.75, blue: 0.0).opacity(0.3) : Color.clear, lineWidth: 1)
+                .stroke(isSelected ? Theme.sand.opacity(0.3) : Color.clear, lineWidth: 1)
         )
     }
 }

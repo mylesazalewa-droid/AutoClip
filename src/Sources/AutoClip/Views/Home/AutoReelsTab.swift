@@ -371,7 +371,7 @@ struct AutoReelsTab: View {
     @State private var errorDetailText: String? = nil
     @State private var reelSearch: String = ""
 
-    private let gold = Color(red: 1.0, green: 0.75, blue: 0.0)
+    private let gold = Theme.sand
     private let captionStyles = CaptionStyle.all
 
     enum InputMode { case file, youtube }
@@ -384,7 +384,7 @@ struct AutoReelsTab: View {
                 gridView
             }
         }
-        .background(Color(red: 0.07, green: 0.08, blue: 0.12))
+        .background(Theme.bg)
         .sheet(isPresented: $showingCreateSheet) {
             createReelSheet
         }
@@ -487,7 +487,7 @@ struct AutoReelsTab: View {
                                 }
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 20).padding(.vertical, 10)
-                                .background(Color(red: 0.85, green: 0.18, blue: 0.18))
+                                .background(Theme.terracotta)
                                 .cornerRadius(9)
                             }
                             .buttonStyle(.plain)
@@ -566,7 +566,7 @@ struct AutoReelsTab: View {
             // Header outside ScrollView — Divider forces VStack to full width (same as Auto Clips)
             HStack {
                 Text("My Reels")
-                    .font(.system(size: 15, weight: .semibold)).foregroundColor(.white)
+                    .font(Theme.display(22, weight: .medium)).foregroundColor(Theme.cream)
                 let displayCount = reelSearch.isEmpty ? store.reels.count
                     : store.reels.filter { $0.title.localizedCaseInsensitiveContains(reelSearch) }.count
                 Text("(\(displayCount))")
@@ -746,7 +746,7 @@ struct AutoReelsTab: View {
                                 if let err = downloadError {
                                     Text(err)
                                         .font(.system(size: 11))
-                                        .foregroundColor(Color(red: 1, green: 0.45, blue: 0.45))
+                                        .foregroundColor(Theme.danger)
                                         .fixedSize(horizontal: false, vertical: true)
                                 }
                             }
@@ -759,7 +759,7 @@ struct AutoReelsTab: View {
                 }
                 .padding(20)
             }
-            .background(Color(red: 0.07, green: 0.08, blue: 0.12))
+            .background(Theme.bg)
             .navigationTitle("Create Auto Reel")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -795,7 +795,7 @@ struct AutoReelsTab: View {
                 .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 20)
                 .disabled(!canCreate)
                 // Opaque bar so scrolled settings don't show through the (translucent) disabled button
-                .background(Color(red: 0.07, green: 0.08, blue: 0.12))
+                .background(Theme.bg)
             }
         }
         .frame(minWidth: 420, minHeight: 500)
@@ -843,11 +843,11 @@ struct AutoReelsTab: View {
                     Spacer()
                     Text(formatDur(targetDuration)).font(.system(size: 12, design: .monospaced)).foregroundColor(gold)
                 }
-                Slider(value: $targetDuration, in: 30...300, step: 10).tint(gold)
+                Slider(value: $targetDuration, in: 30...300, step: 10).tint(Theme.action)
                 HStack {
                     Text("Captions").font(.system(size: 12)).foregroundColor(Color.white.opacity(0.6))
                     Spacer()
-                    Toggle("", isOn: $burnCaptions).toggleStyle(.switch).tint(gold)
+                    Toggle("", isOn: $burnCaptions).toggleStyle(.switch).tint(Theme.action)
                 }
                 if burnCaptions && !captionStyles.isEmpty {
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -908,11 +908,11 @@ struct AutoReelsTab: View {
             }
             HStack(spacing: 16) {
                 HStack(spacing: 6) {
-                    Toggle("", isOn: $crossDissolve).toggleStyle(.switch).tint(gold).labelsHidden()
+                    Toggle("", isOn: $crossDissolve).toggleStyle(.switch).tint(Theme.action).labelsHidden()
                     Text("Dissolve cuts").font(.system(size: 11)).foregroundColor(Color.white.opacity(0.7))
                 }
                 HStack(spacing: 6) {
-                    Toggle("", isOn: $emojiOverlays).toggleStyle(.switch).tint(gold).labelsHidden()
+                    Toggle("", isOn: $emojiOverlays).toggleStyle(.switch).tint(Theme.action).labelsHidden()
                     Text("Emoji overlays").font(.system(size: 11)).foregroundColor(Color.white.opacity(0.7))
                 }
             }
@@ -970,7 +970,7 @@ struct AutoReelsTab: View {
                 Image(systemName: "film.stack").foregroundColor(gold).font(.system(size: 12))
                 Text("Storyline").font(.system(size: 12, weight: .semibold)).foregroundColor(.white)
                 Spacer()
-                Toggle("", isOn: $useStoryline).toggleStyle(.switch).tint(gold)
+                Toggle("", isOn: $useStoryline).toggleStyle(.switch).tint(Theme.action)
             }
             if useStoryline {
                 VStack(spacing: 4) {
@@ -1015,7 +1015,7 @@ struct AutoReelsTab: View {
                 Text("Smart AI Selection")
                     .font(.system(size: 12, weight: .semibold)).foregroundColor(.white)
                 Spacer()
-                Toggle("", isOn: $useAI).toggleStyle(.switch).tint(gold)
+                Toggle("", isOn: $useAI).toggleStyle(.switch).tint(Theme.action)
             }
 
             if useAI {
@@ -1284,7 +1284,7 @@ struct AutoReelsTab: View {
                 }
             }
         }
-        .background(Color(red: 0.11, green: 0.12, blue: 0.17))
+        .background(Theme.raised)
         .cornerRadius(12)
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.07), lineWidth: 1))
     }
@@ -1362,7 +1362,7 @@ private struct ReelCard: View {
                             .cornerRadius(4)
                         Spacer()
                         HStack(spacing: 4) {
-                            Circle().fill(Color(red: 1, green: 0.3, blue: 0.3)).frame(width: 5, height: 5)
+                            Circle().fill(Theme.danger).frame(width: 5, height: 5)
                             Text(formatReelDur(reel.duration))
                                 .font(.system(size: 9, weight: .medium)).foregroundColor(.white)
                         }
@@ -1438,7 +1438,7 @@ private struct ReelCard: View {
                             Button(action: onDelete) {
                                 Image(systemName: "trash")
                                     .font(.system(size: 11, weight: .semibold))
-                                    .foregroundColor(Color(red: 1, green: 0.4, blue: 0.4))
+                                    .foregroundColor(Theme.danger)
                                     .padding(6)
                                     .background(Color.black.opacity(0.65))
                                     .cornerRadius(6)
@@ -1463,7 +1463,7 @@ private struct ReelCard: View {
             }
             .frame(height: 20)
             .padding(.horizontal, 12).padding(.top, 8)
-            .background(Color(red: 0.13, green: 0.15, blue: 0.20))
+            .background(Theme.raised)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(reel.title)
@@ -1492,10 +1492,10 @@ private struct ReelCard: View {
                 }
             }
             .padding(.horizontal, 12).padding(.vertical, 8)
-            .background(Color(red: 0.13, green: 0.15, blue: 0.20))
+            .background(Theme.raised)
 
         }
-        .background(Color(red: 0.13, green: 0.15, blue: 0.20))
+        .background(Theme.raised)
         .cornerRadius(8)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
@@ -1795,7 +1795,7 @@ private struct ReelDetailSidebar: View {
             }
         }
         .id(reel.id)
-        .background(Color(red: 0.09, green: 0.10, blue: 0.14))
+        .background(Theme.surface)
     }
 }
 
@@ -1980,7 +1980,7 @@ struct ReelThumbnailView: View {
                     .aspectRatio(contentMode: .fill)
             } else {
                 Rectangle()
-                    .fill(Color(red: 0.10, green: 0.11, blue: 0.16))
+                    .fill(Theme.surface)
                     .overlay(
                         Image(systemName: "film")
                             .font(.system(size: 32))
@@ -2036,7 +2036,7 @@ private extension AutoReelsTab {
                 }
             }
             .padding(.horizontal, 16).padding(.vertical, 10)
-            .background(Color(red: 0.09, green: 0.10, blue: 0.14))
+            .background(Theme.surface)
 
             Divider().background(Color.white.opacity(0.08))
 

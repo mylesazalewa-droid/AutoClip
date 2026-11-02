@@ -22,7 +22,7 @@ struct QuotesPanel: View {
     let clips: [Clip]
     var seekAction: ((Double) -> Void)?
 
-    private let gold = Color(red: 1.0, green: 0.75, blue: 0.0)
+    private let gold = Theme.sand
 
     var quotes: [Quote] { extractQuotes(from: clips) }
 
@@ -197,7 +197,7 @@ struct QuoteCard: View {
     @State private var copied = false
     @State private var isHovered = false
 
-    private let gold = Color(red: 1.0, green: 0.75, blue: 0.0)
+    private let gold = Theme.sand
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -242,7 +242,7 @@ struct QuoteCard: View {
                         Text(copied ? "Copied!" : "Copy")
                             .font(.system(size: 11))
                     }
-                    .foregroundColor(copied ? Color(red: 0.2, green: 0.8, blue: 0.4) : Color.white.opacity(0.45))
+                    .foregroundColor(copied ? Theme.good : Color.white.opacity(0.45))
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .background(Color.white.opacity(0.06))

@@ -1,7 +1,7 @@
 import SwiftUI
 import Charts
 
-private let gold = Color(red: 1.0, green: 0.75, blue: 0.0)
+private let gold = Theme.sand
 
 /// Add, rename and remove the people whose messages are assessed.
 struct SpeakersSheet: View {
@@ -48,7 +48,7 @@ struct SpeakersSheet: View {
         }
         .padding(20)
         .frame(width: 480)
-        .background(Color(red: 0.09, green: 0.10, blue: 0.15))
+        .background(Theme.surface)
     }
 
     private func add() {

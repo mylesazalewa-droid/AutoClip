@@ -15,7 +15,7 @@ struct SetupView: View {
             VStack(spacing: 12) {
                 Image(systemName: "scissors")
                     .font(.system(size: 56, weight: .bold))
-                    .foregroundColor(Color(red: 1.0, green: 0.75, blue: 0.0))
+                    .foregroundColor(Theme.sand)
 
                 Text("AutoClip")
                     .font(.system(size: 32, weight: .bold))
@@ -57,7 +57,7 @@ struct SetupView: View {
                 if isDownloading {
                     VStack(spacing: 8) {
                         ProgressView(value: downloadProgress)
-                            .accentColor(Color(red: 1.0, green: 0.75, blue: 0.0))
+                            .accentColor(Theme.sand)
                             .frame(maxWidth: 360)
 
                         Text(statusText)
@@ -68,7 +68,7 @@ struct SetupView: View {
                     if let error = downloadError {
                         Text(error)
                             .font(.system(size: 12))
-                            .foregroundColor(Color(red: 1, green: 0.4, blue: 0.4))
+                            .foregroundColor(Theme.danger)
                             .padding(.horizontal, 40)
                             .multilineTextAlignment(.center)
                     }
@@ -83,7 +83,7 @@ struct SetupView: View {
                         .foregroundColor(.black)
                         .padding(.horizontal, 32)
                         .padding(.vertical, 13)
-                        .background(Color(red: 1.0, green: 0.75, blue: 0.0))
+                        .background(Theme.sand)
                         .cornerRadius(10)
                     }
                     .buttonStyle(.plain)
@@ -94,14 +94,14 @@ struct SetupView: View {
             Spacer()
         }
         .frame(width: 560, height: 500)
-        .background(Color(red: 0.07, green: 0.08, blue: 0.12))
+        .background(Theme.bg)
     }
 
     func modelFeature(icon: String, text: String) -> some View {
         VStack(spacing: 6) {
             Image(systemName: icon)
                 .font(.system(size: 20))
-                .foregroundColor(Color(red: 1.0, green: 0.75, blue: 0.0))
+                .foregroundColor(Theme.sand)
             Text(text)
                 .font(.system(size: 12))
                 .foregroundColor(Color.white.opacity(0.6))

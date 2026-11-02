@@ -18,7 +18,7 @@ struct AutoClipApp: App {
 
         // Auto Reels: one window per video's reels, with a large preview
         WindowGroup("Reels", id: "reel-window", for: UUID.self) { $id in
-            if let id { ReelWindowView(recordID: id) }
+            if let id { ReelWindowView(recordID: id).tint(Theme.action).preferredColorScheme(.dark) }
         }
         .defaultSize(width: 1280, height: 820)
     }
@@ -38,6 +38,8 @@ struct MainWindow: View {
                 Text(message)
             }
             .frame(minWidth: 900, idealWidth: 1280, minHeight: 600, idealHeight: 800)
+            .tint(Theme.action)
+            .preferredColorScheme(.dark)
     }
 }
 
