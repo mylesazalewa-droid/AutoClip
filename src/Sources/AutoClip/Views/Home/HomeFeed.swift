@@ -298,7 +298,7 @@ struct PosterCard: View {
         Button(action: open) {
             VStack(alignment: .leading, spacing: 7) {
                 ZStack(alignment: .topLeading) {
-                    ReelThumbnailView(path: path).frame(width: 150, height: 250).clipped()
+                    ReelThumbnailView(path: path, faceAspect: 150 / 250).frame(width: 150, height: 250).clipped()
                     LinearGradient(colors: [.clear, .black.opacity(0.55)], startPoint: .center, endPoint: .bottom)
                     if let badge {
                         Text(badge).font(.system(size: 9, weight: .semibold)).foregroundColor(Theme.cream)

@@ -2,6 +2,7 @@ import SwiftUI
 import AVFoundation
 import UniformTypeIdentifiers
 import AppKit
+import Vision
 
 // MARK: - Thumbnail helper
 
@@ -1093,13 +1094,15 @@ struct AutoReelsTab: View {
             ZStack(alignment: .bottom) {
                 // Thumbnail from source video (or placeholder while unavailable)
                 if let srcPath = job.sourceVideoPath {
-                    ReelThumbnailView(path: srcPath)
-                        .frame(height: 340).clipped()
+                    Color.clear
+                        .aspectRatio(9 / 16, contentMode: .fit)
+                        .overlay(ReelThumbnailView(path: srcPath, faceAspect: 9 / 16))
+                        .clipped()
                         .overlay(Color.black.opacity(0.35))  // dim so overlay text is readable
                 } else {
                     Rectangle()
                         .fill(Color.white.opacity(0.05))
-                        .frame(height: 340)
+                        .aspectRatio(9 / 16, contentMode: .fit)
                         .overlay(
                             Image(systemName: job.error != nil ? "exclamationmark.triangle" : "film.stack")
                                 .font(.system(size: 36))
@@ -1155,7 +1158,10 @@ struct AutoReelsTab: View {
                     .background(Color.black.opacity(0.75))
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .frame(minWidth: 0, maxWidth: .infinity)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Theme.line, lineWidth: 1))
+            .shadow(color: .black.opacity(0.25), radius: 8, y: 4)
 
             // Title row
             HStack {
@@ -1194,7 +1200,7 @@ struct AutoReelsTab: View {
                     .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal, 10).padding(.top, 8).padding(.bottom, 4)
+            .padding(.horizontal, 2).padding(.top, 8).padding(.bottom, 4)
 
             if job.isFinished, job.error == nil {
                 if let urls = job.outputURLs, urls.count > 1 {
@@ -1255,9 +1261,6 @@ struct AutoReelsTab: View {
                 }
             }
         }
-        .background(Theme.raised)
-        .cornerRadius(12)
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.07), lineWidth: 1))
     }
 
     func reelCard(_ reel: AutoReelRecord) -> some View {
@@ -1318,9 +1321,10 @@ private struct ReelCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             ZStack(alignment: .topLeading) {
-                ReelThumbnailView(path: reel.path)
-                    .frame(minWidth: 0, maxWidth: .infinity)
+                Color.clear
                     .aspectRatio(9 / 16, contentMode: .fit)
+                    .overlay(ReelThumbnailView(path: reel.path, faceAspect: 9 / 16))
+                    .frame(minWidth: 0, maxWidth: .infinity)
                     .clipped()
                 // Shade for the labels
                 LinearGradient(colors: [.black.opacity(0.45), .clear, .clear, .black.opacity(0.6)], startPoint: .top, endPoint: .bottom)
@@ -1852,6 +1856,9 @@ private struct ReelFullPreviewSheet: View {
 
 struct ReelThumbnailView: View {
     let path: String
+    /// Width ÷ height of the frame it fills. When set, the picture is cropped to that shape
+    /// around the speaker's face, so a wide video in a tall card still shows the person.
+    var faceAspect: CGFloat? = nil
     @State private var image: NSImage?
 
     var body: some View {
@@ -1870,28 +1877,59 @@ struct ReelThumbnailView: View {
                     )
             }
         }
-        .task(id: path) { await loadThumbnail() }
+        .task(id: path + "\(faceAspect ?? 0)") { await loadThumbnail() }
     }
 
     /// Pictures already made, shared by every card, sidebar row and banner
     private static let cache = NSCache<NSString, NSImage>()
 
     private func loadThumbnail() async {
-        if let hit = Self.cache.object(forKey: path as NSString) { image = hit; return }
+        let key = (path + "|\(faceAspect ?? 0)") as NSString
+        if let hit = Self.cache.object(forKey: key) { image = hit; return }
         guard FileManager.default.fileExists(atPath: path) else { return }
         let url = URL(fileURLWithPath: path)
         let asset = AVURLAsset(url: url)
         let gen = AVAssetImageGenerator(asset: asset)
         gen.appliesPreferredTrackTransform = true
-        gen.maximumSize = CGSize(width: 640, height: 640)
+        gen.maximumSize = CGSize(width: 960, height: 960)
         // Long videos (sermons, episodes) open on black or a title; pick a moment further in
         let dur = (try? await asset.load(.duration)).map(CMTimeGetSeconds) ?? 0
-        let t = CMTime(seconds: dur > 60 ? dur * 0.12 : 1.5, preferredTimescale: 600)
-        if let cgImg = try? await gen.image(at: t).image {
-            let ns = NSImage(cgImage: cgImg, size: .zero)
-            Self.cache.setObject(ns, forKey: path as NSString)
-            await MainActor.run { image = ns }
+        let first = dur > 60 ? dur * 0.12 : min(1.5, dur / 2)
+        // When framing a person, look a little further if the first moment has no face
+        let moments = faceAspect == nil || dur <= 60 ? [first] : [first, dur * 0.3, dur * 0.5]
+        var chosen: CGImage?
+        for m in moments {
+            guard let cg = try? await gen.image(at: CMTime(seconds: m, preferredTimescale: 600)).image else { continue }
+            if chosen == nil { chosen = cg }
+            if let aspect = faceAspect, let framed = Self.frame(cg, aspect: aspect) { chosen = framed; break }
+            if faceAspect == nil { break }
         }
+        guard var cg = chosen else { return }
+        // No face anywhere: still crop to the shape, from the middle
+        if let aspect = faceAspect, abs(CGFloat(cg.width) / CGFloat(cg.height) - aspect) > 0.02 {
+            cg = Self.crop(cg, aspect: aspect, centerX: 0.5, centerY: 0.5) ?? cg
+        }
+        let ns = NSImage(cgImage: cg, size: .zero)
+        Self.cache.setObject(ns, forKey: key)
+        await MainActor.run { image = ns }
+    }
+
+    /// Crops to `aspect` around the biggest face, with the face a little above the middle.
+    private static func frame(_ img: CGImage, aspect: CGFloat) -> CGImage? {
+        let req = VNDetectFaceRectanglesRequest()
+        try? VNImageRequestHandler(cgImage: img, options: [:]).perform([req])
+        guard let face = (req.results ?? []).max(by: { $0.boundingBox.width * $0.boundingBox.height < $1.boundingBox.width * $1.boundingBox.height }) else { return nil }
+        let b = face.boundingBox                     // 0…1, origin bottom-left
+        return crop(img, aspect: aspect, centerX: b.midX, centerY: 1 - b.midY + 0.12)
+    }
+
+    private static func crop(_ img: CGImage, aspect: CGFloat, centerX: CGFloat, centerY: CGFloat) -> CGImage? {
+        let W = CGFloat(img.width), H = CGFloat(img.height)
+        var w = W, h = W / aspect
+        if h > H { h = H; w = H * aspect }
+        let x = max(0, min(W - w, centerX * W - w / 2))
+        let y = max(0, min(H - h, centerY * H - h / 2))
+        return img.cropping(to: CGRect(x: x, y: y, width: w, height: h).integral)
     }
 }
 
