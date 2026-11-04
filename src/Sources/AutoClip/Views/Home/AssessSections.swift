@@ -50,7 +50,7 @@ struct TimeLink: View {
 
 struct Pointer: Identifiable { let id = UUID(); let icon: String; let text: String; let good: Bool }
 
-private func pointerList(_ pointers: [Pointer]) -> some View {
+func pointerList(_ pointers: [Pointer]) -> some View {
     VStack(alignment: .leading, spacing: 6) {
         ForEach(pointers) { p in
             HStack(alignment: .top, spacing: 8) {

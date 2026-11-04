@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
-enum HomeTab: String { case projects, autoClips, autoReels, podcast, assess, search }
+enum HomeTab: String { case projects, autoClips, autoReels, podcast, assess, worship, search }
 
 struct HomeView: View {
     @ObservedObject private var library = LibraryService.shared
@@ -47,6 +47,8 @@ struct HomeView: View {
                     PodcastTab()
                 case .assess:
                     AssessTab()
+                case .worship:
+                    WorshipTab()
                 case .search:
                     SearchTab()
                 case .autoClips:
@@ -121,6 +123,7 @@ struct HomeView: View {
                 tabButton(title: "Auto Reels", tab: .autoReels)
                 tabButton(title: "Podcast", tab: .podcast)
                 tabButton(title: "Assess", tab: .assess)
+                tabButton(title: "Worship", tab: .worship)
                 tabButton(title: "Search", tab: .search)
             }
 

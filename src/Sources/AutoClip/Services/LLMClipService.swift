@@ -466,6 +466,43 @@ Respond with ONLY valid JSON, no markdown:
         throw lastError
     }
 
+    // MARK: - Worship coach
+
+    func worshipCoach(facts: String, provider: AIProvider, apiKey: String) async throws -> WorshipCoach {
+        let prompt = """
+You are an experienced, encouraging worship pastor reviewing the worship part of a church service with the team, so they can improve week by week. These are measurements from a recording, what was said between songs, and the team's own notes. The measurements are rough and depend on the camera and sound feed. Don't judge anyone's heart or sincerity; talk about craft and how it comes across.
+
+\(facts)
+
+Return:
+- "summary": 2 sentences.
+- "wins": 3 items {title (max 6 words), detail (1–2 specific sentences)}.
+- "improvements": 3 items {title, detail (what the recording showed and one practical change)}.
+- "rehearsal": 3 to 5 short steps for this week's rehearsal.
+
+Respond with ONLY valid JSON, no markdown:
+{"summary":"...","wins":[{"title":"...","detail":"..."}],"improvements":[{"title":"...","detail":"..."}],"rehearsal":["..."]}
+"""
+        var lastError: Error = llmError("The AI coach didn't return a report")
+        for _ in 1...2 {
+            let text = try await ask(prompt, provider: provider, apiKey: apiKey)
+            guard let a = text.firstIndex(of: "{"), let b = text.lastIndex(of: "}"),
+                  let o = try? JSONSerialization.jsonObject(with: Data(String(text[a...b]).utf8)) as? [String: Any],
+                  let summary = o["summary"] as? String else {
+                lastError = llmError("The AI coach's report wasn't valid JSON — try again"); continue
+            }
+            let items = { (key: String) -> [WorshipCoach.Item] in
+                (o[key] as? [[String: Any]] ?? []).compactMap { n in
+                    guard let t = n["title"] as? String else { return nil }
+                    return .init(title: t, detail: n["detail"] as? String ?? "")
+                }
+            }
+            return WorshipCoach(summary: summary, wins: items("wins"), improvements: items("improvements"),
+                                rehearsal: o["rehearsal"] as? [String] ?? [])
+        }
+        throw lastError
+    }
+
     // MARK: - Sermon notes
 
     /// Small-group / website notes for a sermon. `verses` are the references found in the

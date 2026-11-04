@@ -68,10 +68,10 @@ struct DeliveryOverviewCard: View {
             if let d = report.delivery {
                 let s = DeliveryScores(report: report, delivery: d)
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), alignment: .leading)], alignment: .leading, spacing: 16) {
-                    ring("Overall Energy", s.energy, "How much your volume moves, whether sentences hold up to the last word, and your speed.")
-                    ring("Vocal Variety", s.variety, "How much your pitch moves, less any flat stretches.")
-                    ring("Pacing", s.pacing, "Time spent at 100–190 words a minute, less stretches with no pause.")
-                    ring("Clarity", s.clarity, "How few filler words and crutch phrases there are per minute. It doesn't measure how crisply words are spoken.")
+                    ScoreRing(title: "Overall Energy", value: s.energy, why: "How much your volume moves, whether sentences hold up to the last word, and your speed.")
+                    ScoreRing(title: "Vocal Variety", value: s.variety, why: "How much your pitch moves, less any flat stretches.")
+                    ScoreRing(title: "Pacing", value: s.pacing, why: "Time spent at 100–190 words a minute, less stretches with no pause.")
+                    ScoreRing(title: "Clarity", value: s.clarity, why: "How few filler words and crutch phrases there are per minute. It doesn't measure how crisply words are spoken.")
                 }
             } else {
                 HStack(spacing: 8) {
@@ -99,21 +99,33 @@ struct DeliveryOverviewCard: View {
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Theme.line, lineWidth: 1))
     }
 
-    private func ring(_ title: String, _ value: Int, _ why: String) -> some View {
-        let strong = value >= 75
-        let color = strong ? Theme.good : value >= 55 ? Theme.sand : Theme.warn
-        return HStack(spacing: 12) {
+    private func fillerRow(_ kind: String, _ marks: [Filler]) -> some View {
+        TimelineDotRow(label: "“\(kind)”", marks: marks.map { .init(time: $0.time, seek: $0.time, help: "\(assessTime($0.time)) · \($0.context)") },
+                       duration: duration, italic: true, play: play)
+    }
+}
+
+/// A score out of 100 as a ring. With no value the recording couldn't show it, so none is made up.
+struct ScoreRing: View {
+    let title: String
+    let value: Int?
+    let why: String
+
+    var body: some View {
+        let strong = (value ?? 0) >= 75
+        let color = value == nil ? Theme.muted : strong ? Theme.good : (value ?? 0) >= 55 ? Theme.sand : Theme.warn
+        HStack(spacing: 12) {
             ZStack {
                 Circle().stroke(Color.white.opacity(0.12), lineWidth: 5)
-                Circle().trim(from: 0, to: CGFloat(value) / 100)
+                Circle().trim(from: 0, to: CGFloat(value ?? 0) / 100)
                     .stroke(color, style: StrokeStyle(lineWidth: 5, lineCap: .round))
                     .rotationEffect(.degrees(-90))
-                Text("\(value)").font(Theme.display(20)).foregroundColor(Theme.cream).monospacedDigit()
+                Text(value.map(String.init) ?? "–").font(Theme.display(20)).foregroundColor(Theme.cream).monospacedDigit()
             }
             .frame(width: 56, height: 56)
             VStack(alignment: .leading, spacing: 5) {
                 Text(title).font(Theme.display(15)).foregroundColor(Theme.cream).lineLimit(1)
-                Text(strong ? "Strong" : value >= 55 ? "Suggestions" : "Focus here")
+                Text(value == nil ? "Not readable" : strong ? "Strong" : (value ?? 0) >= 55 ? "Suggestions" : "Focus here")
                     .font(.system(size: 10, weight: .medium)).foregroundColor(color)
                     .padding(.horizontal, 8).padding(.vertical, 3)
                     .background(Capsule().fill(color.opacity(0.14)))
@@ -121,14 +133,24 @@ struct DeliveryOverviewCard: View {
         }
         .help(why)
     }
+}
 
-    private func fillerRow(_ kind: String, _ marks: [Filler]) -> some View {
+/// A count, a label, and a dot on a track for each moment. Click a dot to play it.
+struct TimelineDotRow: View {
+    struct Mark { let time: Double; let seek: Double; let help: String }
+    let label: String
+    let marks: [Mark]
+    let duration: Double
+    var italic = false
+    let play: (Double) -> Void
+
+    var body: some View {
         HStack(spacing: 12) {
-            Text("\(marks.count)").font(.system(size: 10, weight: .bold)).foregroundColor(Theme.bg).monospacedDigit()
+            Text("\(marks.count)").font(.system(size: 10, weight: .bold)).foregroundColor(marks.isEmpty ? Theme.muted : Theme.bg).monospacedDigit()
                 .frame(minWidth: 32).padding(.vertical, 3)
-                .background(Capsule().fill(Theme.sandDeep))
-            Text("“\(kind)”").font(Theme.display(13).italic()).foregroundColor(Theme.text)
-                .lineLimit(1).frame(width: 130, alignment: .leading)
+                .background(Capsule().fill(marks.isEmpty ? Theme.raised2 : Theme.sandDeep))
+            Text(label).font(italic ? Theme.display(13).italic() : Theme.display(13)).foregroundColor(Theme.text)
+                .lineLimit(1).minimumScaleFactor(0.8).frame(width: 130, alignment: .leading)
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     Capsule().fill(Color.white.opacity(0.09))
@@ -136,9 +158,9 @@ struct DeliveryOverviewCard: View {
                         let inset: CGFloat = 8
                         Circle().fill(Theme.sand).frame(width: 7, height: 7)
                             .frame(width: 13, height: 18).contentShape(Rectangle())
-                            .position(x: inset + CGFloat(min(1, m.time / duration)) * (geo.size.width - inset * 2), y: 9)
-                            .help("\(assessTime(m.time)) · \(m.context)")
-                            .onTapGesture { play(m.time) }
+                            .position(x: inset + CGFloat(min(1, max(0, m.time / duration))) * (geo.size.width - inset * 2), y: 9)
+                            .help(m.help)
+                            .onTapGesture { play(m.seek) }
                     }
                 }
             }
