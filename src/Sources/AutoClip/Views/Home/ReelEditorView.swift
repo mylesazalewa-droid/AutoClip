@@ -685,7 +685,7 @@ struct ReelEditorView: View {
                     ForEach(Array(crew.enumerated()), id: \.element.id) { i, person in
                         ReframeTile(title: "Person \(i + 1)", selected: false) {
                             Image(nsImage: person.face).resizable().scaledToFill()
-                        } action: { follow(ReelDraft.Framing(mode: "person", x: person.x)) }
+                        } action: { follow(ReelDraft.Framing(mode: "person", x: person.x, t: person.time)) }
                     }
                     ReframeTile(title: "Whoever's talking", selected: false) {
                         Image(systemName: "waveform").font(.system(size: 20)).foregroundColor(gold)

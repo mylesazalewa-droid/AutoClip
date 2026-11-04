@@ -8,6 +8,8 @@ struct ReframePerson: Identifiable {
     let id = UUID()
     /// Where they sit across the frame, 0…1
     let x: Double
+    /// When they were at `x` (source seconds)
+    let time: Double
     let face: NSImage
 }
 
@@ -20,7 +22,7 @@ enum Reframe {
         return try? await gen.image(at: CMTime(seconds: time, preferredTimescale: 600)).image
     }
 
-    private struct Face { let x: Double; let height: Double; let frame: Int; let box: CGRect }
+    private struct Face { let x: Double; let height: Double; let frame: Int; let box: CGRect; let time: Double }
 
     /// People on screen together during this stretch, left to right. Someone walking across the
     /// frame is one person, so a second person only counts when two faces share the frame.
@@ -33,7 +35,7 @@ enum Reframe {
             let t = start + (end - start) * (Double(k) + 0.5) / Double(count)
             guard let img = await frame(path: path, at: t) else { continue }
             for o in await detect(img) where o.confidence > 0.6 && o.boundingBox.height >= 0.06 {
-                faces.append(Face(x: o.boundingBox.midX, height: o.boundingBox.height, frame: images.count, box: o.boundingBox))
+                faces.append(Face(x: o.boundingBox.midX, height: o.boundingBox.height, frame: images.count, box: o.boundingBox, time: t))
             }
             images.append(img)
         }
@@ -53,7 +55,23 @@ enum Reframe {
         return groups.prefix(5).compactMap { group in
             guard let best = group.max(by: { $0.height < $1.height }), images.indices.contains(best.frame),
                   let face = crop(images[best.frame], around: best.box) else { return nil }
-            return ReframePerson(x: group.map(\.x).reduce(0, +) / Double(group.count), face: face)
+            return ReframePerson(x: best.x, time: best.time, face: face)
+        }
+    }
+
+    /// Everyone in one frame, as boxes with 0…1 coordinates (origin at the bottom left).
+    static func targets(in image: CGImage) async -> [CGRect] {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let faces = VNDetectFaceRectanglesRequest()
+                let humans = VNDetectHumanRectanglesRequest()
+                humans.upperBodyOnly = false
+                try? VNImageRequestHandler(cgImage: image, options: [:]).perform([faces, humans])
+                let bodies = (humans.results ?? []).map(\.boundingBox).filter { $0.height > 0.2 }
+                // A face inside a body is the same person
+                let lone = (faces.results ?? []).map(\.boundingBox).filter { f in f.height >= 0.04 && !bodies.contains { $0.contains(CGPoint(x: f.midX, y: f.midY)) } }
+                continuation.resume(returning: bodies + lone)
+            }
         }
     }
 

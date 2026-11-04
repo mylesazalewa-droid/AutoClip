@@ -22,6 +22,15 @@ struct WorshipTab: View {
     @State private var coachStatus: String?
     @State private var coachError: String?
     @State private var copied = false
+    @State private var setlistText = ""
+    @State private var setlistNote: String?
+    @State private var goals: [WorshipGoal] = []
+    @State private var clipStatus: Double?
+    @State private var clipTask: Task<Void, Never>?
+    @State private var clipFolder: URL?
+    @State private var clipError: String?
+    @State private var includeFlagged = false
+    @State private var confirmDelete: WorshipReport?
 
     private static let categories = ["Sound", "Band", "Vocals", "Stage", "Communication", "Flow"]
     private let gold = Theme.sand
@@ -34,7 +43,13 @@ struct WorshipTab: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.bg)
-        .onAppear { reports = WorshipStore.all() }
+        .onAppear { reports = WorshipStore.all(); goals = WorshipGoals.load() }
+        .confirmationDialog("Delete this assessment?", isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } }), presenting: confirmDelete) { r in
+            Button("Delete", role: .destructive) { delete(r) }
+            Button("Cancel", role: .cancel) { }
+        } message: { r in
+            Text("This removes the scores, notes and ratings for \(r.title). Your original recording isn't deleted.")
+        }
     }
 
     private func working(_ text: String) -> some View {
@@ -65,6 +80,7 @@ struct WorshipTab: View {
                 }
                 if let error { Text(error).font(.system(size: 12)).foregroundColor(Theme.danger).fixedSize(horizontal: false, vertical: true) }
                 if reports.count >= 2 { trend }
+                if !reports.isEmpty { goalsCard(current: nil) }
                 if reports.isEmpty {
                     EmptyState(icon: "music.mic", title: "No services yet", message: "Add a recording of a service. AutoClip finds the songs and leaves out the sermon.") { EmptyView() }
                         .frame(height: 300)
@@ -78,11 +94,12 @@ struct WorshipTab: View {
 
     private func serviceRow(_ r: WorshipReport) -> some View {
         let s = WorshipStats(r)
-        return Button { open(r) } label: {
+        return HStack(spacing: 8) {
+        Button { open(r) } label: {
             HStack(spacing: 16) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(r.title).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.cream).lineLimit(1)
-                    Text("\(r.date.formatted(date: .abbreviated, time: .omitted)) · \(s.songs.count) song\(s.songs.count == 1 ? "" : "s")")
+                    Text("\(r.date.formatted(date: .abbreviated, time: .omitted)) · \(s.namedSongs.count) song\(s.namedSongs.count == 1 ? "" : "s")")
                         .font(.system(size: 11)).foregroundColor(Theme.muted)
                 }
                 Spacer()
@@ -100,9 +117,18 @@ struct WorshipTab: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .contextMenu {
-            Button("Remove from this list", role: .destructive) { WorshipStore.delete(r); reports = WorshipStore.all() }
+        Button { confirmDelete = r } label: { Image(systemName: "trash").font(.system(size: 12)) }
+            .buttonStyle(.plain).foregroundColor(Theme.muted).padding(8).help("Delete this assessment")
         }
+    }
+
+    private func delete(_ r: WorshipReport) {
+        WorshipStore.delete(r)
+        // A rewrapped copy made just for this tab goes too; the original recording stays
+        let copies = WorshipStore.dir.appendingPathComponent("Recordings").path
+        if r.videoPath.hasPrefix(copies) { try? FileManager.default.removeItem(atPath: r.videoPath) }
+        if current?.videoPath == r.videoPath { player.pause(); player.replaceCurrentItem(with: nil); current = nil }
+        reports = WorshipStore.all()
     }
 
     private static func scoreList(_ s: WorshipStats) -> [(String, Int?)] {
@@ -180,6 +206,8 @@ struct WorshipTab: View {
         current = r
         section = .flow
         coachStatus = nil; coachError = nil
+        setlistText = r.setlist.sorted { $0.start < $1.start }.map(\.name).joined(separator: "\n")
+        setlistNote = nil; clipStatus = nil; clipFolder = nil; clipError = nil
         player.replaceCurrentItem(with: AVPlayerItem(url: URL(fileURLWithPath: r.videoPath)))
     }
 
@@ -203,9 +231,14 @@ struct WorshipTab: View {
         let s = WorshipStats(r)
         return ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                Button { player.pause(); current = nil; reports = WorshipStore.all() } label: {
-                    Label("All services", systemImage: "chevron.left").font(.system(size: 12, weight: .medium)).foregroundColor(gold)
-                }.buttonStyle(.plain)
+                HStack {
+                    Button { player.pause(); current = nil; reports = WorshipStore.all() } label: {
+                        Label("All services", systemImage: "chevron.left").font(.system(size: 12, weight: .medium)).foregroundColor(gold)
+                    }.buttonStyle(.plain)
+                    Spacer()
+                    Button { confirmDelete = r } label: { Label("Delete", systemImage: "trash") }
+                        .buttonStyle(SecondaryButtonStyle(compact: true)).help("Delete this assessment")
+                }
 
                 HStack(alignment: .top, spacing: 18) {
                     VideoPlayer(player: player).aspectRatio(16 / 9, contentMode: .fit).frame(maxWidth: 480)
@@ -234,7 +267,7 @@ struct WorshipTab: View {
                 case .sound: sound(r, s)
                 case .stage: stage(r, s)
                 case .talk: talk(s)
-                case .team: team(r)
+                case .team: team(r, s)
                 case .coach: coach(r, s)
                 }
             }
@@ -262,8 +295,13 @@ struct WorshipTab: View {
                 Button("End here") { let t = playhead; if t > r.rangeStart { save { $0.rangeEnd = t } } }.controlSize(.small)
                 Button("Whole recording") { save { $0.rangeStart = 0; $0.rangeEnd = $0.duration } }.controlSize(.small)
             }
-            if let v = r.visual, r.rangeStart < v.start - 5 || r.rangeEnd > v.end + 5 {
-                Button { rewatch(r) } label: { Label("Watch the added part of the stage", systemImage: "eye") }.controlSize(.small)
+            let stale = WorshipStats(r).needsRewatch
+            if stale {
+                Text("This was measured before AutoClip could tell clapping from raised hands, or find exhortations.")
+                    .font(.system(size: 11)).foregroundColor(Theme.warn).fixedSize(horizontal: false, vertical: true)
+            }
+            if stale || r.visual.map({ r.rangeStart < $0.start - 5 || r.rangeEnd > $0.end + 5 }) == true {
+                Button { rewatch(r) } label: { Label("Measure again", systemImage: "eye") }.buttonStyle(PrimaryButtonStyle(compact: true))
             }
         }
     }
@@ -275,7 +313,8 @@ struct WorshipTab: View {
                 let v = try await WorshipAnalysis.watch(AVURLAsset(url: URL(fileURLWithPath: r.videoPath)), from: r.rangeStart, to: r.rangeEnd) { p in
                     Task { @MainActor in progress = p }
                 }
-                save { $0.visual = v }
+                let words = (try? await TranscriptCache.transcript(for: r.videoPath) { _ in }) ?? []
+                save { $0.visual = v; $0.talks = WorshipAnalysis.talks(in: $0, words: words); $0.analyzedAt = Date() }
             } catch {}
             status = nil
         }
@@ -289,13 +328,13 @@ struct WorshipTab: View {
                 Image(systemName: "music.note").font(.system(size: 15)).foregroundColor(gold)
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Worship Analysis").font(Theme.display(22)).foregroundColor(Theme.cream)
-                    Text("\(s.songs.count) song\(s.songs.count == 1 ? "" : "s") · Analyzed \(r.analyzedAt.formatted(.relative(presentation: .named)))")
+                    Text("\(s.namedSongs.count) song\(s.namedSongs.count == 1 ? "" : "s") · Analyzed \(r.analyzedAt.formatted(.relative(presentation: .named)))")
                         .font(.system(size: 11)).foregroundColor(Theme.muted)
                 }
             }
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 200), alignment: .leading)], alignment: .leading, spacing: 16) {
                 ScoreRing(title: "Sound", value: s.soundScore, why: "Distortion, possible feedback, sudden volume changes, and how even the songs are.")
-                ScoreRing(title: "Engagement", value: s.engagementScore, why: "Clapping you can hear during songs, and raised hands on stage. A microphone near the stage may miss the room.")
+                ScoreRing(title: "Engagement", value: s.engagementScore, why: "Clapping heard or seen, and raised hands. When the congregation is in shot, what it's doing counts most.")
                 ScoreRing(title: "Smiles", value: s.smilesScore, why: "Smiles in frames where a face is close enough to read. A rough read.")
                 ScoreRing(title: "Stage Presence", value: s.stageScore, why: "How often faces point toward the camera, and how much bodies move with the music.")
                 ScoreRing(title: "Communication", value: s.communicationScore, why: "Inviting the room in, quiet gaps between songs, filler words and how long the talking runs.")
@@ -306,10 +345,11 @@ struct WorshipTab: View {
             VStack(alignment: .leading, spacing: 10) {
                 Text("THROUGH THE WORSHIP").font(.system(size: 9, weight: .semibold)).tracking(1.4).foregroundColor(Theme.muted)
                 flowStrip(r, s)
-                row("Clapping", s.clapMarks, r)
+                row("Clapping heard or team", s.clapMarks, r)
                 row("Applause and cheers", s.applauseMarks, r)
                 row("Smiles", s.smileMarks, r)
-                row("Hands raised", s.handsMarks, r)
+                row("Room: hands or claps", s.roomHandsMarks, r)
+                row("Hands up, team", s.handsMarks, r)
                 row("Talking", s.talks.map(\.start), r)
                 row("Possible feedback", s.feedback, r)
                 row("Volume jumps", s.jumps, r)
@@ -366,27 +406,186 @@ struct WorshipTab: View {
     private func flow(_ s: WorshipStats) -> some View {
         VStack(alignment: .leading, spacing: 14) {
         AssessCard(title: "Clapping and response") { pointerList(s.engagementPointers) }
-        AssessCard(title: "Songs", subtitle: "AutoClip splits the recording where the music stops or talking starts, so a medley may show as one song.") {
-            if s.songs.isEmpty {
+        setlistCard(s)
+        AssessCard(title: "Songs", subtitle: s.report.setlist.isEmpty ? "Add your setlist to see these by name. Songs with no break between them show as one until you do." : "Click a time to play. Pause where a song really starts and press Starts here to correct it.") {
+            if s.namedSongs.isEmpty {
                 Text("No songs found in this part. Use Start here and End here to set the worship part.").font(.system(size: 12)).foregroundColor(Theme.muted)
             }
-            ForEach(Array(s.songs.enumerated()), id: \.element.id) { i, song in
-                HStack(spacing: 12) {
-                    Text("\(i + 1)").font(Theme.display(15)).foregroundColor(gold).frame(width: 22)
-                    TimeLink(time: song.start, play: play)
-                    Text(assessTime(song.length)).font(.system(size: 12)).foregroundColor(Theme.text).monospacedDigit().frame(width: 48, alignment: .leading)
-                    Text(String(format: "%.0f dB", s.loudness(of: song))).font(.system(size: 11)).foregroundColor(Theme.muted).frame(width: 52, alignment: .leading)
-                        .help("Average level in the recording, compared across songs. It isn't the volume in the room.")
-                    Text(s.clapSeconds(in: song) >= 5 ? "\(Int(s.clapSeconds(in: song)))s of clapping" : "No clapping heard")
-                        .font(.system(size: 11)).foregroundColor(Theme.muted)
-                    Spacer()
-                }
-            }
+            ForEach(Array(s.namedSongs.enumerated()), id: \.element.id) { i, song in songRow(i, song, s) }
             if !s.quietGaps.isEmpty {
                 Text("Quiet gaps").font(.system(size: 11, weight: .semibold)).foregroundColor(Theme.muted).padding(.top, 4)
                 HStack(spacing: 8) { ForEach(s.quietGaps) { g in TimeLink(time: g.start, play: play) } }
             }
         }
+        }
+    }
+
+    private func songRow(_ i: Int, _ song: WorshipStats.NamedSong, _ s: WorshipStats) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 10) {
+                Text("\(i + 1)").font(Theme.display(15)).foregroundColor(gold).frame(width: 22)
+                Text(song.name).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.cream).lineLimit(1)
+                if song.source == .estimate {
+                    Text("Start is a guess").font(.system(size: 9, weight: .medium)).foregroundColor(Theme.warn)
+                        .help("The title wasn't heard, so this start is estimated. Pause where it really starts and press Starts here.")
+                } else if song.source == .lyrics {
+                    Text("Found from the lyrics").font(.system(size: 9)).foregroundColor(Theme.faint)
+                        .help("No break in the music here, so the change is placed between where each title is sung. It may be off by a little.")
+                }
+                Spacer()
+                TimeLink(time: song.part.start, play: play)
+                Text(assessTime(song.part.length)).font(.system(size: 12)).foregroundColor(Theme.text).monospacedDigit().frame(width: 44, alignment: .trailing)
+                if let index = song.setIndex {
+                    Button("Starts here") { let t = playhead; save { $0.setlist[index].start = t; $0.setlist[index].source = .manual } }
+                        .controlSize(.small).help("Set this song's start to where the video is paused")
+                }
+            }
+            HStack(spacing: 14) {
+                let clap = s.clapSeconds(in: song.part)
+                stat(String(format: "%.0f dB", s.loudness(of: song.part)), "Average level in the recording, to compare songs. It isn't the volume in the room.")
+                stat(clap >= 5 ? "\(Int(clap))s of clapping" : "No clapping heard", "Clapping under a loud band can be missed.")
+                if let v = s.smilePercent(in: song.part) { stat(String(format: "%.0f%% smiles", v), "Smiles in close shots during this song.") }
+                if let v = s.facingPercent(in: song.part) { stat(String(format: "%.0f%% facing", v), "Faces toward the camera during this song.") }
+                if let v = s.handsPercent(in: song.part), v > 0 { stat(String(format: "%.0f%% hands up", v), "Shots with hands raised on stage during this song.") }
+            }
+            .padding(.leading, 32)
+        }
+        .padding(.vertical, 3)
+    }
+
+    private func stat(_ text: String, _ help: String) -> some View {
+        Text(text).font(.system(size: 11)).foregroundColor(Theme.muted).help(help)
+    }
+
+    private func setlistCard(_ s: WorshipStats) -> some View {
+        AssessCard(title: "Setlist", subtitle: "Paste your songs in order, one per line. AutoClip names each song and uses the lyrics to split medleys.") {
+            TextEditor(text: $setlistText).font(.system(size: 12)).scrollContentBackground(.hidden)
+                .padding(6).frame(height: 96)
+                .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.05)))
+            HStack(spacing: 10) {
+                Button("Match the setlist") { matchSetlist() }.buttonStyle(SecondaryButtonStyle(compact: true))
+                if !s.report.setlist.isEmpty {
+                    Button("Clear") { setlistText = ""; setlistNote = nil; save { $0.setlist = [] } }.controlSize(.small)
+                }
+                if let setlistNote { Text(setlistNote).font(.system(size: 11)).foregroundColor(Theme.muted) }
+            }
+        }
+    }
+
+    private func matchSetlist() {
+        guard let r = current else { return }
+        let titles = setlistText.split(whereSeparator: \.isNewline).map {
+            // Drop list numbers such as "1." or "2)"
+            $0.replacingOccurrences(of: #"^\s*\d+[.)]\s*"#, with: "", options: .regularExpression).trimmingCharacters(in: .whitespaces)
+        }.filter { !$0.isEmpty }
+        guard !titles.isEmpty else { setlistNote = "Paste at least one song."; return }
+        setlistNote = "Matching…"
+        Task {
+            let words = (try? await TranscriptCache.transcript(for: r.videoPath) { _ in }) ?? []
+            let placed = WorshipSetlist.place(titles, in: r, words: words)
+            save { $0.setlist = placed }
+            let guesses = placed.filter { $0.source == .estimate }.count
+            setlistNote = guesses == 0 ? "Matched \(placed.count) song\(placed.count == 1 ? "" : "s")." : "Matched, but \(guesses) start\(guesses == 1 ? " is a guess" : "s are guesses"). Check the marked songs."
+        }
+    }
+
+    private func goalsCard(current r: WorshipReport?) -> some View {
+        let recent = Array(reports.sorted { $0.date > $1.date }.prefix(6).reversed())
+        return AssessCard(title: "Goals", subtitle: "Targets the team is working toward, checked on every service. Oldest to newest, up to the last 6.") {
+            if goals.isEmpty {
+                Text("No goals yet. Add one to track it week by week.").font(.system(size: 12)).foregroundColor(Theme.muted)
+            }
+            ForEach(goals) { goal in
+                HStack(spacing: 10) {
+                    Text(goal.title).font(.system(size: 12)).foregroundColor(Theme.text).lineLimit(1)
+                    Spacer()
+                    ForEach(recent, id: \.videoPath) { report in
+                        let v = goal.value(in: WorshipStats(report))
+                        let isCurrent = report.videoPath == r?.videoPath
+                        Text(v.map { goal.text($0) } ?? "–")
+                            .font(.system(size: 10, weight: isCurrent ? .bold : .medium)).monospacedDigit()
+                            .foregroundColor(v == nil ? Theme.faint : goal.met(v!) ? Theme.good : Theme.warn)
+                            .frame(minWidth: 36).padding(.vertical, 3)
+                            .background(RoundedRectangle(cornerRadius: 5).fill(isCurrent ? Color.white.opacity(0.1) : Color.white.opacity(0.03)))
+                            .help("\(report.title), \(report.date.formatted(date: .abbreviated, time: .omitted))")
+                    }
+                    Stepper("", value: Binding(get: { goal.target }, set: { v in setGoal(goal.id) { $0.target = v } }),
+                            in: goal.measure.range, step: goal.measure.step).labelsHidden().controlSize(.small)
+                    Button { goals.removeAll { $0.id == goal.id }; WorshipGoals.save(goals) } label: { Image(systemName: "xmark") }
+                        .buttonStyle(.plain).font(.system(size: 9)).foregroundColor(Theme.faint).help("Remove this goal")
+                }
+            }
+            Menu("Add a goal") {
+                ForEach(WorshipGoal.Measure.allCases.filter { m in !goals.contains { $0.measure == m } }) { m in
+                    Button(m.rawValue) { goals.append(.init(measure: m, target: m.defaultTarget)); WorshipGoals.save(goals) }
+                }
+            }
+            .menuStyle(.borderlessButton).fixedSize().font(.system(size: 12))
+        }
+    }
+
+    private func setGoal(_ id: UUID, _ change: (inout WorshipGoal) -> Void) {
+        guard let i = goals.firstIndex(where: { $0.id == id }) else { return }
+        change(&goals[i])
+        WorshipGoals.save(goals)
+    }
+
+    private func clipsCard(_ r: WorshipReport, _ s: WorshipStats) -> some View {
+        let count = clipMoments(r, s).count
+        return AssessCard(title: "Rehearsal clips", subtitle: "Makes about 20 seconds around each note with the note on screen, plus one reel of them all to watch together.") {
+            if r.visual == nil {
+                Text("This recording has no picture, so clips can't be made.").font(.system(size: 12)).foregroundColor(Theme.muted)
+            } else {
+                Toggle("Also include possible feedback and volume jumps", isOn: $includeFlagged).toggleStyle(.checkbox)
+                    .font(.system(size: 12)).foregroundColor(Theme.text)
+                if let p = clipStatus {
+                    HStack(spacing: 10) {
+                        ProgressView(value: p).tint(Theme.action)
+                        Text("\(Int(p * 100))%").font(.system(size: 11)).foregroundColor(Theme.muted).monospacedDigit()
+                        Button("Cancel") { clipTask?.cancel() }.controlSize(.small)
+                    }
+                } else {
+                    HStack(spacing: 10) {
+                        Button { makeClips(r, s) } label: { Label("Make \(count) clip\(count == 1 ? "" : "s")", systemImage: "film.stack") }
+                            .buttonStyle(PrimaryButtonStyle(compact: true)).disabled(count == 0)
+                        if let clipFolder {
+                            Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([clipFolder]) }.controlSize(.small)
+                        }
+                    }
+                }
+                if let clipError { Text(clipError).font(.system(size: 11)).foregroundColor(Theme.danger).fixedSize(horizontal: false, vertical: true) }
+            }
+        }
+    }
+
+    private func clipMoments(_ r: WorshipReport, _ s: WorshipStats) -> [WorshipClips.Moment] {
+        var out = r.notes.map { n in
+            WorshipClips.Moment(time: n.time, label: "\(assessTime(n.time)) \(n.category) - \(n.text)", caption: "\(n.category): \(n.text)")
+        }
+        if includeFlagged {
+            out += s.feedback.map { .init(time: $0, label: "\(assessTime($0)) Possible feedback", caption: "Possible feedback. Listen here.") }
+            out += s.jumps.map { .init(time: $0, label: "\(assessTime($0)) Volume jump", caption: "Sudden volume change. Was it planned?") }
+        }
+        return out
+    }
+
+    private func makeClips(_ r: WorshipReport, _ s: WorshipStats) {
+        let panel = NSOpenPanel()
+        panel.title = "Where should the clips go?"
+        panel.canChooseFiles = false; panel.canChooseDirectories = true; panel.canCreateDirectories = true
+        panel.prompt = "Choose"
+        guard panel.runModal() == .OK, let parent = panel.url else { return }
+        let moments = clipMoments(r, s)
+        clipError = nil; clipFolder = nil; clipStatus = 0
+        clipTask = Task {
+            do {
+                clipFolder = try await WorshipClips.export(path: r.videoPath, title: r.title, moments: moments, into: parent) { p in
+                    Task { @MainActor in if clipStatus != nil { clipStatus = p } }
+                }
+            } catch {
+                if !Task.isCancelled && !(error is CancellationError) { clipError = error.localizedDescription }
+            }
+            clipStatus = nil
         }
     }
 
@@ -419,7 +618,7 @@ struct WorshipTab: View {
                 HStack(spacing: 12) {
                     metric(s.smilePercent.map { String(format: "%.0f%%", $0) } ?? "–", "smiling, in \(s.smileReadable) close shots")
                     metric(s.facingPercent.map { String(format: "%.0f%%", $0) } ?? "–", "of faces toward the camera")
-                    metric(s.handsPercent.map { String(format: "%.0f%%", $0) } ?? "–", "of shots with hands raised")
+                    metric(s.handsPercent.map { String(format: "%.0f%%", $0) } ?? "–", "of shots with team hands raised")
                     metric(s.averagePeople.map { String(format: "%.1f", $0) } ?? "–", "people in shot on average")
                 }
                 Text("Camera choices shape these numbers. A wide shot can't show smiles, and someone singing toward a screen reads as facing away.")
@@ -445,6 +644,7 @@ struct WorshipTab: View {
                 ForEach(s.talks) { t in
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
                         TimeLink(time: t.start, play: play)
+                        Text(t.overMusic == true ? "Exhortation" : "Talking").font(.system(size: 10, weight: .semibold)).foregroundColor(gold).frame(width: 70, alignment: .leading)
                         Text(t.text).font(.system(size: 12)).foregroundColor(Theme.text).fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -452,7 +652,7 @@ struct WorshipTab: View {
         }
     }
 
-    private func team(_ r: WorshipReport) -> some View {
+    private func team(_ r: WorshipReport, _ s: WorshipStats) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             AssessCard(title: "Add a note", subtitle: "Pause the video where you want the note. It's saved at that moment.") {
                 HStack(spacing: 8) {
@@ -474,6 +674,8 @@ struct WorshipTab: View {
                     }
                 }
             }
+            clipsCard(r, s)
+            goalsCard(current: r)
             AssessCard(title: "How did it feel?", subtitle: "Your team's own rating, which the numbers can't give you.") {
                 ForEach(Self.categories, id: \.self) { c in
                     HStack(spacing: 10) {

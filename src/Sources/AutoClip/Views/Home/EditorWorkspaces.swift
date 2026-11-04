@@ -14,6 +14,9 @@ struct ReframeWorkspace<Advanced: View>: View {
     @State private var found: [UUID: [ReframePerson]] = [:]
     @State private var frame: CGImage?
     @State private var everyClip = true
+    /// The moment shown (source seconds) and who's in it
+    @State private var moment: Double = 0
+    @State private var targets: [CGRect] = []
 
     private var index: Int { min(pieceIndex, max(0, draft.pieces.count - 1)) }
     private var piece: ReelDraft.Piece? { draft.pieces.indices.contains(index) ? draft.pieces[index] : nil }
@@ -29,10 +32,16 @@ struct ReframeWorkspace<Advanced: View>: View {
         }
     }
 
-    /// Where the crop sits: the chosen person, or the first face for "whoever's talking"
+    /// Where the crop sits in the frame on show: the chosen person, or the main person for "whoever's talking"
     private var centre: Double {
-        if let f = framing, f.mode == "person" || f.mode == "fixed" || f.mode == "split" { return f.x }
-        return crew?.min { abs($0.x - 0.5) < abs($1.x - 0.5) }?.x ?? 0.5
+        let xs = targets.map { Double($0.midX) }
+        if let f = framing, f.mode == "fixed" || f.mode == "split" { return f.x }
+        if let f = framing, f.mode == "person" {
+            if abs((f.t ?? moment) - moment) < 0.5 { return f.x }
+            return xs.min { abs($0 - f.x) < abs($1 - f.x) } ?? f.x
+        }
+        if let main = targets.max(by: { $0.height < $1.height }) { return Double(main.midX) }
+        return crew?.first?.x ?? 0.5
     }
 
     private var canReframe: Bool {
@@ -61,11 +70,27 @@ struct ReframeWorkspace<Advanced: View>: View {
 
     private func load() async {
         guard let p = piece, let first = p.sentences.first, let last = p.sentences.last else { return }
-        frame = await Reframe.frame(path: p.sourceVideoPath, at: (first.start + last.end) / 2)
+        let start = p.framing?.t ?? (first.start + last.end) / 2
+        moment = min(max(start, first.start), last.end)
+        await show(moment)
         if found[p.id] == nil {
             let list = await people(p)
             found[p.id] = list
         }
+    }
+
+    private func show(_ t: Double) async {
+        guard let p = piece, let image = await Reframe.frame(path: p.sourceVideoPath, at: t, maxWidth: 1920) else { return }
+        frame = image
+        targets = await Reframe.targets(in: image)
+    }
+
+    /// Clicking someone follows them. Near a detected person it snaps to them; anywhere else it
+    /// still works, for when detection missed them.
+    private func choose(atX x: Double) {
+        let near = targets.map { Double($0.midX) }.min { abs($0 - x) < abs($1 - x) }
+        let picked = near.flatMap { abs($0 - x) < 0.08 ? $0 : nil } ?? x
+        apply(ReelDraft.Framing(mode: "person", x: (picked * 1000).rounded() / 1000, t: moment))
     }
 
     // MARK: Before and after
@@ -74,6 +99,17 @@ struct ReframeWorkspace<Advanced: View>: View {
         HStack(alignment: .center, spacing: 22) {
             VStack(spacing: 10) {
                 beforeImage.frame(maxWidth: 460)
+                if let p = piece, let first = p.sentences.first, let last = p.sentences.last, last.end - first.start > 1 {
+                    HStack(spacing: 8) {
+                        Image(systemName: "clock").font(.system(size: 10)).foregroundColor(Theme.muted)
+                        Slider(value: $moment, in: first.start...last.end) { editing in
+                            if !editing { Task { await show(moment) } }
+                        }
+                        .controlSize(.mini)
+                        .help("Pick the moment to look at, then click the person to follow")
+                    }
+                    .frame(maxWidth: 460)
+                }
                 label("Before")
             }
             Image(systemName: "arrow.right").font(.system(size: 14, weight: .medium)).foregroundColor(Theme.muted)
@@ -96,6 +132,21 @@ struct ReframeWorkspace<Advanced: View>: View {
             let aspect = CGFloat(frame.width) / CGFloat(frame.height)
             Image(decorative: frame, scale: 1).resizable().aspectRatio(aspect, contentMode: .fit)
                 .overlay {
+                    if canReframe {
+                        GeometryReader { geo in
+                            ForEach(Array(targets.enumerated()), id: \.offset) { _, box in
+                                RoundedRectangle(cornerRadius: 4).stroke(Color.white.opacity(0.55), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                                    .frame(width: box.width * geo.size.width, height: box.height * geo.size.height)
+                                    .position(x: box.midX * geo.size.width, y: (1 - box.midY) * geo.size.height)
+                                    .allowsHitTesting(false)
+                            }
+                            Color.clear.contentShape(Rectangle())
+                                .onTapGesture(coordinateSpace: .local) { p in choose(atX: Double(p.x / geo.size.width)) }
+                                .help("Click a person to follow them")
+                        }
+                    }
+                }
+                .overlay {
                     if canReframe, let out = outputAspect {
                         GeometryReader { geo in
                             ForEach(cropBoxes(aspect: aspect, output: out), id: \.self) { x in
@@ -105,10 +156,12 @@ struct ReframeWorkspace<Advanced: View>: View {
                                     .overlay(Rectangle().stroke(Theme.sand, lineWidth: 1.5))
                                     .frame(width: w, height: geo.size.height)
                                     .position(x: cx, y: geo.size.height / 2)
+                                    .allowsHitTesting(false)
                                 Label("AI", systemImage: "sparkles").font(.system(size: 9, weight: .bold)).foregroundColor(Theme.bg)
                                     .padding(.horizontal, 7).padding(.vertical, 3)
                                     .background(Capsule().fill(Theme.sand))
                                     .position(x: cx, y: geo.size.height - 16)
+                                    .allowsHitTesting(false)
                             }
                         }
                     }
@@ -165,14 +218,19 @@ struct ReframeWorkspace<Advanced: View>: View {
                 .font(.system(size: 12)).foregroundColor(Theme.muted).multilineTextAlignment(.center)
         } else if let crew {
             VStack(spacing: 12) {
-                Text(crew.count >= 2 ? "\(crew.count) people found. Who should this follow?" : crew.count == 1 ? "One person found. The frame stays on them." : "No faces found. The frame stays in the middle.")
+                Text(crew.count >= 2 ? "\(crew.count) people found. Who should this follow?" : framing?.mode == "person" ? "Following who you picked." : crew.count == 1 ? "One person found. The frame follows them." : "No one found clearly.")
                     .font(Theme.display(17)).foregroundColor(Theme.cream)
+                Text("Wrong person or missed someone? Click them in the picture. Use the slider to find a clearer moment.")
+                    .font(.system(size: 11)).foregroundColor(Theme.muted)
+                if crew.count < 2, framing != nil {
+                    Button("Back to whoever's talking") { apply(nil) }.controlSize(.small)
+                }
                 if crew.count >= 2 {
                     HStack(spacing: 12) {
                         ForEach(Array(crew.enumerated()), id: \.element.id) { i, person in
                             ReframeTile(title: "Person \(i + 1)", selected: isFollowing(person)) {
                                 Image(nsImage: person.face).resizable().scaledToFill()
-                            } action: { apply(ReelDraft.Framing(mode: "person", x: person.x)) }
+                            } action: { moment = person.time; apply(ReelDraft.Framing(mode: "person", x: person.x, t: person.time)); Task { await show(person.time) } }
                         }
                         ReframeTile(title: "Whoever's talking", selected: framing == nil) {
                             Image(systemName: "waveform").font(.system(size: 20)).foregroundColor(Theme.sand)

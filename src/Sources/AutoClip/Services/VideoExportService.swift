@@ -379,11 +379,11 @@ class VideoExportService {
     /// `careful` looks twice as often (6 frames a second) and counts smaller faces, for moments
     /// where the normal pass lost the person.
     func detectFaces(in asset: AVAsset, clipRange: CMTimeRange, videoSize: CGSize,
-                     cropFraction: Double = 0.32, careful: Bool = false, followX: Double? = nil) async -> [FaceSample] {
+                     cropFraction: Double = 0.32, careful: Bool = false, followX: Double? = nil, followT: Double? = nil) async -> [FaceSample] {
         let startSec = CMTimeGetSeconds(clipRange.start)
         let endSec = startSec + CMTimeGetSeconds(clipRange.duration)
         let path = (asset as? AVURLAsset)?.url.path ?? "\(ObjectIdentifier(asset))"
-        let key = String(format: "%@|%.2f|%.2f|%.3f|%d|%.3f", path, startSec, endSec, cropFraction, careful ? 1 : 0, followX ?? -1)
+        let key = String(format: "%@|%.2f|%.2f|%.3f|%d|%.3f|%.2f", path, startSec, endSec, cropFraction, careful ? 1 : 0, followX ?? -1, followT ?? -1)
         if let cached = Self.cachedFaces(key) { return cached }
 
         let generator = AVAssetImageGenerator(asset: asset)
@@ -400,12 +400,21 @@ class VideoExportService {
             var faces: [DetectedFace] = []
             if let img = try? generator.copyCGImage(at: CMTime(seconds: t, preferredTimescale: 600), actualTime: nil) {
                 faces = detectFacesWithMouths(in: img, minHeight: careful ? 0.06 : 0.07)
+                // Following one person: bodies count too, for when they turn away
+                if followX != nil {
+                    let humans = VNDetectHumanRectanglesRequest()
+                    humans.upperBodyOnly = false
+                    try? VNImageRequestHandler(cgImage: img, options: [:]).perform([humans])
+                    for h in humans.results ?? [] where h.boundingBox.height > 0.25 && !faces.contains(where: { abs($0.x - h.boundingBox.midX) < 0.08 }) {
+                        faces.append(DetectedFace(x: h.boundingBox.midX, height: h.boundingBox.height, mouth: nil))
+                    }
+                }
             }
             frames.append((t - startSec, faces))
             t += interval
         }
 
-        let result = followX.map { Self.planFollowing(frames, from: $0, frameWidth: Double(videoSize.width), perSecond: careful ? 6 : 3) }
+        let result = followX.map { Self.planFollowing(frames, from: $0, at: followT.map { $0 - startSec }, frameWidth: Double(videoSize.width), perSecond: careful ? 6 : 3) }
             ?? Self.planFraming(frames, frameWidth: Double(videoSize.width), cropFraction: cropFraction,
                                 perSecond: careful ? 6 : 3)
         Self.cacheFaces(result, key)
@@ -562,15 +571,22 @@ class VideoExportService {
         return smoothed
     }
 
-    /// Stays on one chosen person: each frame takes the face nearest to where they just were,
-    /// and holds still while they can't be seen.
-    private static func planFollowing(_ frames: [(time: Double, faces: [DetectedFace])], from startX: Double,
+    /// Stays on one chosen person. Starting from where they were chosen, each frame takes the
+    /// face or body nearest to where they just were, working forward and back from there.
+    /// It holds still while they can't be seen.
+    private static func planFollowing(_ frames: [(time: Double, faces: [DetectedFace])], from startX: Double, at anchor: Double?,
                                       frameWidth: Double, perSecond: Int) -> [FaceSample] {
-        var last = startX
-        let samples = frames.map { frame -> FaceSample in
-            if let near = frame.faces.min(by: { abs($0.x - last) < abs($1.x - last) }), abs(near.x - last) < 0.3 { last = near.x }
-            return FaceSample(time: frame.time, centerX: last * frameWidth)
+        guard !frames.isEmpty else { return [] }
+        let first = frames.indices.min { abs(frames[$0].time - (anchor ?? 0)) < abs(frames[$1].time - (anchor ?? 0)) } ?? 0
+        var xs = Array(repeating: startX, count: frames.count)
+        func nearest(_ i: Int, to last: Double, limit: Double) -> Double {
+            guard let near = frames[i].faces.min(by: { abs($0.x - last) < abs($1.x - last) }), abs(near.x - last) < limit else { return last }
+            return near.x
         }
+        xs[first] = nearest(first, to: startX, limit: 1)
+        if first + 1 < frames.count { for i in (first + 1)..<frames.count { xs[i] = nearest(i, to: xs[i - 1], limit: 0.3) } }
+        if first > 0 { for i in stride(from: first - 1, through: 0, by: -1) { xs[i] = nearest(i, to: xs[i + 1], limit: 0.3) } }
+        let samples = frames.indices.map { FaceSample(time: frames[$0].time, centerX: xs[$0] * frameWidth) }
         return smoothSamples(samples, frameWidth: frameWidth, perSecond: perSecond)
     }
 
@@ -655,7 +671,7 @@ class VideoExportService {
             } else if vs.width > vs.height {
                 let faces = await detectFaces(in: a, clipRange: range, videoSize: vs,
                                               cropFraction: cropFraction(videoSize: vs, renderSize: renderSize),
-                                              careful: clip.carefulFraming ?? false, followX: clip.trackX)
+                                              careful: clip.carefulFraming ?? false, followX: clip.trackX, followT: clip.trackT)
                 if faces.isEmpty {
                     li.setTransform(cropTransform(centerX: vs.width / 2, videoSize: vs, renderSize: renderSize, preferredTransform: pt), at: seg.start)
                 } else {
@@ -1654,7 +1670,7 @@ class VideoExportService {
                     let srcRange = CMTimeRange(start: CMTime(seconds: clip.startTime, preferredTimescale: 600), duration: segDur)
                     let faces    = await detectFaces(in: clipAsset, clipRange: srcRange, videoSize: clipVideoSize,
                                                      cropFraction: cropFraction(videoSize: clipVideoSize, renderSize: renderSize),
-                                                     careful: clip.carefulFraming ?? false, followX: clip.trackX)
+                                                     careful: clip.carefulFraming ?? false, followX: clip.trackX, followT: clip.trackT)
 
                     if faces.isEmpty {
                         let t = cropTransform(centerX: clipVideoSize.width / 2, videoSize: clipVideoSize, renderSize: renderSize, preferredTransform: clipTransform)

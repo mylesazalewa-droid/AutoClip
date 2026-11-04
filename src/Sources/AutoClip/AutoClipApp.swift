@@ -25,6 +25,19 @@ struct AutoClipApp: App {
 }
 
 struct MainWindow: View {
+    private static var openedFullScreen = false
+
+    /// The app opens full screen, once per launch. Leaving it with the green button stays left.
+    private static func openFullScreen() {
+        guard !openedFullScreen else { return }
+        openedFullScreen = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            guard let window = NSApp.windows.first(where: { $0.canBecomeMain && $0.isVisible }), !window.styleMask.contains(.fullScreen) else { return }
+            window.collectionBehavior.insert(.fullScreenPrimary)
+            window.toggleFullScreen(nil)
+        }
+    }
+
     @ObservedObject private var appState = AppState.shared
 
     var body: some View {
@@ -41,6 +54,7 @@ struct MainWindow: View {
             .tint(Theme.action)
             .preferredColorScheme(.dark)
             .task { AutoImport.shared.start() }
+            .onAppear { Self.openFullScreen() }
     }
 }
 

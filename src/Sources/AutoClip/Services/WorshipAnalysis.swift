@@ -39,6 +39,48 @@ struct WorshipReport: Codable, Equatable {
     var ratings: [String: Int] = [:]
     var focus = ""
     var coach: WorshipCoach?
+    var setlist: [SetSong] = []
+
+    private enum CodingKeys: String, CodingKey {
+        case videoPath, title, date, analyzedAt, duration, rangeStart, rangeEnd, bin, music, singing, speech, clapping, applause
+        case loudness, lows, mids, highs, clippedPercent, feedback, visual, talks, notes, ratings, focus, coach, setlist
+    }
+
+    init(videoPath: String, title: String, duration: Double, rangeStart: Double, rangeEnd: Double) {
+        self.videoPath = videoPath; self.title = title; self.duration = duration
+        self.rangeStart = rangeStart; self.rangeEnd = rangeEnd
+    }
+
+    /// Reports saved before setlists existed still open.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        videoPath = try c.decode(String.self, forKey: .videoPath)
+        title = try c.decode(String.self, forKey: .title)
+        date = try c.decode(Date.self, forKey: .date)
+        analyzedAt = try c.decode(Date.self, forKey: .analyzedAt)
+        duration = try c.decode(Double.self, forKey: .duration)
+        rangeStart = try c.decode(Double.self, forKey: .rangeStart)
+        rangeEnd = try c.decode(Double.self, forKey: .rangeEnd)
+        bin = try c.decode(Double.self, forKey: .bin)
+        music = try c.decode([Float].self, forKey: .music)
+        singing = try c.decode([Float].self, forKey: .singing)
+        speech = try c.decode([Float].self, forKey: .speech)
+        clapping = try c.decode([Float].self, forKey: .clapping)
+        applause = try c.decode([Float].self, forKey: .applause)
+        loudness = try c.decode([Float].self, forKey: .loudness)
+        lows = try c.decode([Float].self, forKey: .lows)
+        mids = try c.decode([Float].self, forKey: .mids)
+        highs = try c.decode([Float].self, forKey: .highs)
+        clippedPercent = try c.decode(Double.self, forKey: .clippedPercent)
+        feedback = try c.decode([Double].self, forKey: .feedback)
+        visual = try c.decodeIfPresent(Visual.self, forKey: .visual)
+        talks = try c.decode([Talk].self, forKey: .talks)
+        notes = try c.decode([TeamNote].self, forKey: .notes)
+        ratings = try c.decode([String: Int].self, forKey: .ratings)
+        focus = try c.decode(String.self, forKey: .focus)
+        coach = try c.decodeIfPresent(WorshipCoach.self, forKey: .coach)
+        setlist = try c.decodeIfPresent([SetSong].self, forKey: .setlist) ?? []
+    }
 
     /// Sampled video frames across the worship part.
     struct Visual: Codable, Equatable {
@@ -51,8 +93,13 @@ struct WorshipReport: Codable, Equatable {
             var faces: Int
             var facing: Int
             var smile: Bool?       // nil = no face close enough to read
-            var handsUp: Int
-            var energy: Double?    // body movement over a third of a second
+            var handsUp: Int       // team: facing the camera
+            var energy: Double?    // body movement over a moment
+            // Added later, so older reports don't have them
+            var clapping: Int?     // team members clapping
+            var roomPeople: Int?   // backs to the camera: the congregation
+            var roomHands: Int?
+            var roomClapping: Int?
         }
     }
 
@@ -63,6 +110,8 @@ struct WorshipReport: Codable, Equatable {
         var text: String
         var wordCount: Int
         var fillers: Int
+        /// Spoken over the music rather than in a break
+        var overMusic: Bool?
     }
 
     struct TeamNote: Codable, Equatable, Identifiable {
@@ -196,7 +245,11 @@ struct WorshipStats {
     func loudness(of part: Part) -> Double { Double(average(values(report.loudness, in: part))) }
     func singingShare(of part: Part) -> Double { Double(average(values(report.singing, in: part))) }
     /// Seconds of clapping in this part
-    func clapSeconds(in part: Part) -> Double { Double(values(report.clapping, in: part).reduce(0, +)) * report.bin }
+    func clapSeconds(in part: Part) -> Double {
+        let heard = Double(values(report.clapping, in: part).reduce(0, +)) * report.bin
+        let seen = (report.visual?.samples ?? []).filter { $0.t >= part.start && $0.t < part.end && (($0.roomClapping ?? 0) + ($0.clapping ?? 0)) > 0 }
+        return max(heard, Double(seen.count) * 4)
+    }
 
     /// Times with audible clapping, or applause and cheering.
     private func marks(_ a: [Float], over threshold: Float) -> [Double] {
@@ -205,7 +258,23 @@ struct WorshipStats {
             return v > threshold && t >= report.rangeStart && t < report.rangeEnd ? t : nil
         }
     }
-    var clapMarks: [Double] { marks(report.clapping, over: 0.15) }
+    var heardClaps: [Double] { marks(report.clapping, over: 0.15) }
+    /// Clapping heard or seen, room or team
+    var clapMarks: [Double] { thin((heardClaps + teamClapMarks).sorted(), by: 5) }
+    var roomClapMarks: [Double] { samples.filter { ($0.roomClapping ?? 0) > 0 }.map(\.t) }
+    var teamClapMarks: [Double] { samples.filter { ($0.clapping ?? 0) > 0 }.map(\.t) }
+    var roomHandsMarks: [Double] { thin(samples.filter { ($0.roomHands ?? 0) + ($0.roomClapping ?? 0) > 0 }.map(\.t)) }
+    /// Saved before clapping and raised hands were told apart
+    var needsRewatch: Bool { report.visual != nil && report.visual?.samples.contains { $0.roomPeople != nil } != true }
+    private var roomShots: [WorshipReport.Visual.Sample] { samples.filter { ($0.roomPeople ?? 0) > 0 } }
+    var roomVisible: Bool { roomShots.count >= 10 }
+    /// From behind, wrists are often hidden, so clapping and raised hands are counted together.
+    var roomHandsPercent: Double? {
+        roomVisible ? Double(roomShots.filter { ($0.roomHands ?? 0) + ($0.roomClapping ?? 0) > 0 }.count) / Double(roomShots.count) * 100 : nil
+    }
+    var roomClapPercent: Double? {
+        roomVisible ? Double(roomShots.filter { ($0.roomClapping ?? 0) > 0 }.count) / Double(roomShots.count) * 100 : nil
+    }
     var applauseMarks: [Double] { marks(report.applause, over: 0.15) }
     var feedback: [Double] { report.feedback.filter { $0 >= report.rangeStart && $0 < report.rangeEnd } }
 
@@ -266,9 +335,9 @@ struct WorshipStats {
         let e = samples.compactMap(\.energy)
         return e.count >= 10 ? e.reduce(0, +) / Double(e.count) : nil
     }
-    private func thin(_ times: [Double]) -> [Double] {
+    private func thin(_ times: [Double], by gap: Double = 15) -> [Double] {
         var out: [Double] = []
-        for t in times where t - (out.last ?? -100) >= 15 { out.append(t) }
+        for t in times where t - (out.last ?? -100) >= gap { out.append(t) }
         return out
     }
 
@@ -285,7 +354,7 @@ struct WorshipStats {
     }
     /// Talks asking the room to join in
     var invitations: Int {
-        let phrases = ["sing", "lift", "raise", "clap", "stand", "let's", "lets", "join", "with us", "together", "come on", "declare", "shout"]
+        let phrases = ["sing", "lift", "raise", "clap", "stand", "let's", "lets", "join", "with us", "together", "come on", "declare", "shout", "can we", "thank"]
         return talks.filter { t in let l = t.text.lowercased(); return phrases.contains { l.contains($0) } }.count
     }
 
@@ -305,15 +374,20 @@ struct WorshipStats {
     }
     var engagementScore: Int? {
         guard !songs.isEmpty else { return nil }
+        let songTime = max(1, songs.reduce(0) { $0 + $1.length })
+        let heard = songs.reduce(0) { $0 + Double(values(report.clapping, in: $1).reduce(0, +)) * report.bin } / songTime
+        let sound = min(1, (heard + Double(applauseMarks.count) * report.bin / songTime) / 0.15)
+        if let clap = roomClapPercent, let hands = roomHandsPercent {
+            // The room is in shot: what it's doing counts most
+            _ = clap
+            return Self.clamp((sound * 0.3 + min(1, hands / 50) * 0.7) * 100)
+        }
         // Nothing heard or seen may only mean the recording can't show the room
         if clapMarks.isEmpty && applauseMarks.isEmpty && (handsPercent ?? 0) == 0 { return nil }
-        let songTime = songs.reduce(0) { $0 + $1.length }
-        let clap = songs.reduce(0) { $0 + clapSeconds(in: $1) } / max(1, songTime)
-        let sound = min(1, (clap + Double(applauseMarks.count) * report.bin / max(1, songTime)) / 0.15)
         guard let hands = handsPercent else { return Self.clamp(sound * 100) }
         return Self.clamp((sound * 0.6 + min(1, hands / 40) * 0.4) * 100)
     }
-    var smilesScore: Int? { smilePercent.map { Self.clamp($0 / 50 * 100) } }
+    var smilesScore: Int? { smilePercent.map { Self.clamp($0 / 70 * 100) } }
     var stageScore: Int? {
         guard let f = facingPercent else { return nil }
         let facing = min(1, max(0, (f - 30) / 55))
@@ -336,12 +410,18 @@ struct WorshipStats {
 
     var engagementPointers: [Pointer] {
         var p: [Pointer] = []
-        if clapMarks.isEmpty && applauseMarks.isEmpty {
-            p.append(.init(icon: "hands.clap", text: "No clapping or cheering heard. That may be the recording: a board feed or a loud band can hide the room. A microphone facing the room would show it.", good: false))
-        } else {
-            p.append(.init(icon: "hands.clap", text: "Clapping or cheering heard at \(clapMarks.count + applauseMarks.count) moments. Clapping under a loud band can be missed, so treat this as the least it could be.", good: true))
+        if let c = roomClapPercent, let h = roomHandsPercent {
+            p.append(.init(icon: "hands.clap", text: String(format: "The congregation is in shot, with hands up or clapping in %.0f%% of shots. From behind it can't always tell the two apart, so they're counted together. Clearly clapping: %.0f%%.", h, c), good: h > 15))
         }
-        if let h = handsPercent { p.append(.init(icon: "hand.raised", text: String(format: "Hands raised on stage in %.0f%% of shots.", h), good: h > 0)) }
+        if clapMarks.isEmpty && applauseMarks.isEmpty && roomClapMarks.isEmpty {
+            p.append(.init(icon: "hands.clap", text: "No clapping or cheering found. That may be the recording: a board feed or a loud band can hide the room. A microphone facing the room would show it.", good: false))
+        } else if !heardClaps.isEmpty {
+            p.append(.init(icon: "ear", text: "Clapping heard at \(heardClaps.count) moments. Clapping under a loud band can be missed, so treat this as the least it could be.", good: true))
+        }
+        if !teamClapMarks.isEmpty {
+            p.append(.init(icon: "hands.clap", text: "The team is clapping in \(teamClapMarks.count) shots.", good: true))
+        }
+        if let h = handsPercent { p.append(.init(icon: "hand.raised", text: String(format: "Hands raised on the team in %.0f%% of shots.", h), good: h > 0)) }
         return p
     }
 
@@ -387,6 +467,8 @@ struct WorshipStats {
 
     var communicationPointers: [Pointer] {
         var p: [Pointer] = []
+        let exhortations = talks.filter { $0.overMusic == true }.count
+        if exhortations > 0 { p.append(.init(icon: "text.bubble", text: "\(exhortations) exhortation\(exhortations == 1 ? "" : "s") spoken over the music.", good: true)) }
         if talks.isEmpty { p.append(.init(icon: "text.bubble", text: "No talking found between songs. A short welcome or invitation helps people join in.", good: false)) }
         if !talks.isEmpty && invitations == 0 {
             p.append(.init(icon: "person.2", text: "Nothing invited the room to join in. Try one clear line, such as \"Sing this with us.\"", good: false))
@@ -412,7 +494,7 @@ struct WorshipStats {
         t += line("Sound", soundScore) + line("Engagement", engagementScore) + line("Smiles", smilesScore)
         t += line("Stage presence", stageScore) + line("Communication", communicationScore)
         t += "\nSONGS\n"
-        for (i, s) in songs.enumerated() { t += "\(i + 1). \(assessTime(s.start)), \(assessTime(s.length)) long\n" }
+        for (i, s) in namedSongs.enumerated() { t += "\(i + 1). \(s.name): \(assessTime(s.part.start)), \(assessTime(s.part.length)) long\n" }
         let pointers = soundPointers + engagementPointers + stagePointers + communicationPointers
         t += "\nPOINTERS\n" + pointers.map { "• \($0.text)" }.joined(separator: "\n") + "\n"
         if !report.notes.isEmpty {
@@ -424,7 +506,7 @@ struct WorshipStats {
 
     /// The measurements, for the AI coach.
     var coachFacts: String {
-        var t = "Worship part: \(assessTime(report.rangeEnd - report.rangeStart)) long, \(songs.count) songs.\n"
+        var t = "Worship part: \(assessTime(report.rangeEnd - report.rangeStart)) long, \(namedSongs.count) songs: \(namedSongs.map(\.name).joined(separator: ", ")).\n"
         t += "Scores out of 100 (nil = couldn't be read): sound \(soundScore.map(String.init) ?? "nil"), engagement \(engagementScore.map(String.init) ?? "nil"), smiles \(smilesScore.map(String.init) ?? "nil"), stage \(stageScore.map(String.init) ?? "nil"), communication \(communicationScore.map(String.init) ?? "nil").\n"
         t += (soundPointers + engagementPointers + stagePointers + communicationPointers).map { "- \($0.text)" }.joined(separator: "\n") + "\n"
         if !report.notes.isEmpty { t += "Team notes:\n" + report.notes.map { "- \($0.category): \($0.text)" }.joined(separator: "\n") + "\n" }
@@ -666,14 +748,83 @@ enum WorshipAnalysis {
 
     static func talks(in r: WorshipReport, words: [Word]) -> [WorshipReport.Talk] {
         let message = WorshipStats.message(r)
-        return WorshipStats.sections(r).filter { part in
+        let breaks: [WorshipReport.Talk] = WorshipStats.sections(r).filter { part in
             part.kind == .talk && part.length >= 5 && !(message.map { part.start >= $0.start && part.end <= $0.end } ?? false)
         }.compactMap { part in
             let w = words.filter { $0.startTime >= part.start && $0.startTime < part.end }
             guard w.count >= 4 else { return nil }
-            return .init(start: part.start, end: part.end, text: w.map(\.word).joined(separator: " "), wordCount: w.count,
-                         fillers: FillerReport.find(in: w).count)
+            return .init(start: part.start, end: part.end, text: spokenText(w), wordCount: w.count, fillers: FillerReport.find(in: w).count)
         }
+        let over = exhortations(in: r, words: words).filter { e in
+            !breaks.contains { e.start < $0.end && e.end > $0.start } && !(message.map { e.start >= $0.start && e.end <= $0.end } ?? false)
+        }
+        return (breaks + over).sorted { $0.start < $1.start }
+    }
+
+    private static func spokenText(_ w: [Word]) -> String {
+        w.map(\.word).joined(separator: " ")
+            .replacingOccurrences(of: #"[♪♫♩♬]+|>>|\([^)]*\)"#, with: " ", options: .regularExpression)
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: " -"))
+    }
+
+    /// Words the leader says over the music ("Come on, can we thank Him, church?"). The speech
+    /// model marks sung lines with ♪, so lines without it are candidates. Lyrics it failed to mark
+    /// repeat, and real exhortations don't, or they carry a cue or sound like speech.
+    static func exhortations(in r: WorshipReport, words: [Word]) -> [WorshipReport.Talk] {
+        let cues = ["come on", "let's", "lets", "can we", "church", "everybody", "sing that", "sing this", "we say", "say it", "one more time",
+                    "lift your", "lift up", "clap", "good morning", "you guys", "this morning", "together", "repeat"]
+        func clean(_ w: String) -> String { w.lowercased().components(separatedBy: CharacterSet.alphanumerics.inverted).joined() }
+        let plain = words.map { clean($0.word) }
+        var trigrams: [String: Int] = [:]
+        if plain.count > 2 { for i in 0..<(plain.count - 2) { trigrams["\(plain[i]) \(plain[i + 1]) \(plain[i + 2])", default: 0] += 1 } }
+
+        struct Line { var from: Int; var to: Int; var sung: Bool }
+        var lines: [Line] = []
+        var inside = false
+        var from: Int?
+        func close(_ i: Int, sung: Bool) { if let f = from, i > f { lines.append(Line(from: f, to: i - 1, sung: sung)) }; from = nil }
+        for (i, w) in words.enumerated() {
+            let notes = w.word.filter { "♪♫♩♬".contains($0) }.count
+            let gap = i > 0 ? w.startTime - words[i - 1].endTime : 0
+            if from != nil, gap > 1.5 || notes > 0 || w.word.hasPrefix(">>") { close(i, sung: inside) }
+            if notes >= 2 { inside = false } else if notes == 1 { inside.toggle() }
+            // A note on the last word of a line belongs to the line just closed
+            let bare = clean(w.word)
+            if !bare.isEmpty, from == nil { from = i }
+        }
+        close(words.count, sung: inside)
+
+        var out: [WorshipReport.Talk] = []
+        for l in lines {
+            let slice = Array(words[l.from...l.to])
+            let spoken = slice.filter { !clean($0.word).isEmpty }
+            guard spoken.count >= 3 else { continue }
+            let start = slice[0].startTime, end = slice[slice.count - 1].endTime
+            guard start >= r.rangeStart - 5, end <= r.rangeEnd + 5 else { continue }
+            let text = spokenText(slice)
+            let low = " \(text.lowercased()) "
+            let hasCue = cues.contains { low.contains($0) }
+            if l.sung && !hasCue { continue }
+            // Mostly phrases heard over and over: lyrics
+            var repeated = 0
+            let keys = slice.map { clean($0.word) }
+            if keys.count > 2 { for i in 0..<(keys.count - 2) where (trigrams["\(keys[i]) \(keys[i + 1]) \(keys[i + 2])"] ?? 0) >= 3 { repeated += 1 } }
+            if keys.count > 2, Double(repeated) / Double(keys.count - 2) > 0.4, !hasCue { continue }
+            let i = Int(start / r.bin)
+            let sounds = r.speech.indices.contains(i) && r.speech[i] >= 0.4
+            guard hasCue || sounds else { continue }
+            let talk = WorshipReport.Talk(start: start, end: max(end, start + 1), text: text, wordCount: spoken.count,
+                                          fillers: FillerReport.find(in: spoken).count, overMusic: true)
+            // Lines straight after each other are one thought
+            if let last = out.last, start - last.end < 3 {
+                out[out.count - 1].end = talk.end
+                out[out.count - 1].text += " " + talk.text
+                out[out.count - 1].wordCount += talk.wordCount
+                out[out.count - 1].fillers += talk.fillers
+            } else { out.append(talk) }
+        }
+        return out
     }
 
     /// Looks at the stage every few seconds: faces, smiles, raised hands and how bodies are moving.
@@ -681,9 +832,9 @@ enum WorshipAnalysis {
         guard (try? await asset.loadTracks(withMediaType: .video).first) != nil else { return nil }
         let gen = AVAssetImageGenerator(asset: asset)
         gen.appliesPreferredTrackTransform = true
-        gen.maximumSize = CGSize(width: 1280, height: 1280)
-        gen.requestedTimeToleranceBefore = CMTime(seconds: 0.05, preferredTimescale: 600)
-        gen.requestedTimeToleranceAfter = CMTime(seconds: 0.05, preferredTimescale: 600)
+        gen.maximumSize = CGSize(width: 1920, height: 1920)
+        gen.requestedTimeToleranceBefore = .zero
+        gen.requestedTimeToleranceAfter = .zero
         let smiles = CIDetector(ofType: CIDetectorTypeFace, context: nil, options: [CIDetectorAccuracy: CIDetectorAccuracyHigh])
         let step = 4.0
         let total = Int((end - start) / step)
@@ -692,15 +843,20 @@ enum WorshipAnalysis {
             try Task.checkCancellation()
             let t = start + Double(i) * step
             guard let a = try? await gen.image(at: CMTime(seconds: t, preferredTimescale: 600)).image else { continue }
-            let b = try? await gen.image(at: CMTime(seconds: t + 0.33, preferredTimescale: 600)).image
-            let sample = try await offThread { look(at: a, next: b, time: t, smiles: smiles) }
+            // A burst of frames: a clap shows as wrists meeting and parting
+            var burst: [CGImage] = []
+            for k in 1...4 {
+                if let b = try? await gen.image(at: CMTime(seconds: t + Double(k) * 0.12, preferredTimescale: 600)).image { burst.append(b) }
+            }
+            let frames = burst
+            let sample = try await offThread { look(at: a, next: frames, time: t, smiles: smiles) }
             samples.append(sample)
             if i % 5 == 0 { progress(Double(i) / Double(max(total, 1))) }
         }
         return .init(start: start, end: end, samples: samples)
     }
 
-    private static func look(at image: CGImage, next: CGImage?, time: Double, smiles: CIDetector?) -> WorshipReport.Visual.Sample {
+    private static func look(at image: CGImage, next: [CGImage], time: Double, smiles: CIDetector?) -> WorshipReport.Visual.Sample {
         let faceRequest = VNDetectFaceRectanglesRequest()
         faceRequest.revision = VNDetectFaceRectanglesRequestRevision3
         let poseRequest = VNDetectHumanBodyPoseRequest()
@@ -709,32 +865,56 @@ enum WorshipAnalysis {
         let facing = faces.filter { abs($0.yaw?.doubleValue ?? 1) < 0.45 }.count
         // Smiles can only be read on faces close to the camera
         var smile: Bool?
-        if let biggest = faces.map({ $0.boundingBox.height }).max(), biggest >= 0.08, let smiles {
+        if let biggest = faces.map({ $0.boundingBox.height }).max(), biggest >= 0.06, let smiles {
             let found = smiles.features(in: CIImage(cgImage: image), options: [CIDetectorSmile: true]).compactMap { $0 as? CIFaceFeature }
             if !found.isEmpty { smile = found.contains { $0.hasSmile } }
         }
         let poses = people(poseRequest.results ?? [])
-        let hands = poses.filter(\.handsUp).count
-        var energy: Double?
-        if let next, !poses.isEmpty {
-            let second = VNDetectHumanBodyPoseRequest()
-            try? VNImageRequestHandler(cgImage: next, options: [:]).perform([second])
-            let later = people(second.results ?? [])
-            var moves: [Double] = []
-            for p in poses {
-                guard let q = later.min(by: { p.distance(to: $0) < p.distance(to: $1) }) else { continue }
-                let d = p.distance(to: q) / max(p.size, 0.01)
-                if d < 1 { moves.append(d) }   // bigger than that is a camera cut
-            }
-            if !moves.isEmpty { energy = moves.reduce(0, +) / Double(moves.count) }
+        let later: [[Person]] = next.map { frame in
+            let request = VNDetectHumanBodyPoseRequest()
+            try? VNImageRequestHandler(cgImage: frame, options: [:]).perform([request])
+            return people(request.results ?? [])
         }
-        return .init(t: time, people: poses.count, faces: faces.count, facing: facing, smile: smile, handsUp: hands, energy: energy)
+        var moves: [Double] = []
+        var teamHands = 0, teamClaps = 0, room = 0, roomHands = 0, roomClaps = 0
+        for p in poses {
+            var gaps = [p.wristGap].compactMap { $0 }
+            var previous = p
+            for frame in later {
+                guard let q = frame.min(by: { p.neckDistance(to: $0) < p.neckDistance(to: $1) }), p.neckDistance(to: q) < 0.08 else { continue }
+                if let g = q.wristGap { gaps.append(g) }
+                let d = previous.distance(to: q) / max(p.size, 0.01)
+                if d < 1 { moves.append(d) }   // bigger than that is a camera cut
+                previous = q
+            }
+            let clapping = isClapping(gaps)
+            let raised = p.handsUp && !clapping
+            if p.showsFace {
+                if clapping { teamClaps += 1 }
+                if raised { teamHands += 1 }
+            } else {
+                room += 1
+                if clapping { roomClaps += 1 }
+                if raised { roomHands += 1 }
+            }
+        }
+        let energy = moves.isEmpty ? nil : moves.reduce(0, +) / Double(moves.count)
+        return .init(t: time, people: poses.filter(\.showsFace).count, faces: faces.count, facing: facing, smile: smile,
+                     handsUp: teamHands, energy: energy, clapping: teamClaps, roomPeople: room, roomHands: roomHands, roomClapping: roomClaps)
+    }
+
+    /// Wrists that meet and part within half a second. Hands held together or held up don't count.
+    static func isClapping(_ gaps: [Double]) -> Bool {
+        guard gaps.count >= 2, let low = gaps.min(), let high = gaps.max() else { return false }
+        return low < 0.15 && high - low > 0.3
     }
 
     private struct Person {
         let points: [VNHumanBodyPoseObservation.JointName: CGPoint]
         let size: Double
         let handsUp: Bool
+        let showsFace: Bool
+        let wristGap: Double?
         func distance(to other: Person) -> Double {
             let shared = points.keys.filter { other.points[$0] != nil }
             guard !shared.isEmpty else { return .infinity }
@@ -743,19 +923,27 @@ enum WorshipAnalysis {
                 return s + hypot(Double(a.x - b.x), Double(a.y - b.y))
             } / Double(shared.count)
         }
+        func neckDistance(to other: Person) -> Double {
+            guard let a = points[.neck], let b = other.points[.neck] else { return .infinity }
+            return hypot(Double(a.x - b.x), Double(a.y - b.y))
+        }
     }
 
     private static func people(_ observations: [VNHumanBodyPoseObservation]) -> [Person] {
         observations.compactMap { o in
             guard let all = try? o.recognizedPoints(.all) else { return nil }
-            let good = all.filter { $0.value.confidence > 0.3 }.mapValues { $0.location }
-            guard good.count >= 6, let neck = good[.neck] else { return nil }
+            let good = all.filter { $0.value.confidence > 0.25 }.mapValues { $0.location }
+            guard good.count >= 5, let neck = good[.neck] else { return nil }
             let hip = good[.root] ?? good[.leftHip] ?? good[.rightHip]
-            let size = hip.map { hypot(Double(neck.x - $0.x), Double(neck.y - $0.y)) } ?? 0.15
-            guard size > 0.03 else { return nil }   // far-off bodies, such as the audience
+            var size = hip.map { hypot(Double(neck.x - $0.x), Double(neck.y - $0.y)) } ?? 0
+            if let l = good[.leftShoulder], let r = good[.rightShoulder] { size = max(size, hypot(Double(l.x - r.x), Double(l.y - r.y)) * 1.5) }
+            guard size > 0.02 else { return nil }
             let head = good[.nose]?.y ?? neck.y
-            let up = [good[.leftWrist], good[.rightWrist]].compactMap { $0 }.contains { $0.y > head }
-            return Person(points: good, size: size, handsUp: up)
+            let wrists = [good[.leftWrist], good[.rightWrist]].compactMap { $0 }
+            var gap: Double?
+            if let l = good[.leftWrist], let r = good[.rightWrist] { gap = hypot(Double(l.x - r.x), Double(l.y - r.y)) / size }
+            // Someone with their back to the camera shows no nose
+            return Person(points: good, size: size, handsUp: wrists.contains { $0.y > head }, showsFace: good[.nose] != nil, wristGap: gap)
         }
     }
 }

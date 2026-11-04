@@ -39,6 +39,8 @@ struct ReelDraft: Identifiable, Codable, Equatable {
         var mode: String
         var x: Double = 0.5
         var x2: Double?
+        /// When they were at `x` (source seconds), for following someone chosen in the frame
+        var t: Double?
     }
 
     var id = UUID()
@@ -281,7 +283,7 @@ struct ReelDraft: Identifiable, Codable, Equatable {
                 c.sourceVideoPath = piece.sourceVideoPath
                 if let f = piece.framing {
                     if f.mode == "fixed" { c.frameX = f.x }
-                    if f.mode == "person" { c.trackX = f.x }
+                    if f.mode == "person" { c.trackX = f.x; c.trackT = f.t }
                     if f.mode == "careful" { c.carefulFraming = true }
                     if f.mode == "split" { c.splitX = [f.x, f.x2 ?? 0.75] }
                 }
