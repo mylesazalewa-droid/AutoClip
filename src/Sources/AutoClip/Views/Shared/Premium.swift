@@ -233,6 +233,7 @@ struct AppSidebar: View {
             group("Review")
             row("Assess", "waveform.badge.magnifyingglass", .assess)
             row("Worship", "music.note", .worship)
+            row("Results", "chart.line.uptrend.xyaxis", .results)
             group("Find")
             row("Search", "magnifyingglass", .search)
 

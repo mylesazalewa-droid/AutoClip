@@ -33,6 +33,10 @@ struct ShortReview: Codable, Equatable, Identifiable {
     var quietBelow: Float = -60
     /// Seconds with sound but no recognised words: singing, music or speech it couldn't make out
     var unheardSeconds = 0.0
+    /// What happens in the picture. Reviews from before this existed get it when they're opened.
+    var picture: ShortPicture?
+    /// Other openings the AI liked
+    var hookOptions: [Hook]?
 
     struct Hook: Codable, Equatable {
         var line: Int
@@ -62,6 +66,8 @@ struct ShortReview: Codable, Equatable, Identifiable {
         var removeSilences = true
         var removeFillers = true
         var removeStutters = true
+        /// Where stale stretches of picture get punch-in zooms
+        var punchIns: [Double]?
     }
 
     var lines: [ReelDraft.Sentence] { ReelDraft.sentences(from: words) }
@@ -256,6 +262,8 @@ enum ShortDoctor {
         progress(0.45, "Checking for music and burned-in captions…")
         r.hasMusic = await hasMusic(url)
         r.hasBurnedText = await hasBurnedCaptions(asset, duration: duration, words: words)
+        progress(0.52, "Watching the picture…")
+        r.picture = await ShortPicture.read(path: path, duration: duration)
         try Task.checkCancellation()
         progress(0.6, "Looking for a better hook…")
         applyRules(&r)
@@ -289,21 +297,7 @@ enum ShortDoctor {
     static func applyRules(_ r: inout ShortReview) {
         let lines = r.lines
         guard !lines.isEmpty else { return }
-        func strength(_ s: ReelDraft.Sentence) -> Int {
-            let text = spokenText(s).lowercased()
-            let n = text.split(separator: " ").count
-            var v = 0
-            if (4...16).contains(n) { v += 2 }
-            if n > 24 { v -= 2 }
-            if text.contains("?") { v += 3 }
-            if text.rangeOfCharacter(from: .decimalDigits) != nil { v += 1 }
-            if [" you ", "you ", " your "].contains(where: { (" " + text).contains($0) }) { v += 1 }
-            for strong in ["never", "stop", "secret", "why", "how", "truth", "mistake", "nobody", "everyone", "always", "wrong", "most people", "what if", "the reason"] where text.contains(strong) { v += 2 }
-            // Needs what came before to make sense
-            let leads = ["and ", "so ", "but ", "because ", "that ", "this ", "it ", "he ", "she ", "they ", "then ", "or ", "these ", "those ", "which "]
-            if leads.contains(where: { text.hasPrefix($0) }) { v -= 4 }
-            return v
-        }
+        func strength(_ s: ReelDraft.Sentence) -> Int { HookLab.strength(spokenText(s)) }
         let scores = lines.map(strength)
         let first = scores[0]
         let delay = lines[0].start
@@ -342,6 +336,9 @@ enum ShortDoctor {
         if let h = idea.hookLine, (1..<max(1, count)).contains(h) {
             let fallback = spokenText(r.lines[h]).split(separator: " ").prefix(8).joined(separator: " ")
             r.hook = .init(line: h, why: idea.hookWhy, text: idea.hookText.isEmpty ? fallback : idea.hookText, scoreAfter: idea.hookScoreAfter ?? min(95, r.hookScore + 15))
+        }
+        r.hookOptions = idea.hookOptions.filter { (1..<max(1, count)).contains($0.line) && $0.line != r.hook?.line }.map { o in
+            .init(line: o.line, why: o.why, text: o.text.isEmpty ? spokenText(r.lines[o.line]).split(separator: " ").prefix(8).joined(separator: " ") : o.text, scoreAfter: o.scoreAfter ?? HookLab.wordScore(spokenText(r.lines[o.line])))
         }
         r.drops = idea.drops.filter { (0..<count).contains($0.line) }.map { .init(line: $0.line, why: $0.why) }
         // Only keep a new order that's really different, and never lose a line by accident
@@ -463,19 +460,24 @@ enum ShortDoctor {
     static func export(_ r: ShortReview, to url: URL, progress: @escaping (Double) -> Void) async throws {
         let (comp, mix, transform, natural) = try await composition(r)
         guard let session = AVAssetExportSession(asset: comp, presetName: AVAssetExportPresetHighestQuality) else { throw fail("Couldn't start saving.") }
+        let zooms = try await zoomComposition(r, comp: comp, transform: transform, natural: natural)
+        session.videoComposition = zooms
         let text = r.choices.hookText.trimmingCharacters(in: .whitespacesAndNewlines)
         if r.choices.useHookText, !text.isEmpty, let track = try await comp.loadTracks(withMediaType: .video).first {
             let box = CGRect(origin: .zero, size: natural).applying(transform)
             let size = CGSize(width: abs(box.width), height: abs(box.height))
-            let layerInstruction = AVMutableVideoCompositionLayerInstruction(assetTrack: track)
-            layerInstruction.setTransform(transform.concatenating(.init(translationX: -box.minX, y: -box.minY)), at: .zero)
-            let instruction = AVMutableVideoCompositionInstruction()
-            instruction.timeRange = CMTimeRange(start: .zero, duration: comp.duration)
-            instruction.layerInstructions = [layerInstruction]
-            let vc = AVMutableVideoComposition()
-            vc.renderSize = size
-            vc.frameDuration = CMTime(value: 1, timescale: 30)
-            vc.instructions = [instruction]
+            let vc: AVMutableVideoComposition
+            if let zooms { vc = zooms } else {
+                let layerInstruction = AVMutableVideoCompositionLayerInstruction(assetTrack: track)
+                layerInstruction.setTransform(transform.concatenating(.init(translationX: -box.minX, y: -box.minY)), at: .zero)
+                let instruction = AVMutableVideoCompositionInstruction()
+                instruction.timeRange = CMTimeRange(start: .zero, duration: comp.duration)
+                instruction.layerInstructions = [layerInstruction]
+                vc = AVMutableVideoComposition()
+                vc.renderSize = size
+                vc.frameDuration = CMTime(value: 1, timescale: 30)
+                vc.instructions = [instruction]
+            }
             let parent = CALayer(), videoLayer = CALayer()
             parent.frame = CGRect(origin: .zero, size: size)
             parent.isGeometryFlipped = true

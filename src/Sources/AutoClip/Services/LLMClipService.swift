@@ -470,12 +470,14 @@ Respond with ONLY valid JSON, no markdown:
 
     struct ShortIdea {
         struct Drop { var line: Int; var why: String }
+        struct HookIdea { var line: Int; var why: String; var text: String; var scoreAfter: Int? }
         var summary = ""
         var hookLine: Int?
         var hookWhy = ""
         var hookText = ""
         var hookScore: Int?
         var hookScoreAfter: Int?
+        var hookOptions: [HookIdea] = []
         var clarityScore: Int?
         var endingScore: Int?
         var order: [Int] = []
@@ -498,6 +500,7 @@ Return:
 - "summary": 1–2 plain sentences on the biggest thing to improve.
 - "hook_score", "clarity_score", "ending_score": 0–100 for the video as it is.
 - "hook": a stronger opening if there is one, as {"line": number, "why": one sentence, "text": on-screen text of at most 8 words using the speaker's idea, "score_after": 0–100}. The line must make sense with nothing before it, with no "he", "that" or "so" pointing to something earlier. Use null if line 0 is already the best opening.
+- "hook_options": up to 3 other lines that could also open the video, in the same form as "hook". Same rule about making sense with nothing before them. Empty if there are none.
 - "order": every line to keep, in the best order, as numbers. Keep the original order unless moving something clearly helps. Don't place a line before the thing it depends on.
 - "order_why": one sentence, or "" if nothing moved.
 - "drop": lines that drag or repeat, as [{"line": number, "why": short reason}]. Empty if none.
@@ -529,6 +532,9 @@ Respond with ONLY valid JSON, no markdown.
             idea.hookWhy = h["why"] as? String ?? ""
             idea.hookText = h["text"] as? String ?? ""
             idea.hookScoreAfter = score(h["score_after"])
+        }
+        idea.hookOptions = (o["hook_options"] as? [[String: Any]] ?? []).compactMap { h in
+            int(h["line"]).map { .init(line: $0, why: h["why"] as? String ?? "", text: h["text"] as? String ?? "", scoreAfter: score(h["score_after"])) }
         }
         idea.order = (o["order"] as? [Any] ?? []).compactMap { int($0) }
         idea.orderWhy = o["order_why"] as? String ?? ""

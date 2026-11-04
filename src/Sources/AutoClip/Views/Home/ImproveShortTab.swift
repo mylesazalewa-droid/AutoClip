@@ -112,12 +112,19 @@ private struct ShortReviewPage: View {
     @State private var saveTask: Task<Void, Never>?
     @State private var saved: URL?
     @State private var saveError: String?
+    @State private var dropOffs: [DropOff] = []
+    @State private var pendingSeek: Double?
+    @State private var previewStop: Double?
+    @State private var posting: PostedShort?
+    @ObservedObject private var results = ShortResultsStore.shared
     private let gold = Theme.sand
 
     private var ranges: [ClosedRange<Double>] { ShortDoctor.ranges(review) }
     private var lines: [ReelDraft.Sentence] { review.lines }
     /// Anything that changes the edit, to know when to rebuild the "after"
-    private var editKey: String { "\(ranges.map { "\($0.lowerBound)-\($0.upperBound)" })|\(showAfter)" }
+    private var editKey: String { "\(ranges.map { "\($0.lowerBound)-\($0.upperBound)" })|\(showAfter)|\(review.choices.punchIns ?? [])" }
+    /// The moment of the original on screen now
+    private var playhead: Double { showAfter ? ShortDoctor.sourceTime(ofEdit: time, review) : time }
 
     var body: some View {
         HStack(alignment: .top, spacing: 26) {
@@ -126,6 +133,7 @@ private struct ShortReviewPage: View {
                 VStack(alignment: .leading, spacing: 16) {
                     scores
                     warnings
+                    DropOffCard(review: $review, issues: dropOffs, playhead: playhead, real: results.latest(forVideo: review.path), onJump: jump)
                     hookCard
                     pacingCard
                     if review.order != nil { orderCard }
@@ -137,9 +145,20 @@ private struct ShortReviewPage: View {
         }
         .padding(.horizontal, 32).padding(.top, 28).padding(.bottom, 14)
         .task(id: editKey) { await reloadPlayer() }
+        .task(id: review.picture == nil) {
+            // A review from before the picture was read
+            dropOffs = DropOffMap.find(review)
+            if review.picture == nil, let picture = await ShortPicture.read(path: review.path, duration: review.duration) {
+                review.picture = picture
+            }
+        }
+        .sheet(item: $posting) { s in PostedShortSheet(draft: s) }
         .onAppear {
             Backdrop.shared.path = review.path
-            observer = player.addPeriodicTimeObserver(forInterval: CMTime(value: 1, timescale: 10), queue: .main) { t in time = t.seconds.isNaN ? 0 : t.seconds }
+            observer = player.addPeriodicTimeObserver(forInterval: CMTime(value: 1, timescale: 10), queue: .main) { t in
+                time = t.seconds.isNaN ? 0 : t.seconds
+                if let stop = previewStop, time >= stop { player.pause(); previewStop = nil }
+            }
         }
         .onDisappear {
             player.pause()
@@ -159,14 +178,60 @@ private struct ShortReviewPage: View {
         }
         if showAfter {
             do {
-                let (comp, mix, _, _) = try await ShortDoctor.composition(review)
+                let (comp, mix, transform, natural) = try await ShortDoctor.composition(review)
                 let item = AVPlayerItem(asset: comp)
                 item.audioMix = mix
+                item.videoComposition = try await ShortDoctor.zoomComposition(review, comp: comp, transform: transform, natural: natural)
                 player.replaceCurrentItem(with: item)
             } catch { buildError = error.localizedDescription }
         } else {
             player.replaceCurrentItem(with: AVPlayerItem(url: URL(fileURLWithPath: review.path)))
         }
+        if let seek = pendingSeek {
+            pendingSeek = nil
+            await player.seek(to: CMTime(seconds: seek, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+            player.play()
+        }
+    }
+
+    private func play(from t: Double) {
+        Task {
+            await player.seek(to: CMTime(seconds: t, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+            player.play()
+        }
+    }
+
+    /// Plays a little before a moment in the original, in the edit if it's still there.
+    private func jump(to source: Double) {
+        previewStop = nil
+        let lead = max(0, source - 1)
+        if showAfter {
+            if let t = ShortDoctor.editTime(ofSource: source, review) { play(from: max(0, t - 1)) }
+            else { pendingSeek = lead; showAfter = false }
+        } else {
+            play(from: lead)
+        }
+    }
+
+    /// Tries an opening: switches it on and plays the first few seconds of the result.
+    private func preview(_ change: () -> Void) {
+        let before = editKey
+        change()
+        previewStop = 6
+        if !showAfter || before != editKey {
+            pendingSeek = 0
+            showAfter = true
+        } else {
+            play(from: 0)
+        }
+    }
+
+    private func announce() {
+        let improved = review.choices.useHook || review.choices.useOrder || !review.choices.dropped.isEmpty
+        let opening = ShortDoctor.lineOrder(review).first.flatMap { lines.indices.contains($0) ? ShortDoctor.spokenText(lines[$0]) : nil } ?? ""
+        posting = results.latest(forVideo: review.path) ?? PostedShort(
+            title: review.title, videoPath: review.path, version: improved ? "improved" : "original",
+            opening: opening, length: ShortDoctor.length(of: ranges))
     }
 
     // MARK: Video
@@ -214,6 +279,8 @@ private struct ShortReviewPage: View {
                     }
                 }
             }
+            Button { announce() } label: { Label(results.latest(forVideo: review.path) == nil ? "Posted it? Add results" : "Update results", systemImage: "chart.line.uptrend.xyaxis") }
+                .buttonStyle(SecondaryButtonStyle(compact: true))
             if let saveError { Text(saveError).font(.system(size: 11)).foregroundColor(Theme.danger).fixedSize(horizontal: false, vertical: true) }
             Spacer(minLength: 0)
         }
@@ -312,17 +379,19 @@ private struct ShortReviewPage: View {
     }
 
     private var hookCard: some View {
-        AssessCard(title: "Hook") {
-            if let h = review.hook {
-                toggle($review.choices.useHook, "Open on this line", h.why)
-                Text("“\(line(h.line))”").font(Theme.display(16).italic()).foregroundColor(.white).fixedSize(horizontal: false, vertical: true)
-                if review.choices.useHook {
-                    Toggle("Also keep it where it was said (play it twice, as a teaser)", isOn: $review.choices.keepHookInPlace)
-                        .toggleStyle(.checkbox).font(.system(size: 12)).foregroundColor(Theme.text)
-                }
-            } else {
-                Text("Your opening line is already the strongest one in the video.").font(.system(size: 12)).foregroundColor(Theme.text)
-                Text("“\(line(0))”").font(Theme.display(14).italic()).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
+        HookLabCard(review: $review, onPreviewOriginal: {
+            preview { review.choices.useHook = false }
+        }, onPreview: { option in
+            preview {
+                let old = review.hook?.text
+                review.hook = .init(line: option.line, why: option.why, text: option.onScreen, scoreAfter: option.reading.words)
+                review.choices.useHook = true
+                if review.choices.hookText.isEmpty || review.choices.hookText == old { review.choices.hookText = option.onScreen }
+            }
+        }) {
+            if review.choices.useHook {
+                Toggle("Also keep it where it was said (play it twice, as a teaser)", isOn: $review.choices.keepHookInPlace)
+                    .toggleStyle(.checkbox).font(.system(size: 12)).foregroundColor(Theme.text)
             }
             Rectangle().fill(Theme.line).frame(height: 1)
             toggle($review.choices.useHookText, "Add on-screen hook text", "Shows for the first 3 seconds.")

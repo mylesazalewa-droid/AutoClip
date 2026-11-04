@@ -130,6 +130,82 @@ enum YTDLP {
         return URL(fileURLWithPath: path)
     }
 
+    /// What a post shows publicly. Retention and watch time are private to the account.
+    struct PublicStats: Equatable {
+        var title: String?
+        var duration: Double?
+        var views: Int?
+        var likes: Int?
+        var comments: Int?
+        var shares: Int?
+        var postedAt: Date?
+
+        static func parse(_ data: Data) -> PublicStats? {
+            guard let o = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+            func int(_ key: String) -> Int? { (o[key] as? Int) ?? (o[key] as? Double).map { Int($0) } }
+            var s = PublicStats()
+            s.title = o["title"] as? String
+            s.duration = (o["duration"] as? Double) ?? (o["duration"] as? Int).map(Double.init)
+            s.views = int("view_count")
+            s.likes = int("like_count")
+            s.comments = int("comment_count")
+            s.shares = int("repost_count")
+            if let d = o["upload_date"] as? String {
+                let f = DateFormatter()
+                f.dateFormat = "yyyyMMdd"
+                f.locale = Locale(identifier: "en_US_POSIX")
+                s.postedAt = f.date(from: d)
+            }
+            return s
+        }
+
+        /// Only overwrites with numbers the post actually showed.
+        static func apply(_ stats: PublicStats, to short: inout PostedShort) {
+            if short.title.isEmpty, let t = stats.title { short.title = t }
+            if short.length == nil { short.length = stats.duration }
+            short.views = stats.views ?? short.views
+            short.likes = stats.likes ?? short.likes
+            short.comments = stats.comments ?? short.comments
+            short.shares = stats.shares ?? short.shares
+            short.updatedAt = Date()
+        }
+    }
+
+    /// Reads a post's public numbers without downloading the video.
+    static func publicStats(_ link: String) async throws -> PublicStats {
+        let trimmed = link.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let u = URL(string: trimmed), let scheme = u.scheme?.lowercased(), ["http", "https"].contains(scheme) else {
+            throw Failure(message: "That doesn't look like a link.")
+        }
+        guard let ytdlp = executablePath() else { throw Failure(message: "yt-dlp not found. Install with: brew install yt-dlp") }
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: ytdlp)
+        process.arguments = ["-J", "--skip-download", "--no-playlist", "--no-warnings", "--socket-timeout", "20", "--", trimmed]
+        process.environment = environment
+        let outPipe = Pipe()
+        process.standardOutput = outPipe
+        process.standardError = FileHandle.nullDevice
+        let data: Data = try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (c: CheckedContinuation<Data, Error>) in
+                DispatchQueue.global(qos: .userInitiated).async {
+                    do {
+                        try process.run()
+                        let stop = DispatchWorkItem { if process.isRunning { process.terminate() } }
+                        DispatchQueue.global().asyncAfter(deadline: .now() + 60, execute: stop)
+                        let d = outPipe.fileHandleForReading.readDataToEndOfFile()
+                        process.waitUntilExit()
+                        stop.cancel()
+                        c.resume(returning: process.terminationStatus == 0 ? d : Data())
+                    } catch { c.resume(throwing: error) }
+                }
+            }
+        } onCancel: { if process.isRunning { process.terminate() } }
+        guard let stats = PublicStats.parse(data) else {
+            throw Failure(message: "Couldn't read that post. It may be private or need a sign-in, so enter its numbers yourself.")
+        }
+        return stats
+    }
+
     private final class ErrLog: @unchecked Sendable {
         private let lock = NSLock()
         private var buf = ""
