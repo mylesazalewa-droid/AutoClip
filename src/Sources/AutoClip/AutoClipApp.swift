@@ -25,16 +25,21 @@ struct AutoClipApp: App {
 }
 
 struct MainWindow: View {
-    private static var openedFullScreen = false
+    private static var sizedWindow = false
 
-    /// The app opens full screen, once per launch. Leaving it with the green button stays left.
-    private static func openFullScreen() {
-        guard !openedFullScreen else { return }
-        openedFullScreen = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            guard let window = NSApp.windows.first(where: { $0.canBecomeMain && $0.isVisible }), !window.styleMask.contains(.fullScreen) else { return }
-            window.collectionBehavior.insert(.fullScreenPrimary)
-            window.toggleFullScreen(nil)
+    /// Opens corner to corner in a normal window, keeping the red, yellow and green buttons.
+    /// Once per launch, so resizing it afterwards sticks.
+    private static func fillScreen() {
+        guard !sizedWindow else { return }
+        sizedWindow = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            guard let window = NSApp.windows.first(where: { $0.canBecomeMain && $0.isVisible }) else { return }
+            func fill() { if let screen = window.screen ?? NSScreen.main { window.setFrame(screen.visibleFrame, display: true, animate: false) } }
+            // macOS may bring back true full screen from the last run
+            if window.styleMask.contains(.fullScreen) {
+                window.toggleFullScreen(nil)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { fill() }
+            } else { fill() }
         }
     }
 
@@ -54,7 +59,7 @@ struct MainWindow: View {
             .tint(Theme.action)
             .preferredColorScheme(.dark)
             .task { AutoImport.shared.start() }
-            .onAppear { Self.openFullScreen() }
+            .onAppear { Self.fillScreen() }
     }
 }
 

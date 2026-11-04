@@ -118,12 +118,16 @@ struct HomeView: View {
             .buttonStyle(.plain)
             .padding(.leading, 20)
 
-            HStack(spacing: 4) {
+            HStack(spacing: 10) {
                 tabButton(title: "Home", tab: .projects)
-                tabButton(title: "Auto Reels", tab: .autoReels)
-                tabButton(title: "Podcast", tab: .podcast)
-                tabButton(title: "Assess", tab: .assess)
-                tabButton(title: "Worship", tab: .worship)
+                TabGroup(title: "Create") {
+                    tabButton(title: "Auto Reels", tab: .autoReels)
+                    tabButton(title: "Podcast", tab: .podcast)
+                }
+                TabGroup(title: "Review") {
+                    tabButton(title: "Assess", tab: .assess)
+                    tabButton(title: "Worship", tab: .worship)
+                }
                 tabButton(title: "Search", tab: .search)
             }
 
@@ -855,6 +859,22 @@ struct AutoClipsSettingsSheet: View {
 }
 
 /// A section link in the header: text that brightens on hover, with a sand underline when open.
+/// Tabs that belong together, under a small label.
+struct TabGroup<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        HStack(spacing: 2) {
+            Text(title.uppercased()).font(.system(size: 9, weight: .semibold)).tracking(1.2).foregroundColor(Theme.faint)
+                .padding(.leading, 10)
+            content
+        }
+        .padding(.trailing, 2)
+        .background(Capsule().fill(Color.white.opacity(0.035)))
+    }
+}
+
 struct TabLink: View {
     let title: String
     let active: Bool
