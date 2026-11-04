@@ -466,6 +466,80 @@ Respond with ONLY valid JSON, no markdown:
         throw lastError
     }
 
+    // MARK: - Improve a short
+
+    struct ShortIdea {
+        struct Drop { var line: Int; var why: String }
+        var summary = ""
+        var hookLine: Int?
+        var hookWhy = ""
+        var hookText = ""
+        var hookScore: Int?
+        var hookScoreAfter: Int?
+        var clarityScore: Int?
+        var endingScore: Int?
+        var order: [Int] = []
+        var orderWhy = ""
+        var drops: [Drop] = []
+        var endingLine: Int?
+        var endingNote = ""
+    }
+
+    /// Reviews a finished short. With no key, it runs on this Mac's on-device AI.
+    func shortReview(lines: [(index: Int, start: Double, text: String)], duration: Double,
+                     provider: AIProvider, apiKey: String) async throws -> ShortIdea {
+        let script = lines.map { "[\($0.index)] \(Int($0.start))s: \($0.text)" }.joined(separator: "\n")
+        let prompt = """
+You are an expert editor of short-form video. This is the transcript of a finished \(Int(duration))-second short, one numbered line per sentence. You can only reorder or remove these lines. You can't add words anyone didn't say. Only suggest changes that really help, and keep the speaker's meaning. If it's already good, say so and leave things alone.
+
+\(script)
+
+Return:
+- "summary": 1–2 plain sentences on the biggest thing to improve.
+- "hook_score", "clarity_score", "ending_score": 0–100 for the video as it is.
+- "hook": a stronger opening if there is one, as {"line": number, "why": one sentence, "text": on-screen text of at most 8 words using the speaker's idea, "score_after": 0–100}. The line must make sense with nothing before it, with no "he", "that" or "so" pointing to something earlier. Use null if line 0 is already the best opening.
+- "order": every line to keep, in the best order, as numbers. Keep the original order unless moving something clearly helps. Don't place a line before the thing it depends on.
+- "order_why": one sentence, or "" if nothing moved.
+- "drop": lines that drag or repeat, as [{"line": number, "why": short reason}]. Empty if none.
+- "ending": {"line": number of the best line to finish on or null to leave it, "note": one sentence}.
+
+Respond with ONLY valid JSON, no markdown.
+"""
+        var lastError: Error = llmError("The review didn't come back. Try again.")
+        for _ in 1...2 {
+            let text = apiKey.isEmpty ? try await LocalAI.generate(prompt) : try await ask(prompt, provider: provider, apiKey: apiKey)
+            if let idea = Self.parseShortIdea(text) { return idea }
+            lastError = llmError("The review wasn't readable. Try again.")
+        }
+        throw lastError
+    }
+
+    static func parseShortIdea(_ text: String) -> ShortIdea? {
+        guard let a = text.firstIndex(of: "{"), let b = text.lastIndex(of: "}"),
+              let o = try? JSONSerialization.jsonObject(with: Data(String(text[a...b]).utf8)) as? [String: Any] else { return nil }
+        func int(_ v: Any?) -> Int? { (v as? Int) ?? (v as? Double).map { Int($0) } ?? (v as? String).flatMap { Int($0) } }
+        func score(_ v: Any?) -> Int? { int(v).map { min(100, max(0, $0)) } }
+        var idea = ShortIdea()
+        idea.summary = o["summary"] as? String ?? ""
+        idea.hookScore = score(o["hook_score"])
+        idea.clarityScore = score(o["clarity_score"])
+        idea.endingScore = score(o["ending_score"])
+        if let h = o["hook"] as? [String: Any] {
+            idea.hookLine = int(h["line"])
+            idea.hookWhy = h["why"] as? String ?? ""
+            idea.hookText = h["text"] as? String ?? ""
+            idea.hookScoreAfter = score(h["score_after"])
+        }
+        idea.order = (o["order"] as? [Any] ?? []).compactMap { int($0) }
+        idea.orderWhy = o["order_why"] as? String ?? ""
+        idea.drops = (o["drop"] as? [[String: Any]] ?? []).compactMap { d in int(d["line"]).map { .init(line: $0, why: d["why"] as? String ?? "") } }
+        if let e = o["ending"] as? [String: Any] {
+            idea.endingLine = int(e["line"])
+            idea.endingNote = e["note"] as? String ?? ""
+        }
+        return idea
+    }
+
     // MARK: - Worship coach
 
     func worshipCoach(facts: String, provider: AIProvider, apiKey: String) async throws -> WorshipCoach {

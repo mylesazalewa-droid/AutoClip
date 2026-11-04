@@ -182,7 +182,7 @@ enum WorshipClips {
     }
 
     /// The note as white text on a dark pill, at twice its size for sharpness.
-    private static func captionImage(_ text: String, width: CGFloat, fontSize: CGFloat) -> CGImage? {
+    static func captionImage(_ text: String, width: CGFloat, fontSize: CGFloat) -> CGImage? {
         let style = NSMutableParagraphStyle()
         style.alignment = .center
         let string = NSAttributedString(string: text, attributes: [

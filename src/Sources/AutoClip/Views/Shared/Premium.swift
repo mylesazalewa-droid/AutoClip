@@ -228,6 +228,7 @@ struct AppSidebar: View {
             row("Home", "house", .projects, also: .autoClips)
             group("Create")
             row("Auto Reels", "play.rectangle.on.rectangle", .autoReels)
+            row("Improve a Short", "wand.and.stars", .improve)
             row("Podcast", "mic", .podcast)
             group("Review")
             row("Assess", "waveform.badge.magnifyingglass", .assess)
