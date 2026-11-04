@@ -38,7 +38,6 @@ struct PodcastTab: View {
                 library
             }
         }
-        .background(Theme.bg)
         .sheet(isPresented: $showNew) { NewEpisodeSheet { selected = $0 } }
     }
 
@@ -51,12 +50,14 @@ struct PodcastTab: View {
             }
             ScrollView {
                 if store.episodes.isEmpty {
-                    EmptyState(icon: "mic.and.signal.meter.fill", title: "Make a podcast",
-                               message: "Add a video or audio recording, plus any other camera angles or each person's own recording. AutoClip cuts the long pauses and “um”s, cleans up and evens out the voices, follows whoever is talking, and exports every size plus podcast audio with chapters, show notes and a transcript.") {
+                    CinematicHero(path: nil, eyebrow: "Get started", title: "Make a podcast",
+                                  detail: "Cuts the long pauses and ums, cleans up the voices, follows whoever is talking, and exports every size.",
+                                  height: 420, icon: "mic.and.signal.meter.fill") {
                         Button { showNew = true } label: { Label("New episode", systemImage: "plus") }.buttonStyle(PrimaryButtonStyle())
                     }
+                    .padding(.horizontal, 32).padding(.top, 4)
                 } else {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 200, maximum: 240), spacing: 18, alignment: .top)],
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 250, maximum: 330), spacing: 22, alignment: .top)],
                               alignment: .leading, spacing: 22) {
                         ForEach(store.episodes) { e in
                             EpisodeCard(episode: e, status: store.status[e.id]) { selected = e.id }
@@ -68,7 +69,7 @@ struct PodcastTab: View {
                                 }
                         }
                     }
-                    .padding(.horizontal, 28).padding(.top, 4).padding(.bottom, 30)
+                    .padding(.horizontal, 32).padding(.top, 4).padding(.bottom, 36)
                 }
             }
         }

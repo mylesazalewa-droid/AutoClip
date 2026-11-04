@@ -59,10 +59,9 @@ struct SearchTab: View {
                 results
             }
             sidePanel.frame(width: 380)
-                .background(Theme.surface)
+                .background(Color.black.opacity(0.22))
                 .overlay(Rectangle().fill(Theme.line).frame(width: 1), alignment: .leading)
         }
-        .background(Theme.bg)
         .task { await load() }
         .onDisappear { stopTranscribing = true; player.pause() }
     }
@@ -163,12 +162,10 @@ struct SearchTab: View {
     }
 
     private var intro: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Find any moment across all your sermons")
-                .font(Theme.display(20)).foregroundColor(Theme.cream)
-            Text("Search \(library.count) transcribed video\(library.count == 1 ? "" : "s") for a word, a topic or a Bible passage. Useful for avoiding repeats, building a series or pulling clips. Words match their other forms, so “forgive” also finds “forgiven” and “forgiveness”. Put a phrase in quotes to match it exactly.")
-                .font(.system(size: 12)).foregroundColor(Color.white.opacity(0.6)).fixedSize(horizontal: false, vertical: true)
-        }
+        CinematicHero(path: nil, eyebrow: "\(library.count) transcribed video\(library.count == 1 ? "" : "s")",
+                      title: "Find any moment across all your sermons",
+                      detail: "Search for a word, a topic or a Bible passage. \u{201C}forgive\u{201D} also finds forgiven and forgiveness. Put a phrase in quotes to match it exactly.",
+                      height: 320, icon: "text.magnifyingglass") { EmptyView() }
     }
 
     private func talkResults(_ talk: Talk, _ hits: [Hit]) -> some View {

@@ -408,7 +408,6 @@ struct AutoReelsTab: View {
                 gridView
             }
         }
-        .background(Theme.bg)
         .sheet(isPresented: $showingCreateSheet) {
             createReelSheet
         }
@@ -601,10 +600,21 @@ struct AutoReelsTab: View {
             }
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 24) {
+                    if reelSearch.isEmpty, let latest = store.reels.first {
+                        CinematicHero(path: latest.sourceVideoPath ?? latest.path, eyebrow: "Latest project", title: latest.title,
+                                      detail: "\(latest.drafts?.count ?? latest.paths.count) reels ready to review", height: 400) {
+                            Button { selectedReel = latest } label: { Label("Open", systemImage: "play.fill") }.buttonStyle(PrimaryButtonStyle())
+                            Button {
+                                pickedVideoURL = nil; inputMode = .file; showingCreateSheet = true
+                            } label: { Label("New reel", systemImage: "plus") }.buttonStyle(SecondaryButtonStyle())
+                        }
+                        .padding(.horizontal, 32)
+                        SectionTitle(title: "All projects", count: store.reels.count).padding(.horizontal, 32)
+                    }
                     // Active jobs + finished reels, as posters
                     LazyVGrid(
-                        columns: [GridItem(.adaptive(minimum: 200, maximum: 240), spacing: 18, alignment: .top)],
+                        columns: [GridItem(.adaptive(minimum: 250, maximum: 330), spacing: 22, alignment: .top)],
                         alignment: .leading,
                         spacing: 22
                     ) {
@@ -613,9 +623,8 @@ struct AutoReelsTab: View {
                             : store.reels.filter { $0.title.localizedCaseInsensitiveContains(reelSearch) }
                         ForEach(visibleReels) { reel in reelCard(reel) }
                     }
-                    .padding(.horizontal, 28)
-                    .padding(.top, 4)
-                    .padding(.bottom, 30)
+                    .padding(.horizontal, 32)
+                    .padding(.bottom, 36)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }

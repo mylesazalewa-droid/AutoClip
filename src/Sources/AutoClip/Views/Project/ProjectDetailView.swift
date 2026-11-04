@@ -111,7 +111,6 @@ struct ProjectDetailView: View {
                     .frame(minWidth: 300, idealWidth: 320, maxWidth: 360)
             }
         }
-        .background(Theme.bg)
         .sheet(isPresented: $showHistory) {
             ExportHistoryView()
         }

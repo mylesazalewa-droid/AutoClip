@@ -34,10 +34,12 @@ struct HomeView: View {
 
     var body: some View {
         ZStack {
-            Theme.bg.ignoresSafeArea()
+            AmbientBackdrop()
 
+            HStack(spacing: 0) {
+            AppSidebar(active: $activeTab)
             VStack(spacing: 0) {
-                toolbar
+                if activeTab == .autoClips { toolbar }
 
                 // Tab content
                 switch activeTab {
@@ -71,6 +73,12 @@ struct HomeView: View {
                     )
                 }
             }
+            }
+            .ignoresSafeArea(.container, edges: .top)
+        }
+        .onAppear {
+            // Until a page picks one, the backdrop comes from the latest video
+            if Backdrop.shared.path == nil, let r = AutoReelsStore.shared.reels.first { Backdrop.shared.path = r.sourceVideoPath ?? r.path }
         }
         .onDrop(of: [.movie, .fileURL], isTargeted: $isDropTargeted) { providers in
             guard activeTab == .autoClips else { return false }
@@ -96,46 +104,12 @@ struct HomeView: View {
         }
     }
 
-    func tabButton(title: String, tab: HomeTab) -> some View {
-        TabLink(title: title, active: activeTab == tab || (tab == .projects && activeTab == .autoClips)) { activeTab = tab }
-    }
-
     // MARK: - Header
 
     /// One bar like a streaming site: the name, the sections, then search and actions.
     var toolbar: some View {
         HStack(spacing: 22) {
-            Button { activeTab = .projects } label: {
-                HStack(spacing: 9) {
-                    Image(systemName: "scissors")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(Theme.bg)
-                        .frame(width: 28, height: 28)
-                        .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Theme.sand))
-                    Text("AUTOCLIP").font(Theme.display(17, weight: .medium)).tracking(3).foregroundColor(Theme.cream)
-                }
-            }
-            .buttonStyle(.plain)
-            .padding(.leading, 20)
-
-            HStack(spacing: 10) {
-                tabButton(title: "Home", tab: .projects)
-                TabGroup(title: "Create") {
-                    tabButton(title: "Auto Reels", tab: .autoReels)
-                    tabButton(title: "Podcast", tab: .podcast)
-                }
-                TabGroup(title: "Review") {
-                    tabButton(title: "Assess", tab: .assess)
-                    tabButton(title: "Worship", tab: .worship)
-                }
-                tabButton(title: "Search", tab: .search)
-            }
-
             Spacer()
-
-            AutoImportChip()
-            AIUsageChip()
-            ContentKindMenu()
 
             if activeTab == .autoClips {
                 HStack(spacing: 7) {
@@ -175,25 +149,10 @@ struct HomeView: View {
                 .sheet(isPresented: $showAutoClipsSettings) {
                     AutoClipsSettingsSheet()
                 }
-            } else {
-                Button { activeTab = .search } label: {
-                    HStack(spacing: 7) {
-                        Image(systemName: "magnifyingglass").font(.system(size: 12))
-                        Text("Search every video…").font(.system(size: 12))
-                    }
-                    .foregroundColor(Theme.faint)
-                    .padding(.horizontal, 12).padding(.vertical, 7)
-                    .frame(width: 230, alignment: .leading)
-                    .background(Capsule().fill(Color.white.opacity(0.06)))
-                    .overlay(Capsule().stroke(Theme.line, lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-                .opacity(activeTab == .search ? 0 : 1)
             }
             Color.clear.frame(width: 8, height: 1)
         }
         .frame(height: 58)
-        .background(Theme.surface.opacity(0.96))
         .overlay(Rectangle().fill(Theme.line).frame(height: 1), alignment: .bottom)
     }
 
@@ -859,41 +818,3 @@ struct AutoClipsSettingsSheet: View {
 }
 
 /// A section link in the header: text that brightens on hover, with a sand underline when open.
-/// Tabs that belong together, under a small label.
-struct TabGroup<Content: View>: View {
-    let title: String
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        HStack(spacing: 2) {
-            Text(title.uppercased()).font(.system(size: 9, weight: .semibold)).tracking(1.2).foregroundColor(Theme.faint)
-                .padding(.leading, 10)
-            content
-        }
-        .padding(.trailing, 2)
-        .background(Capsule().fill(Color.white.opacity(0.035)))
-    }
-}
-
-struct TabLink: View {
-    let title: String
-    let active: Bool
-    let action: () -> Void
-    @State private var hover = false
-
-    var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 13, weight: active ? .semibold : .regular))
-                .foregroundColor(active ? Theme.cream : hover ? Theme.text : Theme.muted)
-                .padding(.horizontal, 10).padding(.vertical, 8)
-                .overlay(alignment: .bottom) {
-                    Capsule().fill(Theme.sand).frame(width: active ? 22 : 0, height: 2).offset(y: 9)
-                }
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .onHover { hover = $0 }
-        .animation(.easeOut(duration: 0.15), value: active)
-    }
-}

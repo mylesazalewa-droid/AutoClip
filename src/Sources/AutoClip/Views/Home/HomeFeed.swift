@@ -49,7 +49,7 @@ struct HomeFeed: View {
         for r in reelsStore.reels {
             items.append(.init(id: "r" + r.id.uuidString, kind: "Auto Reels", title: r.title,
                                detail: "\(r.paths.count) reel\(r.paths.count == 1 ? "" : "s") · \(r.format) · \(time(r.duration))",
-                               date: Date(timeIntervalSince1970: r.dateCreated), thumb: r.path,
+                               date: Date(timeIntervalSince1970: r.dateCreated), thumb: r.sourceVideoPath ?? r.path,
                                tall: r.format.contains("9:16") || r.format.lowercased().contains("vertical"), open: { onOpenReel(r) }))
         }
         for e in podcasts.episodes where e.analyzed {
@@ -63,7 +63,7 @@ struct HomeFeed: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 30) {
+            VStack(alignment: .leading, spacing: 36) {
                 let hero = heroItems
                 if hero.isEmpty { welcome } else { banner(hero) }
 
@@ -111,9 +111,8 @@ struct HomeFeed: View {
                 }
                 Color.clear.frame(height: 20)
             }
-            .padding(.top, 20)
+            .padding(.top, 32)
         }
-        .background(Theme.bg)
         .onAppear { sermons = AssessTab.knownVideos(reels: reelsStore.reels) }
         .task {
             // The banner turns every 8 seconds
@@ -130,56 +129,19 @@ struct HomeFeed: View {
     private func banner(_ items: [HeroItem]) -> some View {
         let i = min(heroIndex, items.count - 1)
         let item = items[i]
-        return ZStack(alignment: .bottomLeading) {
-            Group {
-                if item.thumb.isEmpty {
-                    LinearGradient(colors: [Theme.navy, Theme.olive.opacity(0.8)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                        .overlay(Image(systemName: "mic.and.signal.meter.fill").font(.system(size: 120)).foregroundColor(Theme.sand.opacity(0.12)).offset(x: 220))
-                } else {
-                    // A soft, dimmed backdrop from the same picture
-                    ReelThumbnailView(path: item.thumb).blur(radius: 40).opacity(0.55)
+        return ZStack(alignment: .bottomTrailing) {
+            CinematicHero(path: item.thumb.isEmpty ? nil : item.thumb,
+                          eyebrow: "\(item.kind) · \(item.date.formatted(.relative(presentation: .named)))",
+                          title: item.title, detail: item.detail, height: 540, icon: "mic.and.signal.meter.fill") {
+                Button(action: item.open) { Label("Open", systemImage: "play.fill") }.buttonStyle(PrimaryButtonStyle())
+                Button { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: item.thumb)]) } label: {
+                    Label("Show in Finder", systemImage: "folder")
                 }
+                .buttonStyle(SecondaryButtonStyle())
+                .disabled(item.thumb.isEmpty)
             }
-            .frame(height: 340).frame(maxWidth: .infinity).clipped()
             .id(item.id)
             .transition(.opacity)
-            // Shade so the words read over any picture
-            LinearGradient(colors: [Theme.bg.opacity(0.95), Theme.bg.opacity(0.55), Theme.bg.opacity(0.2)], startPoint: .leading, endPoint: .trailing)
-            LinearGradient(colors: [.clear, Theme.bg.opacity(0.6)], startPoint: .center, endPoint: .bottom)
-            // The picture itself, at its real shape
-            if !item.thumb.isEmpty {
-                ReelThumbnailView(path: item.thumb)
-                    .frame(width: item.tall ? 160 : 460, height: item.tall ? 284 : 259).clipped()
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color.white.opacity(0.14), lineWidth: 1))
-                    .shadow(color: .black.opacity(0.5), radius: 18, y: 8)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
-                    .padding(.trailing, 70)
-                    .id("pic" + item.id)
-                    .transition(.opacity)
-            }
-
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 8) {
-                    Image(systemName: "diamond.fill").font(.system(size: 6)).foregroundColor(Theme.sand)
-                    Text(item.kind.uppercased()).font(.system(size: 10, weight: .semibold)).tracking(2).foregroundColor(Theme.sand)
-                    Text("· \(item.date.formatted(.relative(presentation: .named)))").font(.system(size: 10)).foregroundColor(Theme.muted)
-                }
-                Text(item.title.uppercased())
-                    .font(Theme.display(38)).tracking(3).foregroundColor(Theme.cream)
-                    .lineLimit(2).frame(maxWidth: 520, alignment: .leading)
-                Text(item.detail).font(.system(size: 13)).foregroundColor(Theme.text.opacity(0.8))
-                HStack(spacing: 10) {
-                    Button(action: item.open) { Label("Open", systemImage: "play.fill") }.buttonStyle(PrimaryButtonStyle())
-                    Button { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: item.thumb)]) } label: {
-                        Label("Show in Finder", systemImage: "folder")
-                    }
-                    .buttonStyle(SecondaryButtonStyle())
-                    .disabled(item.thumb.isEmpty)
-                }
-                .padding(.top, 4)
-            }
-            .padding(.vertical, 36).padding(.leading, 64).padding(.trailing, 36)
 
             // Arrows and page dots
             if items.count > 1 {
@@ -192,19 +154,15 @@ struct HomeFeed: View {
                 .frame(maxHeight: .infinity)
                 HStack(spacing: 6) {
                     ForEach(items.indices, id: \.self) { k in
-                        Capsule().fill(k == i ? Theme.sand : Color.white.opacity(0.25)).frame(width: k == i ? 18 : 6, height: 6)
+                        Capsule().fill(k == i ? Theme.sand : Color.white.opacity(0.3)).frame(width: k == i ? 20 : 6, height: 6)
                             .onTapGesture { withAnimation { heroIndex = k } }
                     }
                 }
-                .frame(maxWidth: .infinity, alignment: .trailing)
-                .padding(24)
+                .padding(26)
             }
         }
-        .frame(height: 340)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Theme.line, lineWidth: 1))
-        .shadow(color: .black.opacity(0.4), radius: 20, y: 8)
-        .padding(.horizontal, 28)
+        .frame(height: 540)
+        .padding(.horizontal, 32)
         .animation(.easeInOut(duration: 0.5), value: i)
     }
 
@@ -235,7 +193,7 @@ struct HomeFeed: View {
         }
         .frame(height: 260)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .padding(.horizontal, 28)
+        .padding(.horizontal, 32)
     }
 
     // MARK: Rows
@@ -250,13 +208,13 @@ struct HomeFeed: View {
                 StartTile(title: "Assess", subtitle: "Feedback on delivery", icon: "waveform.badge.magnifyingglass", color: Theme.olive) { HomeNav.shared.open(.assess) }
                 StartTile(title: "Search", subtitle: "Find any moment", icon: "magnifyingglass", color: Theme.charcoal) { HomeNav.shared.open(.search) }
             }
-            .padding(.horizontal, 28)
+            .padding(.horizontal, 32)
         }
     }
 
     private func rowTitle(_ title: String, count: Int?, action: (String, () -> Void)?) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(title).font(Theme.display(20, weight: .medium)).foregroundColor(Theme.cream)
+            Text(title).font(Theme.display(22, weight: .medium)).foregroundColor(Theme.cream)
             if let count { Text("\(count)").font(.system(size: 12, weight: .medium)).foregroundColor(Theme.faint) }
             Spacer()
             if let action {
@@ -267,7 +225,7 @@ struct HomeFeed: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 28)
+        .padding(.horizontal, 32)
     }
 
     private func row<Content: View>(_ title: String, count: Int, action: (String, () -> Void)?, @ViewBuilder content: () -> Content) -> some View {
@@ -275,7 +233,7 @@ struct HomeFeed: View {
             rowTitle(title, count: count, action: action)
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(alignment: .top, spacing: 14) { content() }
-                    .padding(.horizontal, 28).padding(.vertical, 6)
+                    .padding(.horizontal, 32).padding(.vertical, 6)
             }
         }
     }
@@ -285,7 +243,7 @@ struct HomeFeed: View {
 
 // MARK: - Cards
 
-/// A tall 9:16 card, like a film poster.
+/// A tall 9:16 card, like a film poster, with its title on the picture.
 struct PosterCard: View {
     let path: String
     let title: String
@@ -296,35 +254,41 @@ struct PosterCard: View {
 
     var body: some View {
         Button(action: open) {
-            VStack(alignment: .leading, spacing: 7) {
-                ZStack(alignment: .topLeading) {
-                    ReelThumbnailView(path: path, faceAspect: 150 / 250).frame(width: 150, height: 250).clipped()
-                    LinearGradient(colors: [.clear, .black.opacity(0.55)], startPoint: .center, endPoint: .bottom)
-                    if let badge {
-                        Text(badge).font(.system(size: 9, weight: .semibold)).foregroundColor(Theme.cream)
-                            .padding(.horizontal, 6).padding(.vertical, 3).background(Capsule().fill(Color.black.opacity(0.55))).padding(8)
-                    }
-                    if hover {
-                        Image(systemName: "play.fill").font(.system(size: 18)).foregroundColor(Theme.cream)
-                            .frame(width: 44, height: 44).background(Circle().fill(Theme.terracotta.opacity(0.9)))
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    }
+            ZStack(alignment: .bottomLeading) {
+                ReelThumbnailView(path: path, faceAspect: 200 / 340).frame(width: 200, height: 340).clipped()
+                LinearGradient(colors: [.clear, .clear, .black.opacity(0.9)], startPoint: .top, endPoint: .bottom)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title).font(.system(size: 13, weight: .semibold)).foregroundColor(.white).lineLimit(2)
+                    Text(meta).font(.system(size: 11)).foregroundColor(Color.white.opacity(0.7)).lineLimit(1)
                 }
-                .frame(width: 150, height: 250)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(hover ? Theme.sand.opacity(0.7) : Theme.line, lineWidth: hover ? 1.5 : 1))
-                Text(title).font(.system(size: 12, weight: .semibold)).foregroundColor(Theme.text).lineLimit(1).frame(width: 150, alignment: .leading)
-                Text(meta).font(.system(size: 10)).foregroundColor(Theme.muted).lineLimit(1)
+                .padding(12)
+                if let badge {
+                    Text(badge).font(.system(size: 9, weight: .semibold)).foregroundColor(Theme.cream)
+                        .padding(.horizontal, 7).padding(.vertical, 3).background(Capsule().fill(Color.black.opacity(0.6)))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).padding(10)
+                }
+                if hover { playBadge }
             }
+            .frame(width: 200, height: 340)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(hover ? Color.white.opacity(0.75) : Color.white.opacity(0.08), lineWidth: hover ? 2 : 1))
+            .shadow(color: .black.opacity(hover ? 0.55 : 0.3), radius: hover ? 18 : 8, y: 6)
             .scaleEffect(hover ? 1.03 : 1)
             .animation(.easeOut(duration: 0.15), value: hover)
         }
         .buttonStyle(.plain)
         .onHover { hover = $0 }
     }
+
+    private var playBadge: some View {
+        Image(systemName: "play.fill").font(.system(size: 18)).foregroundColor(Theme.bg)
+            .frame(width: 48, height: 48).background(Circle().fill(Color.white.opacity(0.92)))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
 }
 
-/// A wide 16:9 card with an optional "how much is left after the edit" bar, like Continue Watching.
+/// A wide 16:9 card with its title on the picture, and an optional "how much is left after the
+/// edit" bar, like Continue Watching.
 struct WideCard: View {
     let path: String?
     let icon: String
@@ -336,38 +300,37 @@ struct WideCard: View {
 
     var body: some View {
         Button(action: open) {
-            VStack(alignment: .leading, spacing: 7) {
-                ZStack(alignment: .bottomLeading) {
-                    if let path { ReelThumbnailView(path: path).frame(width: 250, height: 140).clipped() }
-                    else {
-                        LinearGradient(colors: [Theme.navy, Theme.charcoal], startPoint: .topLeading, endPoint: .bottomTrailing)
-                            .overlay(Image(systemName: icon).font(.system(size: 34)).foregroundColor(Theme.sand.opacity(0.35)))
-                    }
-                    if let progress {
-                        GeometryReader { g in
-                            ZStack(alignment: .leading) {
-                                Rectangle().fill(Color.white.opacity(0.18))
-                                Rectangle().fill(Theme.terracottaLight).frame(width: g.size.width * min(1, max(0, progress)))
-                            }
+            ZStack(alignment: .bottomLeading) {
+                if let path { ReelThumbnailView(path: path).frame(width: 340, height: 192).clipped() }
+                else {
+                    LinearGradient(colors: [Theme.navy, Theme.charcoal], startPoint: .topLeading, endPoint: .bottomTrailing)
+                        .overlay(Image(systemName: icon).font(.system(size: 40)).foregroundColor(Theme.sand.opacity(0.5)))
+                }
+                LinearGradient(colors: [.clear, .clear, .black.opacity(0.88)], startPoint: .top, endPoint: .bottom)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title).font(.system(size: 13, weight: .semibold)).foregroundColor(.white).lineLimit(1)
+                    Text(meta).font(.system(size: 11)).foregroundColor(Color.white.opacity(0.7)).lineLimit(1)
+                }
+                .padding(.horizontal, 12).padding(.bottom, progress == nil ? 11 : 15)
+                if let progress {
+                    GeometryReader { g in
+                        ZStack(alignment: .leading) {
+                            Rectangle().fill(Color.white.opacity(0.18))
+                            Rectangle().fill(Theme.terracottaLight).frame(width: g.size.width * min(1, max(0, progress)))
                         }
-                        .frame(height: 3)
                     }
-                    if hover {
-                        Image(systemName: "play.fill").font(.system(size: 16)).foregroundColor(Theme.cream)
-                            .frame(width: 40, height: 40).background(Circle().fill(Theme.terracotta.opacity(0.9)))
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    }
+                    .frame(height: 3)
                 }
-                .frame(width: 250, height: 140)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(hover ? Theme.sand.opacity(0.7) : Theme.line, lineWidth: hover ? 1.5 : 1))
-                HStack(spacing: 5) {
-                    Image(systemName: icon).font(.system(size: 9)).foregroundColor(Theme.sand)
-                    Text(title).font(.system(size: 12, weight: .semibold)).foregroundColor(Theme.text).lineLimit(1)
+                if hover {
+                    Image(systemName: "play.fill").font(.system(size: 16)).foregroundColor(Theme.bg)
+                        .frame(width: 44, height: 44).background(Circle().fill(Color.white.opacity(0.92)))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                .frame(width: 250, alignment: .leading)
-                Text(meta).font(.system(size: 10)).foregroundColor(Theme.muted).lineLimit(1)
             }
+            .frame(width: 340, height: 192)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(hover ? Color.white.opacity(0.75) : Color.white.opacity(0.08), lineWidth: hover ? 2 : 1))
+            .shadow(color: .black.opacity(hover ? 0.55 : 0.3), radius: hover ? 18 : 8, y: 6)
             .scaleEffect(hover ? 1.02 : 1)
             .animation(.easeOut(duration: 0.15), value: hover)
         }
@@ -387,19 +350,22 @@ struct StartTile: View {
 
     var body: some View {
         Button(action: open) {
-            ZStack(alignment: .leading) {
-                LinearGradient(colors: [color, color.opacity(0.65)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                Image(systemName: icon).font(.system(size: 54)).foregroundColor(Color.white.opacity(0.08))
-                    .frame(maxWidth: .infinity, alignment: .trailing).offset(x: 10)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title.uppercased()).font(Theme.display(17)).tracking(2.5).foregroundColor(Theme.cream)
-                    Text(subtitle).font(.system(size: 11)).foregroundColor(Theme.cream.opacity(0.7))
+            HStack(spacing: 14) {
+                Image(systemName: icon).font(.system(size: 18)).foregroundColor(Theme.cream)
+                    .frame(width: 46, height: 46)
+                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(color))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title).font(Theme.display(17, weight: .medium)).foregroundColor(.white)
+                    Text(subtitle).font(.system(size: 12)).foregroundColor(Theme.muted)
                 }
-                .padding(.horizontal, 18)
+                Spacer()
+                Image(systemName: "arrow.right").font(.system(size: 12, weight: .medium)).foregroundColor(hover ? Theme.sand : Theme.faint)
             }
+            .padding(.horizontal, 16)
             .frame(height: 84).frame(maxWidth: .infinity)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color.white.opacity(hover ? 0.25 : 0.08), lineWidth: 1))
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white.opacity(hover ? 0.1 : 0.06)))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.white.opacity(hover ? 0.22 : 0.09), lineWidth: 1))
+            .contentShape(Rectangle())
             .scaleEffect(hover ? 1.02 : 1)
             .animation(.easeOut(duration: 0.15), value: hover)
         }

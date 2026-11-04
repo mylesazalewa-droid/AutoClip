@@ -40,7 +40,7 @@ struct ReelWindowView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .background(Theme.bg)
+        .background(AmbientBackdrop())
         .preferredColorScheme(.dark)
         .navigationTitle(record?.title ?? "Reels")
         .frame(minWidth: 940, minHeight: 600)

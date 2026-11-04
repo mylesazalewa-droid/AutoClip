@@ -42,7 +42,6 @@ struct WorshipTab: View {
             else { landing }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Theme.bg)
         .onAppear { reports = WorshipStore.all(); goals = WorshipGoals.load() }
         .confirmationDialog("Delete this assessment?", isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } }), presenting: confirmDelete) { r in
             Button("Delete", role: .destructive) { delete(r) }
@@ -66,10 +65,16 @@ struct WorshipTab: View {
     private var landing: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Worship").font(Theme.display(30)).foregroundColor(Theme.cream)
-                    Text("Add a service recording to see how the sound, clapping, smiles, stage presence and communication came across. Your files stay on this Mac.")
-                        .font(.system(size: 12)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                if let latest = reports.first {
+                    let stats = WorshipStats(latest)
+                    CinematicHero(path: latest.visual == nil ? nil : latest.videoPath, eyebrow: "Latest service · \(latest.date.formatted(date: .abbreviated, time: .omitted))",
+                                  title: latest.title, detail: "\(stats.namedSongs.count) song\(stats.namedSongs.count == 1 ? "" : "s") · sound \(stats.soundScore.map(String.init) ?? "–") · communication \(stats.communicationScore.map(String.init) ?? "–")",
+                                  height: 400, icon: "music.note") {
+                        Button { open(latest) } label: { Label("Open", systemImage: "play.fill") }.buttonStyle(PrimaryButtonStyle())
+                    }
+                } else {
+                    PageHeader(eyebrow: "Review", title: "Worship", subtitle: "Add a service recording to see how the sound, clapping, smiles, stage presence and communication came across. Your files stay on this Mac.")
+                        .padding(.horizontal, -32)
                 }
                 HStack(spacing: 10) {
                     Button { chooseFile() } label: { Label("Add a recording", systemImage: "plus") }.buttonStyle(PrimaryButtonStyle(compact: true))
@@ -88,7 +93,7 @@ struct WorshipTab: View {
                     ForEach(Array(reports.enumerated()), id: \.element.videoPath) { _, r in serviceRow(r) }
                 }
             }
-            .padding(.horizontal, 28).padding(.vertical, 22)
+            .padding(.horizontal, 32).padding(.vertical, 28)
         }
     }
 
@@ -97,6 +102,10 @@ struct WorshipTab: View {
         return HStack(spacing: 8) {
         Button { open(r) } label: {
             HStack(spacing: 16) {
+                if r.visual != nil {
+                    VideoFrameView(path: r.videoPath, width: 480).frame(width: 150, height: 84).clipped()
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                }
                 VStack(alignment: .leading, spacing: 3) {
                     Text(r.title).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.cream).lineLimit(1)
                     Text("\(r.date.formatted(date: .abbreviated, time: .omitted)) · \(s.namedSongs.count) song\(s.namedSongs.count == 1 ? "" : "s")")
@@ -108,7 +117,7 @@ struct WorshipTab: View {
                         Text(v.map(String.init) ?? "–").font(.system(size: 14, weight: .semibold, design: .serif)).foregroundColor(Theme.cream).monospacedDigit()
                         Text(name).font(.system(size: 9)).foregroundColor(Theme.faint)
                     }
-                    .frame(width: 66)
+                    .frame(width: 88)
                 }
             }
             .padding(14)
@@ -205,6 +214,7 @@ struct WorshipTab: View {
     private func open(_ r: WorshipReport) {
         current = r
         section = .flow
+        if r.visual != nil { Backdrop.shared.path = r.videoPath }
         coachStatus = nil; coachError = nil
         setlistText = r.setlist.sorted { $0.start < $1.start }.map(\.name).joined(separator: "\n")
         setlistNote = nil; clipStatus = nil; clipFolder = nil; clipError = nil

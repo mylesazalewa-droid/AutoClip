@@ -157,7 +157,6 @@ struct AssessTab: View {
           }
           }
         }
-        .background(Theme.bg)
         .confirmationDialog(deleteTitle, isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
                             titleVisibility: .visible) {
             if let path = pendingDelete {
@@ -281,7 +280,7 @@ struct AssessTab: View {
                 Button { chooseVideo() } label: { Label("Add video", systemImage: "plus") }
                     .buttonStyle(PrimaryButtonStyle())
             }
-            youTubeField.frame(maxWidth: 520).padding(.horizontal, 28).padding(.bottom, 18)
+            youTubeField.frame(maxWidth: 520).padding(.horizontal, 32).padding(.bottom, 18)
             ScrollView {
                 if videos.isEmpty {
                     EmptyState(icon: "waveform.badge.magnifyingglass", title: "No sermons yet",
@@ -289,23 +288,44 @@ struct AssessTab: View {
                         Button { chooseVideo() } label: { Label("Add video", systemImage: "plus") }.buttonStyle(PrimaryButtonStyle())
                     }
                 } else {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 200, maximum: 240), spacing: 18, alignment: .top)],
-                              alignment: .leading, spacing: 22) {
-                        ForEach(videos, id: \.self) { path in
-                            SermonCard(path: path, report: allReports.first { $0.videoPath == path },
-                                       speaker: profiles.speakers.count > 1 ? profiles.speaker(for: path).name : nil,
-                                       open: { select(path) }, delete: { pendingDelete = path })
-                                .contextMenu {
-                                    speakerAssignMenu(path)
-                                    Divider()
-                                    Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)]) }
-                                    Button("Delete…") { pendingDelete = path }
-                                }
+                    VStack(alignment: .leading, spacing: 24) {
+                        let done = videos.filter { p in allReports.contains { $0.videoPath == p } }
+                        let waiting = videos.filter { p in !allReports.contains { $0.videoPath == p } }
+                        if let path = done.first, let r = allReports.first(where: { $0.videoPath == path }) {
+                            CinematicHero(path: path, eyebrow: "Latest assessment", title: r.title,
+                                          detail: r.speakingMinutes > 0 ? String(format: "%.1f filler words a minute over %.0f minutes", r.fillersPerMin, r.speakingMinutes) : nil, height: 400) {
+                                Button { select(path) } label: { Label("Open", systemImage: "play.fill") }.buttonStyle(PrimaryButtonStyle())
+                                Button { chooseVideo() } label: { Label("Add video", systemImage: "plus") }.buttonStyle(SecondaryButtonStyle())
+                            }
+                            .padding(.horizontal, 32)
                         }
+                        if !done.isEmpty { sermonGrid("Assessed", done) }
+                        if !waiting.isEmpty { sermonGrid("Not assessed yet", waiting) }
                     }
-                    .padding(.horizontal, 28).padding(.top, 4).padding(.bottom, 30)
+                    .padding(.top, 4).padding(.bottom, 36)
                 }
             }
+        }
+    }
+
+    private func sermonGrid(_ title: String, _ paths: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            SectionTitle(title: title, count: paths.count).padding(.horizontal, 32)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 250, maximum: 330), spacing: 22, alignment: .top)],
+                      alignment: .leading, spacing: 26) {
+                ForEach(paths, id: \.self) { path in
+                    SermonCard(path: path, report: allReports.first { $0.videoPath == path },
+                               speaker: profiles.speakers.count > 1 ? profiles.speaker(for: path).name : nil,
+                               open: { select(path) }, delete: { pendingDelete = path })
+                        .contextMenu {
+                            speakerAssignMenu(path)
+                            Divider()
+                            Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)]) }
+                            Button("Delete…") { pendingDelete = path }
+                        }
+                }
+            }
+            .padding(.horizontal, 32)
         }
     }
 
@@ -403,6 +423,7 @@ struct AssessTab: View {
 
     private func select(_ path: String) {
         selected = path
+        Backdrop.shared.path = path
         error = nil; hits = []; words = []; hidden = []; hovered = nil
         report = nil; deliveryStatus = nil; stageStatus = nil; coachStatus = nil; coachError = nil
         notesStatus = nil; notesError = nil

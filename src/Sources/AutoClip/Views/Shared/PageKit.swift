@@ -18,7 +18,7 @@ struct PageHeader<Trailing: View>: View {
                     Image(systemName: "diamond.fill").font(.system(size: 5)).foregroundColor(Theme.sand)
                     Text(eyebrow.uppercased()).font(.system(size: 10, weight: .semibold)).tracking(2).foregroundColor(Theme.sand)
                 }
-                Text(title).font(Theme.display(28)).foregroundColor(Theme.cream).lineLimit(2)
+                Text(title).font(Theme.display(36, weight: .medium)).foregroundColor(.white).lineLimit(2)
                 if let subtitle {
                     Text(subtitle).font(.system(size: 12)).foregroundColor(Theme.muted).lineLimit(2)
                 }
@@ -26,7 +26,7 @@ struct PageHeader<Trailing: View>: View {
             Spacer(minLength: 12)
             HStack(spacing: 10) { trailing }
         }
-        .padding(.horizontal, 28).padding(.top, 22).padding(.bottom, 18)
+        .padding(.horizontal, 32).padding(.top, 30).padding(.bottom, 20)
     }
 }
 

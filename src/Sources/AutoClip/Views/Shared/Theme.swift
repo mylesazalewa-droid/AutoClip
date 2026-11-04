@@ -10,10 +10,10 @@ enum Theme {
 
     // Surfaces, darkest to lightest
     static let bg = hex(0x141517)
-    static let surface = hex(0x1B1D20)
-    static let raised = hex(0x23262A)
-    static let raised2 = hex(0x2D3035)
-    static let line = Color.white.opacity(0.07)
+    static let surface = Color.white.opacity(0.055)
+    static let raised = Color.white.opacity(0.085)
+    static let raised2 = Color.white.opacity(0.13)
+    static let line = Color.white.opacity(0.09)
 
     // The fabric colours
     static let navy = hex(0x1E2A4A)
@@ -29,8 +29,8 @@ enum Theme {
     // Text
     static let cream = hex(0xF1E9DC)
     static let text = Color.white.opacity(0.92)
-    static let muted = Color.white.opacity(0.55)
-    static let faint = Color.white.opacity(0.35)
+    static let muted = Color.white.opacity(0.62)
+    static let faint = Color.white.opacity(0.42)
 
     // Meaning
     static let accent = sand
