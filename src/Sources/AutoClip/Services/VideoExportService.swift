@@ -379,11 +379,11 @@ class VideoExportService {
     /// `careful` looks twice as often (6 frames a second) and counts smaller faces, for moments
     /// where the normal pass lost the person.
     func detectFaces(in asset: AVAsset, clipRange: CMTimeRange, videoSize: CGSize,
-                     cropFraction: Double = 0.32, careful: Bool = false) async -> [FaceSample] {
+                     cropFraction: Double = 0.32, careful: Bool = false, followX: Double? = nil) async -> [FaceSample] {
         let startSec = CMTimeGetSeconds(clipRange.start)
         let endSec = startSec + CMTimeGetSeconds(clipRange.duration)
         let path = (asset as? AVURLAsset)?.url.path ?? "\(ObjectIdentifier(asset))"
-        let key = String(format: "%@|%.2f|%.2f|%.3f|%d", path, startSec, endSec, cropFraction, careful ? 1 : 0)
+        let key = String(format: "%@|%.2f|%.2f|%.3f|%d|%.3f", path, startSec, endSec, cropFraction, careful ? 1 : 0, followX ?? -1)
         if let cached = Self.cachedFaces(key) { return cached }
 
         let generator = AVAssetImageGenerator(asset: asset)
@@ -405,8 +405,9 @@ class VideoExportService {
             t += interval
         }
 
-        let result = Self.planFraming(frames, frameWidth: Double(videoSize.width), cropFraction: cropFraction,
-                                      perSecond: careful ? 6 : 3)
+        let result = followX.map { Self.planFollowing(frames, from: $0, frameWidth: Double(videoSize.width), perSecond: careful ? 6 : 3) }
+            ?? Self.planFraming(frames, frameWidth: Double(videoSize.width), cropFraction: cropFraction,
+                                perSecond: careful ? 6 : 3)
         Self.cacheFaces(result, key)
         return result
     }
@@ -561,6 +562,18 @@ class VideoExportService {
         return smoothed
     }
 
+    /// Stays on one chosen person: each frame takes the face nearest to where they just were,
+    /// and holds still while they can't be seen.
+    private static func planFollowing(_ frames: [(time: Double, faces: [DetectedFace])], from startX: Double,
+                                      frameWidth: Double, perSecond: Int) -> [FaceSample] {
+        var last = startX
+        let samples = frames.map { frame -> FaceSample in
+            if let near = frame.faces.min(by: { abs($0.x - last) < abs($1.x - last) }), abs(near.x - last) < 0.3 { last = near.x }
+            return FaceSample(time: frame.time, centerX: last * frameWidth)
+        }
+        return smoothSamples(samples, frameWidth: frameWidth, perSecond: perSecond)
+    }
+
     private static func smoothSamples(_ samples: [FaceSample], frameWidth: Double, perSecond: Int = 3) -> [FaceSample] {
         guard samples.count > 2 else { return samples }
 
@@ -642,7 +655,7 @@ class VideoExportService {
             } else if vs.width > vs.height {
                 let faces = await detectFaces(in: a, clipRange: range, videoSize: vs,
                                               cropFraction: cropFraction(videoSize: vs, renderSize: renderSize),
-                                              careful: clip.carefulFraming ?? false)
+                                              careful: clip.carefulFraming ?? false, followX: clip.trackX)
                 if faces.isEmpty {
                     li.setTransform(cropTransform(centerX: vs.width / 2, videoSize: vs, renderSize: renderSize, preferredTransform: pt), at: seg.start)
                 } else {
@@ -1641,7 +1654,7 @@ class VideoExportService {
                     let srcRange = CMTimeRange(start: CMTime(seconds: clip.startTime, preferredTimescale: 600), duration: segDur)
                     let faces    = await detectFaces(in: clipAsset, clipRange: srcRange, videoSize: clipVideoSize,
                                                      cropFraction: cropFraction(videoSize: clipVideoSize, renderSize: renderSize),
-                                                     careful: clip.carefulFraming ?? false)
+                                                     careful: clip.carefulFraming ?? false, followX: clip.trackX)
 
                     if faces.isEmpty {
                         let t = cropTransform(centerX: clipVideoSize.width / 2, videoSize: clipVideoSize, renderSize: renderSize, preferredTransform: clipTransform)

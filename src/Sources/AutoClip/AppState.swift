@@ -30,7 +30,7 @@ class AppState: ObservableObject {
         panel.allowedContentTypes = [.audiovisualContent]
         panel.allowsOtherFileTypes = true
         panel.allowsMultipleSelection = false
-        panel.message = "Select a video to analyze"
+        panel.message = "Select a video or audio file to analyze"
         panel.prompt = "Import"
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
@@ -44,6 +44,27 @@ class AppState: ObservableObject {
         analyzeProgress = 0
         analyzeStatus = "Preparing..."
 
+        guard AudioSource.isAudioFile(url) else { importFile(url); return }
+        Task {
+            do {
+                let video = try await AudioSource.video(for: url) { p in
+                    DispatchQueue.main.async {
+                        self.analyzeProgress = p * 0.05
+                        self.analyzeStatus = "Preparing your audio: \(Int(p * 100))%"
+                    }
+                }
+                await MainActor.run { self.importFile(video) }
+            } catch {
+                await MainActor.run {
+                    self.isAnalyzing = false
+                    self.errorMessage = error.localizedDescription
+                    self.showError = true
+                }
+            }
+        }
+    }
+
+    private func importFile(_ url: URL) {
         library.importVideoFile(url, progress: { p, msg in
             DispatchQueue.main.async {
                 self.analyzeProgress = p * 0.1

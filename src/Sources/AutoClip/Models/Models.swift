@@ -59,6 +59,8 @@ struct Clip: Identifiable, Codable {
     var thumbnailData: String?
     var sourceVideoPath: String = ""  // empty = use the reel's primary source video
     /// Framing chosen in the reel editor: hold the crop still at this horizontal centre (0…1)
+    /// Keep the crop on the person who starts here (0…1), following them as they move
+    var trackX: Double?
     var frameX: Double?
     /// Re-check the face tracking more closely for this clip
     var carefulFraming: Bool?

@@ -69,7 +69,16 @@ enum ReelPipeline {
 
             let svc = VideoExportService.shared
 
-            let workingURL = await svc.convertHEVCIfNeeded(videoURL) { msg in
+            // Audio-only files get a companion video, then go through the same steps as any video
+            var sourceURL = videoURL
+            if await AudioSource.needsVideo(videoURL) {
+                await upd(0.03, "Preparing your audio…")
+                sourceURL = try await AudioSource.video(for: videoURL) { p in
+                    Task { await upd(0.03 + p * 0.07, "Preparing your audio: \(Int(p * 100))%") }
+                }
+            }
+
+            let workingURL = await svc.convertHEVCIfNeeded(sourceURL) { msg in
                 Task { await upd(0.10, msg) }
             }
 

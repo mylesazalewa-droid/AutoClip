@@ -468,7 +468,7 @@ struct AutoReelsTab: View {
                             .foregroundColor(Color.white.opacity(isDropTargeted ? 0.7 : 0.3))
 
                         VStack(spacing: 6) {
-                            Text("Drop your reel video here")
+                            Text("Drop your video or audio here")
                                 .font(.system(size: 20, weight: .semibold))
                                 .foregroundColor(.white)
                             Text("MP4, MOV, MKV — any format works")

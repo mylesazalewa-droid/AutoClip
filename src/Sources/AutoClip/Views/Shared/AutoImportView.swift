@@ -41,7 +41,7 @@ struct AutoImportView: View {
                 Text("AUTO-IMPORT").font(.system(size: 10, weight: .semibold)).tracking(2).foregroundColor(Theme.sand)
             }
             Text("New video in, reels out").font(Theme.display(22)).foregroundColor(Theme.cream)
-            Text("When a new video goes up on your channel or lands in a folder, AutoClip downloads it, makes reels with your Auto Reels settings and builds the content kit. AutoClip needs to be open (it can be in the background).")
+            Text("When a new video goes up on your channel, or a video or audio file lands in a folder, AutoClip gets it, makes reels with your Auto Reels settings and builds the content kit. AutoClip needs to be open (it can be in the background).")
                 .font(.system(size: 11)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
 
             VStack(alignment: .leading, spacing: 6) {
@@ -54,7 +54,7 @@ struct AutoImportView: View {
                         .lineLimit(1).truncationMode(.middle)
                     Spacer()
                     if !folder.isEmpty { Button("Clear") { folder = "" }.controlSize(.small) }
-                    Button("Choose…") { if let f = pickFolder("Choose a folder to watch for new videos") { folder = f.path } }.controlSize(.small)
+                    Button("Choose…") { if let f = pickFolder("Choose a folder to watch for new videos or audio") { folder = f.path } }.controlSize(.small)
                 }
             }
 

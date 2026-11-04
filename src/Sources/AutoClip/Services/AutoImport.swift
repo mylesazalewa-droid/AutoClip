@@ -79,7 +79,7 @@ final class AutoImport: ObservableObject {
 
     // MARK: Finding new videos
 
-    private static let videoTypes: Set<String> = ["mp4", "mov", "m4v", "mkv"]
+    private static let videoTypes: Set<String> = Set(["mp4", "mov", "m4v", "mkv"]).union(AudioSource.types)
 
     /// The newest uploads on the channel: (id, title), newest first.
     nonisolated static func latest(channel: String, count: Int = 5) async throws -> [(id: String, title: String)] {

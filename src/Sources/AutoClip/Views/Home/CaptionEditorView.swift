@@ -6,6 +6,8 @@ import AppKit
 struct CaptionEditorView: View {
     @Binding var look: CaptionLook
     let gold: Color
+    enum Part { case all, font, effects }
+    var part: Part = .all
 
     private static let families: [String] = NSFontManager.shared.availableFontFamilies.sorted()
     private static let popular = ["Impact", "Arial Black", "Avenir Next", "Futura", "Helvetica Neue",
@@ -16,6 +18,28 @@ struct CaptionEditorView: View {
     private let sampleWords = ["This", "is", "how", "your", "captions", "look"]
 
     var body: some View {
+        switch part {
+        case .all: everything
+        case .font:
+            VStack(alignment: .leading, spacing: 14) {
+                fontRow
+                sliderRow("Size", value: $look.sizeScale, range: 0.5...2.0, label: "\(Int(look.sizeScale * 100))%")
+                sliderRow("Position", value: $look.position, range: 0.1...0.92,
+                          label: look.position < 0.35 ? "Top" : look.position < 0.65 ? "Middle" : "Bottom")
+                wordsRow
+                colorRow
+            }
+        case .effects:
+            VStack(alignment: .leading, spacing: 14) {
+                motionRow
+                emphasisRow
+                outlineRow
+                backgroundRow
+            }
+        }
+    }
+
+    private var everything: some View {
         HStack(alignment: .top, spacing: 14) {
             preview
             VStack(alignment: .leading, spacing: 10) {

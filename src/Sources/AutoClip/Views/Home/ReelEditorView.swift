@@ -459,7 +459,13 @@ struct ReelDraftsView: View {
 // MARK: - Reel editor
 
 struct ReelEditorView: View {
+    enum Workspace: String { case edit = "Edit", reframe = "Reframe", audio = "Audio", captions = "Captions" }
     @State var draft: ReelDraft
+    @State var workspace: Workspace = .edit
+    /// People in the first clip, when there's a choice of who to follow
+    @State private var crew: [ReframePerson] = []
+    @State private var previewAsset: AVAsset?
+    @State private var mediaToken = 0
     @State private var splitNote: [UUID: String] = [:]
     let gold: Color
     var onSave: (ReelDraft) -> Void
@@ -534,29 +540,17 @@ struct ReelEditorView: View {
             .padding(16)
             Divider().background(Color.white.opacity(0.08))
 
-            HStack(alignment: .top, spacing: 16) {
-                previewColumn.frame(width: 260)
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 14) {
-                            sizeSection
-                            polishSection
-                            captionsSection
-                            audioSection
-                            Text("CLIPS — click words to cut them (shift-click a range) · ▶ plays · ✏️ fixes caption text")
-                                .font(.system(size: 10, weight: .semibold)).foregroundColor(Color.white.opacity(0.35)).tracking(1)
-                            ForEach(Array(draft.pieces.enumerated()), id: \.element.id) { i, _ in pieceCard(i) }
-                        }
-                        .padding(.trailing, 6)
-                    }
-                    // Follow along while playing (not while paused, so manual scrolling isn't fought)
-                    .onChange(of: playing?.id) { id in
-                        guard isPlaying, let id else { return }
-                        withAnimation(.easeInOut(duration: 0.25)) { proxy.scrollTo(id, anchor: .center) }
-                    }
-                }
+            PillTabs(selection: $workspace, items: [Workspace.edit, .reframe, .audio, .captions].map { ($0, $0.rawValue) })
+                .padding(.top, 12)
+
+            switch workspace {
+            case .edit: editWorkspace
+            case .reframe:
+                ReframeWorkspace(draft: $draft, people: { p in await peopleIn(p) }) { i in framingRow(i) }
+                    .padding(16)
+            case .audio: audioWorkspace
+            case .captions: captionsWorkspace
             }
-            .padding(16)
 
             Divider().background(Color.white.opacity(0.08))
             HStack {
@@ -575,10 +569,11 @@ struct ReelEditorView: View {
             }
             .padding(16)
         }
-        .frame(minWidth: 860, minHeight: 640)
+        .frame(minWidth: 980, minHeight: 740)
         .background(Theme.bg)
         .preferredColorScheme(.dark)
         .task(id: reloadToken) { await reloadPreview() }
+        .task { await askWhoToFollow() }
         .onChange(of: draft.pieces) { _ in reloadToken += 1 }
         .onChange(of: draft.tightenPauses) { _ in reloadToken += 1 }
         .onChange(of: draft.hookText) { _ in rebuildOverlays() }
@@ -588,6 +583,119 @@ struct ReelEditorView: View {
         .onDisappear {
             if let o = observer { player.removeTimeObserver(o) }
             player.pause()
+        }
+    }
+
+    // MARK: Workspaces
+
+    private var editWorkspace: some View {
+            HStack(alignment: .top, spacing: 16) {
+                previewColumn.frame(width: 260)
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 14) {
+                            whoBanner
+                            sizeSection
+                            polishSection
+                            Text("CLIPS — click words to cut them (shift-click a range) · ▶ plays · ✏️ fixes caption text")
+                                .font(.system(size: 10, weight: .semibold)).foregroundColor(Color.white.opacity(0.35)).tracking(1)
+                            ForEach(Array(draft.pieces.enumerated()), id: \.element.id) { i, _ in pieceCard(i) }
+                        }
+                        .padding(.trailing, 6)
+                    }
+                    // Follow along while playing (not while paused, so manual scrolling isn't fought)
+                    .onChange(of: playing?.id) { id in
+                        guard isPlaying, let id else { return }
+                        withAnimation(.easeInOut(duration: 0.25)) { proxy.scrollTo(id, anchor: .center) }
+                    }
+                }
+            }
+            .padding(16)
+    }
+
+    private var audioWorkspace: some View {
+        VStack(spacing: 14) {
+            HStack(alignment: .top, spacing: 20) {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(Array(draft.pieces.enumerated()), id: \.element.id) { i, piece in
+                                ForEach(Array(piece.sentences.enumerated()), id: \.element.id) { j, s in
+                                    wordFlow(i, j, activeWord: playing?.id == s.id ? playing?.word : nil, large: true)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .id(s.id)
+                                }
+                            }
+                        }
+                        .padding(.trailing, 8)
+                    }
+                    .onChange(of: playing?.id) { id in
+                        guard isPlaying, let id else { return }
+                        withAnimation(.easeInOut(duration: 0.25)) { proxy.scrollTo(id, anchor: .center) }
+                    }
+                }
+                previewColumn.frame(width: previewAspect < 1 ? 200 : 420)
+            }
+            .frame(maxHeight: .infinity)
+            ReelStrip(asset: previewAsset, token: mediaToken, duration: total, time: time) { t in
+                time = t
+                player.seek(to: CMTime(seconds: t, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+            }
+            audioBar
+        }
+        .padding(16)
+    }
+
+    private var captionsWorkspace: some View {
+        HStack(alignment: .top, spacing: 24) {
+            previewColumn.frame(maxWidth: previewAspect < 1 ? 280 : .infinity)
+                .frame(maxWidth: .infinity)
+            CaptionPanel(captions: $draft.captions,
+                         look: Binding(get: { look }, set: { var l = $0; l.keywords = []; draft.look = l }), gold: gold)
+        }
+        .padding(16)
+    }
+
+    // MARK: Who to follow
+
+    private func peopleIn(_ piece: ReelDraft.Piece) async -> [ReframePerson] {
+        guard let first = piece.sentences.first, let last = piece.sentences.last else { return [] }
+        return await Reframe.people(in: piece.sourceVideoPath, from: first.start, to: last.end)
+    }
+
+    /// With more than one person on screen, ask who to follow (once per reel).
+    private func askWhoToFollow() async {
+        guard draft.reframeAsked != true, previewAspect < sourceAspect,
+              draft.pieces.allSatisfy({ $0.framing == nil }), let first = draft.pieces.first else { return }
+        let found = await peopleIn(first)
+        if found.count >= 2 { crew = found }
+    }
+
+    private func follow(_ framing: ReelDraft.Framing?) {
+        draft.reframeAsked = true
+        for i in draft.pieces.indices { draft.pieces[i].framing = framing }
+        crew = []
+    }
+
+    @ViewBuilder private var whoBanner: some View {
+        if !crew.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("\(crew.count) people found. Who should this reel follow?").font(Theme.display(15)).foregroundColor(Theme.cream)
+                HStack(spacing: 12) {
+                    ForEach(Array(crew.enumerated()), id: \.element.id) { i, person in
+                        ReframeTile(title: "Person \(i + 1)", selected: false) {
+                            Image(nsImage: person.face).resizable().scaledToFill()
+                        } action: { follow(ReelDraft.Framing(mode: "person", x: person.x)) }
+                    }
+                    ReframeTile(title: "Whoever's talking", selected: false) {
+                        Image(systemName: "waveform").font(.system(size: 20)).foregroundColor(gold)
+                    } action: { follow(nil) }
+                    Spacer()
+                    Button("See before & after") { workspace = .reframe }.controlSize(.small)
+                }
+            }
+            .padding(12).background(gold.opacity(0.08)).cornerRadius(10)
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(gold.opacity(0.3), lineWidth: 1))
         }
     }
 
@@ -649,6 +757,7 @@ struct ReelEditorView: View {
         guard let (item, words) = await draft.previewItem() else { return }
         if let o = observer { player.removeTimeObserver(o); observer = nil }
         player.replaceCurrentItem(with: item)
+        previewAsset = item.asset
         followSpeaker(item)
         reelWords = words
         rebuildOverlays()
@@ -659,6 +768,7 @@ struct ReelEditorView: View {
             if abs(r.height) > 0 { sourceAspect = abs(r.width) / abs(r.height) }
         }
         total = max(0.1, draft.duration)
+        mediaToken += 1
         let seekTo = auditionAt.map { max(0, min($0, total - 0.2)) } ?? min(resumeAt, total)
         await player.seek(to: CMTime(seconds: seekTo, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
         time = seekTo
@@ -844,52 +954,37 @@ struct ReelEditorView: View {
         Binding(get: { draft.audioSettings }, set: { draft.audio = $0; $0.save() })
     }
 
-    private var audioSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("AUDIO").font(.system(size: 10, weight: .semibold)).foregroundColor(Color.white.opacity(0.35)).tracking(1)
+    private var audioBar: some View {
+        HStack(spacing: 18) {
             Toggle(isOn: audio.cleanVoice) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Clean up voice").font(.system(size: 12)).foregroundColor(.white)
-                    Text("Removes room echo, hum and background noise")
-                        .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.4))
+                    Text("Removes echo, hum and noise").font(.system(size: 10)).foregroundColor(Color.white.opacity(0.4))
                 }
-            }.toggleStyle(.switch).tint(Theme.action)
+            }.toggleStyle(.switch).tint(Theme.action).fixedSize()
             if audio.wrappedValue.cleanVoice {
-                HStack {
-                    Text("Strength").font(.system(size: 11)).foregroundColor(Color.white.opacity(0.6))
-                    Slider(value: audio.strength, in: 0.3...1).tint(Theme.action)
-                }
+                Slider(value: audio.strength, in: 0.3...1).tint(Theme.action).frame(width: 90).help("How strongly the voice is cleaned")
             }
             Toggle(isOn: audio.levelVoice) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Even out volume").font(.system(size: 12)).foregroundColor(.white)
-                    Text("Evens out loud and quiet moments and sets a steady volume")
-                        .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.4))
+                    Text("Steady loud and quiet moments").font(.system(size: 10)).foregroundColor(Color.white.opacity(0.4))
                 }
-            }.toggleStyle(.switch).tint(Theme.action)
-            HStack {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Background music").font(.system(size: 12)).foregroundColor(.white)
-                    Text(audio.wrappedValue.musicName ?? "None — dips under speech when added")
-                        .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.4)).lineLimit(1)
-                }
-                Spacer()
-                if audio.wrappedValue.musicPath != nil {
-                    Button { audio.wrappedValue.musicPath = nil } label: { Image(systemName: "xmark.circle") }
-                        .buttonStyle(.plain).foregroundColor(Color.white.opacity(0.5)).help("Remove music")
-                }
-                Button("Choose…") { chooseMusic() }.controlSize(.small)
-            }
+            }.toggleStyle(.switch).tint(Theme.action).fixedSize()
+            Spacer(minLength: 0)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Background music").font(.system(size: 12)).foregroundColor(.white)
+                Text(audio.wrappedValue.musicName ?? "Dips under speech").font(.system(size: 10)).foregroundColor(Color.white.opacity(0.4)).lineLimit(1)
+            }.frame(maxWidth: 130, alignment: .leading)
             if audio.wrappedValue.musicPath != nil {
-                HStack {
-                    Text("Music volume").font(.system(size: 11)).foregroundColor(Color.white.opacity(0.6))
-                    Slider(value: audio.musicVolume, in: 0.03...0.35).tint(Theme.action)
-                }
+                Slider(value: audio.musicVolume, in: 0.03...0.35).tint(Theme.action).frame(width: 80).help("Music volume")
+                Button { audio.wrappedValue.musicPath = nil } label: { Image(systemName: "xmark.circle") }
+                    .buttonStyle(.plain).foregroundColor(Color.white.opacity(0.5)).help("Remove music")
             }
-            Text("Audio changes are applied when you export.")
-                .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.3))
+            Button("Choose…") { chooseMusic() }.controlSize(.small)
         }
         .padding(12).background(Color.white.opacity(0.04)).cornerRadius(10)
+        .help("Audio changes are applied when you export.")
     }
 
     private func chooseMusic() {
@@ -899,30 +994,6 @@ struct ReelEditorView: View {
         panel.canChooseDirectories = false
         guard panel.runModal() == .OK, let url = panel.url else { return }
         audio.wrappedValue.musicPath = url.path
-    }
-
-    private var captionsSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("CAPTIONS").font(.system(size: 10, weight: .semibold)).foregroundColor(Color.white.opacity(0.35)).tracking(1)
-                Spacer()
-                Toggle("", isOn: $draft.captions).toggleStyle(.switch).tint(Theme.action).labelsHidden()
-            }
-            if draft.captions {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        ForEach(CaptionStyle.all) { style in
-                            Button(style.name) { draft.look = CaptionLook(preset: style) }
-                                .buttonStyle(.plain).font(.system(size: 11))
-                                .padding(.horizontal, 10).padding(.vertical, 5)
-                                .background(Color.white.opacity(0.07)).cornerRadius(6)
-                        }
-                    }
-                }
-                CaptionEditorView(look: Binding(get: { look }, set: { var l = $0; l.keywords = []; draft.look = l }), gold: gold)
-            }
-        }
-        .padding(12).background(Color.white.opacity(0.04)).cornerRadius(10)
     }
 
     // MARK: Clips
@@ -1066,7 +1137,7 @@ struct ReelEditorView: View {
             HStack(spacing: 8) {
                 Image(systemName: "person.crop.rectangle").font(.system(size: 10)).foregroundColor(gold.opacity(0.8))
                 Text("Framing").font(.system(size: 10, weight: .semibold)).foregroundColor(Color.white.opacity(0.5))
-                PillTabs(selection: mode, items: [("auto", "Follow speaker"), ("careful", "Look closer"), ("fixed", "Hold still"), ("split", "Split screen")], compact: true)
+                PillTabs(selection: mode, items: (f.mode == "person" ? [("person", "Chosen person")] : []) + [("auto", "Follow speaker"), ("careful", "Look closer"), ("fixed", "Hold still"), ("split", "Split screen")], compact: true)
                 Spacer(minLength: 0)
             }
             if f.mode == "careful" {
@@ -1110,19 +1181,19 @@ struct ReelEditorView: View {
     /// The sentence as clickable words. Click a word to cut it (click again to restore);
     /// shift-click to cut/restore everything from the last clicked word. While playing,
     /// the spoken word lights up in gold.
-    private func wordFlow(_ i: Int, _ j: Int, activeWord: Int?) -> some View {
+    private func wordFlow(_ i: Int, _ j: Int, activeWord: Int?, large: Bool = false) -> some View {
         let s = draft.pieces[i].sentences[j]
         return WordFlowLayout(spacing: 4, lineSpacing: 2) {
             ForEach(Array(s.words.enumerated()), id: \.element.id) { k, w in
                 let cut = s.isCut(w)
                 let isActive = activeWord == k && !cut
                 Text(w.word)
-                    .font(.system(size: 12, weight: isActive ? .bold : .regular))
+                    .font(.system(size: large ? 15 : 12, weight: isActive ? .bold : .regular))
                     .foregroundColor(!s.included ? Color.white.opacity(0.3)
-                                     : cut ? Theme.danger.opacity(0.7)
+                                     : cut ? (large ? Color.white.opacity(0.3) : Theme.danger.opacity(0.7))
                                      : isActive ? gold
                                      : (activeWord.map { k < $0 } ?? false) ? .white : Color.white.opacity(0.85))
-                    .strikethrough(!s.included || cut, color: cut ? Theme.danger : nil)
+                    .strikethrough(!s.included || cut, color: cut && !large ? Theme.danger : nil)
                     .padding(.horizontal, 1)
                     .background(cut ? Theme.danger.opacity(0.12) : Color.clear)
                     .cornerRadius(2)

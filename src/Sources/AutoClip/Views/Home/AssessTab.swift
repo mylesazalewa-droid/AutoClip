@@ -132,7 +132,7 @@ struct AssessTab: View {
                     }
                 } else if selected == nil {
                     VStack(spacing: 14) {
-                        placeholder("Pick a video to assess", "AutoClip transcribes it (or reuses the saved transcript), then measures filler words, pace, pauses, voice and stage presence. The AI coach adds strengths, things to work on and a sermon map.")
+                        placeholder("Pick a video or audio file to assess", "AutoClip transcribes it (or reuses the saved transcript), then measures filler words, pace, pauses, voice and stage presence. The AI coach adds strengths, things to work on and a sermon map.")
                             .frame(maxHeight: 360)
                         HStack(spacing: 10) {
                             Button { showPractice = true } label: { Label("Record a practice run", systemImage: "mic.fill") }
@@ -599,11 +599,14 @@ struct AssessTab: View {
                     PracticeCompareCard(report: r, sermons: sermons(of: profiles.speaker(for: r.videoPath)))
                 }
 
+                if let r = report {
+                    DeliveryOverviewCard(report: r, fillers: overviewFillers, status: deliveryStatus, play: play(at:))
+                }
+
                 PillTabs(selection: $mode, items: Mode.allCases.map { ($0, $0.rawValue) })
 
                 switch mode {
                 case .fillers:
-                    timeline
                     chips
                     occurrences
                 case .delivery:
@@ -633,6 +636,17 @@ struct AssessTab: View {
             }
             .padding(.horizontal, 28).padding(.vertical, 22)
         }
+    }
+
+    /// Filler words plus crutch phrases, each moment once
+    private var overviewFillers: [DeliveryOverviewCard.Filler] {
+        var out = shown.map { DeliveryOverviewCard.Filler(kind: $0.kind, time: $0.time, context: $0.context) }
+        for c in report?.delivery?.crutches ?? [] {
+            let kind = c.kind.replacingOccurrences(of: "?", with: "")
+            guard !hidden.contains(kind), !out.contains(where: { $0.kind == kind && abs($0.time - c.time) < 0.5 }) else { continue }
+            out.append(.init(kind: kind, time: c.time, context: c.context))
+        }
+        return out
     }
 
     private var speakingMinutes: Double {
@@ -676,44 +690,6 @@ struct AssessTab: View {
     }
 
     /// One line for the whole video with a dot for each filler word.
-    private var timeline: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("WHERE THEY ARE").font(.system(size: 10, weight: .semibold)).foregroundColor(Color.white.opacity(0.35)).tracking(1)
-            GeometryReader { geo in
-                let w = geo.size.width
-                ZStack(alignment: .topLeading) {
-                    Rectangle().fill(Color.white.opacity(0.15)).frame(height: 2).offset(y: 23)
-                    ForEach(shown) { h in
-                        let x = CGFloat(h.time / duration) * w
-                        Circle()
-                            .fill(color(h.kind))
-                            .frame(width: hovered == h ? 14 : 9, height: hovered == h ? 14 : 9)
-                            .position(x: x, y: 24)
-                            .onHover { inside in hovered = inside ? h : (hovered == h ? nil : hovered) }
-                            .onTapGesture { play(h) }
-                    }
-                    if let h = hovered {
-                        let x = min(max(CGFloat(h.time / duration) * w, 120), w - 120)
-                        VStack(spacing: 2) {
-                            Text("\(fmt(h.time)) · \(h.kind)").font(.system(size: 11, weight: .semibold)).foregroundColor(color(h.kind))
-                            Text(h.context).font(.system(size: 10)).foregroundColor(.white).lineLimit(2)
-                        }
-                        .padding(6).frame(width: 240)
-                        .background(Color.black.opacity(0.9)).cornerRadius(6)
-                        .position(x: x, y: -14)
-                        .allowsHitTesting(false)
-                    }
-                }
-            }
-            .frame(height: 40)
-            HStack {
-                Text("0:00"); Spacer(); Text(fmt(duration / 2)); Spacer(); Text(fmt(duration))
-            }
-            .font(.system(size: 10, design: .monospaced)).foregroundColor(Color.white.opacity(0.4))
-        }
-        .padding(.top, 20)
-    }
-
     private var chips: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("BY WORD — click to show or hide").font(.system(size: 10, weight: .semibold)).foregroundColor(Color.white.opacity(0.35)).tracking(1)
@@ -785,7 +761,7 @@ private struct SermonCard: View {
     @State private var hover = false
 
     private var title: String { YTDLP.title(fromFile: URL(fileURLWithPath: path)) }
-    private var audioOnly: Bool { ["m4a", "mp3", "wav"].contains(URL(fileURLWithPath: path).pathExtension.lowercased()) }
+    private var audioOnly: Bool { AudioSource.isAudioFile(URL(fileURLWithPath: path)) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {

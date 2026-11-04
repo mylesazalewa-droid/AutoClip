@@ -44,6 +44,8 @@ struct ReelDraft: Identifiable, Codable, Equatable {
     var id = UUID()
     var title: String
     var pieces: [Piece]
+    /// The "who should this follow?" question has been answered
+    var reframeAsked: Bool?
     var formatRaw: String
     var captions: Bool
     var look: CaptionLook?
@@ -279,6 +281,7 @@ struct ReelDraft: Identifiable, Codable, Equatable {
                 c.sourceVideoPath = piece.sourceVideoPath
                 if let f = piece.framing {
                     if f.mode == "fixed" { c.frameX = f.x }
+                    if f.mode == "person" { c.trackX = f.x }
                     if f.mode == "careful" { c.carefulFraming = true }
                     if f.mode == "split" { c.splitX = [f.x, f.x2 ?? 0.75] }
                 }
