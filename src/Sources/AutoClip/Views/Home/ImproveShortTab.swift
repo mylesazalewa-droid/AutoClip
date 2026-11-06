@@ -165,6 +165,10 @@ private struct ShortReviewPage: View {
             if let observer { player.removeTimeObserver(observer) }
         }
         .onChange(of: review) { r in model.save(r) }
+        .pausesWhenHidden { player.pause(); previewStop = nil }
+        .onPageShown { Backdrop.shared.path = review.path }
+        .reportsWork(.improve, "saving", saving != nil)
+        .onDisappear { TabActivity.shared.set(.improve, "saving", false) }
     }
 
     private func reloadPlayer() async {
@@ -243,6 +247,7 @@ private struct ShortReviewPage: View {
                     Label("All shorts", systemImage: "chevron.left").font(.system(size: 12, weight: .medium)).foregroundColor(gold)
                 }
                 .buttonStyle(.plain)
+                .disabled(saving != nil)
                 Spacer()
                 PillTabs(selection: $showAfter, items: [(false, "Before"), (true, "After")], compact: true)
             }

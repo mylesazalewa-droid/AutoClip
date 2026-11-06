@@ -43,6 +43,11 @@ struct WorshipTab: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear { reports = WorshipStore.all(); goals = WorshipGoals.load() }
+        .onPageShown { reports = WorshipStore.all(); goals = WorshipGoals.load() }
+        .pausesWhenHidden { player.pause() }
+        .reportsWork(.worship, "assess", status != nil)
+        .reportsWork(.worship, "clips", clipStatus != nil)
+        .reportsWork(.worship, "coach", coachStatus != nil)
         .confirmationDialog("Delete this assessment?", isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } }), presenting: confirmDelete) { r in
             Button("Delete", role: .destructive) { delete(r) }
             Button("Cancel", role: .cancel) { }

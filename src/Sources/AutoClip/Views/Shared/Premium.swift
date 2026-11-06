@@ -211,6 +211,21 @@ struct SectionTitle: View {
 /// The app's navigation, down the left side.
 struct AppSidebar: View {
     @Binding var active: HomeTab
+    @ObservedObject private var activity = TabActivity.shared
+    @ObservedObject private var reels = AutoReelsStore.shared
+    @ObservedObject private var podcasts = PodcastStore.shared
+    @ObservedObject private var shorts = ShortDoctorModel.shared
+
+    /// True while this page has work running, so it's clear it carried on when you left.
+    private func working(_ tab: HomeTab) -> Bool {
+        switch tab {
+        case .autoReels: if reels.activeJobs.contains(where: { !$0.isFinished }) { return true }
+        case .podcast: if !podcasts.status.isEmpty { return true }
+        case .improve: if shorts.status != nil { return true }
+        default: break
+        }
+        return activity.isWorking(tab)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -236,6 +251,8 @@ struct AppSidebar: View {
             row("Results", "chart.line.uptrend.xyaxis", .results)
             group("Find")
             row("Search", "magnifyingglass", .search)
+            group("Manage")
+            row("Storage", "internaldrive", .storage)
 
             Spacer()
 
@@ -259,7 +276,7 @@ struct AppSidebar: View {
     }
 
     private func row(_ title: String, _ icon: String, _ tab: HomeTab, also: HomeTab? = nil) -> some View {
-        SidebarLink(title: title, icon: icon, isActive: active == tab || active == also) {
+        SidebarLink(title: title, icon: icon, isActive: active == tab || active == also, working: working(tab)) {
             withAnimation(.easeInOut(duration: 0.15)) { active = tab }
         }
     }
@@ -269,6 +286,7 @@ private struct SidebarLink: View {
     let title: String
     let icon: String
     let isActive: Bool
+    var working = false
     let action: () -> Void
     @State private var hover = false
 
@@ -280,6 +298,9 @@ private struct SidebarLink: View {
                 Text(title).font(.system(size: 13, weight: isActive ? .semibold : .regular))
                     .foregroundColor(isActive ? .white : hover ? Theme.text : Color.white.opacity(0.72))
                 Spacer()
+                if working {
+                    Circle().fill(Theme.sand).frame(width: 7, height: 7).help("Working")
+                }
             }
             .padding(.horizontal, 12).padding(.vertical, 9)
             .background(RoundedRectangle(cornerRadius: 9, style: .continuous)

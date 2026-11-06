@@ -436,6 +436,11 @@ struct AutoReelsTab: View {
             apiKeys = loaded
             if !loaded.isEmpty { useAI = true }
         }
+        .pausesWhenHidden { previewPlayer?.pause() }
+        .onAppear {
+            // Opened from Home for the first time, with a reel to go to
+            if let id = store.navigateToReelID { selectedReel = store.reels.first { $0.id == id }; store.navigateToReelID = nil }
+        }
         .onChange(of: store.navigateToReelID) { reelID in
             guard let reelID else { return }
             selectedReel = store.reels.first { $0.id == reelID }
@@ -1569,6 +1574,7 @@ private struct ReelDetailSidebar: View {
             .onAppear {
                 loadPlayer(url: primaryURL, cutPoints: reel.cutPoints)
             }
+            .pausesWhenHidden { player?.pause(); isPlaying = false }
             .onDisappear {
                 if let token = timeObserverToken { player?.removeTimeObserver(token); timeObserverToken = nil }
                 player?.pause(); player = nil; isPlaying = false
@@ -1906,6 +1912,7 @@ private struct ReelFullPreviewSheet: View {
             }
             p.play(); isPlaying = true
         }
+        .pausesWhenHidden { player?.pause() }
         .onDisappear {
             if let token = timeObserverToken { player?.removeTimeObserver(token) }
             player?.pause(); player = nil

@@ -294,6 +294,7 @@ struct PodcastEpisodeView: View {
                 .padding(20)
             }
             .task(id: previewKey) { await rebuildPreview() }
+            .pausesWhenHidden { player.pause() }
             .onAppear {
                 title = e.title
                 observer = player.addPeriodicTimeObserver(forInterval: CMTime(value: 1, timescale: 10), queue: .main) { t in

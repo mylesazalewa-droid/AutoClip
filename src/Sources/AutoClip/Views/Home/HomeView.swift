@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
-enum HomeTab: String { case projects, autoClips, autoReels, improve, podcast, assess, worship, results, search }
+enum HomeTab: String { case projects, autoClips, autoReels, improve, podcast, assess, worship, results, storage, search }
 
 struct HomeView: View {
     @ObservedObject private var library = LibraryService.shared
@@ -16,6 +16,41 @@ struct HomeView: View {
     @State private var showAutoClipsSettings = false
 
     private let gold = Theme.sand
+    @Environment(\.pageVisible) private var homeVisible
+    @State private var visited: Set<HomeTab> = []
+    /// Each page's backdrop, to go back to when you return to it
+    @State private var backdrops: [HomeTab: String] = [:]
+    private static let allTabs: [HomeTab] = [.projects, .autoClips, .autoReels, .improve, .podcast, .assess, .worship, .results, .storage, .search]
+
+    @ViewBuilder private func page(_ tab: HomeTab) -> some View {
+        switch tab {
+        case .autoReels: AutoReelsTab()
+        case .improve: ImproveShortTab()
+        case .podcast: PodcastTab()
+        case .assess: AssessTab()
+        case .worship: WorshipTab()
+        case .results: ResultsTab()
+        case .storage: StorageTab()
+        case .search: SearchTab()
+        case .autoClips:
+            VStack(spacing: 0) {
+                toolbar
+                if filteredProjects.isEmpty && searchText.isEmpty { landingPage } else { projectsContent }
+            }
+        case .projects:
+            HomeFeed(
+                onOpenProject: { project in
+                    AppState.shared.selectedProject = project
+                    AppState.shared.selectedClip = nil
+                    activeTab = .autoClips
+                },
+                onOpenReel: { reel in
+                    AutoReelsStore.shared.navigateToReelID = reel.id
+                    activeTab = .autoReels
+                }
+            )
+        }
+    }
 
     var filteredProjects: [Project] {
         var list = library.projects
@@ -41,46 +76,32 @@ struct HomeView: View {
             VStack(spacing: 0) {
                 if activeTab == .autoClips { toolbar }
 
-                // Tab content
-                switch activeTab {
-                case .autoReels:
-                    AutoReelsTab()
-                case .improve:
-                    ImproveShortTab()
-                case .podcast:
-                    PodcastTab()
-                case .assess:
-                    AssessTab()
-                case .worship:
-                    WorshipTab()
-                case .results:
-                    ResultsTab()
-                case .search:
-                    SearchTab()
-                case .autoClips:
-                    if filteredProjects.isEmpty && searchText.isEmpty {
-                        landingPage
-                    } else {
-                        projectsContent
+                // Tab content. A page stays alive once it's been opened.
+                ZStack {
+                    ForEach(Self.allTabs.filter { visited.contains($0) || $0 == activeTab }, id: \.self) { tab in
+                        let showing = tab == activeTab
+                        page(tab)
+                            .opacity(showing ? 1 : 0)
+                            .allowsHitTesting(showing)
+                            .disabled(!showing)
+                            .accessibilityHidden(!showing)
+                            .environment(\.pageVisible, showing && homeVisible)
+                            .zIndex(showing ? 1 : 0)
                     }
-                case .projects:
-                    HomeFeed(
-                        onOpenProject: { project in
-                            AppState.shared.selectedProject = project
-                            AppState.shared.selectedClip = nil
-                            activeTab = .autoClips
-                        },
-                        onOpenReel: { reel in
-                            AutoReelsStore.shared.navigateToReelID = reel.id
-                            activeTab = .autoReels
-                        }
-                    )
                 }
             }
             }
             .ignoresSafeArea(.container, edges: .top)
         }
+        .onChange(of: activeTab) { [activeTab] new in
+            visited.insert(new)
+            // Nothing typed should land in a page you've left
+            NSApp.keyWindow?.makeFirstResponder(nil)
+            if let p = Backdrop.shared.path { backdrops[activeTab] = p }
+            if let p = backdrops[new] { Backdrop.shared.path = p }
+        }
         .onAppear {
+            visited.insert(activeTab)
             // Until a page picks one, the backdrop comes from the latest video
             if Backdrop.shared.path == nil, let r = AutoReelsStore.shared.reels.first { Backdrop.shared.path = r.sourceVideoPath ?? r.path }
         }

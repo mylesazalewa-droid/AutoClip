@@ -63,7 +63,11 @@ struct SearchTab: View {
                 .overlay(Rectangle().fill(Theme.line).frame(width: 1), alignment: .leading)
         }
         .task { await load() }
-        .onDisappear { stopTranscribing = true; player.pause() }
+        .onDisappear { player.pause() }
+        .pausesWhenHidden { player.pause() }
+        // New videos may have been transcribed elsewhere. A run in progress updates this itself.
+        .onPageShown { if transcribing == nil { Task { await load() } } }
+        .reportsWork(.search, "transcribing", transcribing != nil)
     }
 
     // MARK: Search bar

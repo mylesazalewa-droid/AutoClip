@@ -79,12 +79,16 @@ struct ContentView: View {
 
     var body: some View {
         ZStack {
-            Group {
-                if appState.selectedProject != nil && !appState.isAnalyzing {
+            let inProject = appState.selectedProject != nil && !appState.isAnalyzing
+            ZStack {
+                // Stays alive behind a project, so work on its pages keeps going
+                HomeView()
+                    .opacity(inProject ? 0 : 1)
+                    .allowsHitTesting(!inProject)
+                    .disabled(inProject)
+                    .environment(\.pageVisible, !inProject)
+                if inProject {
                     ProjectDetailView(project: selectedProjectBinding)
-                        .transition(.opacity)
-                } else {
-                    HomeView()
                         .transition(.opacity)
                 }
             }

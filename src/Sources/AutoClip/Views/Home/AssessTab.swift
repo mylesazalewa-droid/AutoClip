@@ -173,6 +173,11 @@ struct AssessTab: View {
                            : "Moving it to the Trash removes the video file. You can put it back from the Trash.")
             }
         }
+        .pausesWhenHidden { player.pause() }
+        .onPageShown { allReports = SpeakerReportStore.all() }
+        .reportsWork(.assess, "video", status != nil || ytStatus != nil)
+        .reportsWork(.assess, "reading", deliveryStatus != nil || stageStatus != nil)
+        .reportsWork(.assess, "writing", coachStatus != nil || notesStatus != nil)
         .onAppear {
             allReports = SpeakerReportStore.all()
             if let p = HomeNav.shared.assessPath { HomeNav.shared.assessPath = nil; mode = .fillers; select(p) }

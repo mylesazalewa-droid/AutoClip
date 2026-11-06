@@ -23,6 +23,7 @@ final class HomeNav: ObservableObject {
 /// The Home tab, laid out like a streaming service: a large rotating banner of your latest work,
 /// then rows of reels, podcast episodes and sermons to scroll through.
 struct HomeFeed: View {
+    @Environment(\.pageVisible) private var visible
     @ObservedObject private var library = LibraryService.shared
     @ObservedObject private var reelsStore = AutoReelsStore.shared
     @ObservedObject private var podcasts = PodcastStore.shared
@@ -114,12 +115,14 @@ struct HomeFeed: View {
             .padding(.top, 32)
         }
         .onAppear { sermons = AssessTab.knownVideos(reels: reelsStore.reels) }
+        .onPageShown { sermons = AssessTab.knownVideos(reels: reelsStore.reels) }
         .task {
             // The banner turns every 8 seconds
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 8_000_000_000)
                 let n = heroItems.count
-                if n > 1 { withAnimation(.easeInOut(duration: 0.6)) { heroIndex = (heroIndex + 1) % n } }
+                // Not while hidden: the banner sets the backdrop, which belongs to the page on show
+                if n > 1, visible { withAnimation(.easeInOut(duration: 0.6)) { heroIndex = (heroIndex + 1) % n } }
             }
         }
     }
