@@ -53,6 +53,10 @@ enum ReelPipeline {
             }
         }
 
+        // The free trial covers a set number of sermons
+        let allowed = await MainActor.run { License.shared.allowSermon(srcPath) }
+        guard allowed else { await upd(0, "Free trial used", finished: true, error: License.trialMessage); return }
+
         await upd(0.01, "Loading AI model…")
 
         do {

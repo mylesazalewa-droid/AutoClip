@@ -63,6 +63,8 @@ class VideoExportService {
         var hookText: String? = nil
         var verseCards: Bool = false
         var overlayLook: CaptionLook? = nil
+        /// Small mark on trial exports
+        var watermark: String? = nil
     }
 
     enum ExportError: LocalizedError {
@@ -1729,12 +1731,13 @@ class VideoExportService {
             vc.instructions = instructions
 
             let burn = options.burnCaptions && !remappedWords.isEmpty
-            if burn || !overlays.isEmpty {
+            if burn || !overlays.isEmpty || options.watermark != nil {
                 let parent = CALayer(); parent.frame = CGRect(origin: .zero, size: renderSize); parent.isGeometryFlipped = true
                 let vl = CALayer(); vl.frame = CGRect(origin: .zero, size: renderSize); parent.addSublayer(vl)
                 if !overlays.isEmpty {
                     parent.addSublayer(ReelOverlays.layer(for: overlays, size: renderSize, duration: reelDuration))
                 }
+                if let mark = options.watermark { parent.addSublayer(Self.watermarkLayer(mark, size: renderSize)) }
                 vc.animationTool = AVVideoCompositionCoreAnimationTool(postProcessingAsVideoLayer: vl, in: parent)
                 if burn {
                     var reelClip = clips[0]
@@ -1841,5 +1844,26 @@ private extension Process {
         try p.run()
         p.waitUntilExit()
         return String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+    }
+}
+
+
+extension VideoExportService {
+    /// "Made with AutoClip", small and below the apps' top bar, so it isn't covered.
+    static func watermarkLayer(_ text: String, size: CGSize) -> CALayer {
+        let font = NSFont.systemFont(ofSize: max(14, size.width * 0.026), weight: .semibold)
+        let attr = NSAttributedString(string: text, attributes: [.font: font, .foregroundColor: NSColor.white.withAlphaComponent(0.85)])
+        let w = ceil(attr.size().width) + font.pointSize, h = ceil(attr.size().height) + font.pointSize * 0.5
+        let bg = CALayer()
+        bg.frame = CGRect(x: size.width * 0.04, y: size.height * 0.11, width: w, height: h)
+        bg.backgroundColor = NSColor.black.withAlphaComponent(0.35).cgColor
+        bg.cornerRadius = h / 2
+        let t = CATextLayer()
+        t.string = attr
+        t.contentsScale = 2
+        t.alignmentMode = .center
+        t.frame = CGRect(x: 0, y: font.pointSize * 0.22, width: w, height: h)
+        bg.addSublayer(t)
+        return bg
     }
 }

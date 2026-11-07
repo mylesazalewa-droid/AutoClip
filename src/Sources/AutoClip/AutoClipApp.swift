@@ -10,6 +10,14 @@ struct AutoClipApp: App {
         .windowToolbarStyle(.unified(showsTitle: false))
         .commands {
             CommandGroup(replacing: .newItem) { }
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") { Task { await Updater.shared.check(manual: true) } }
+                Button("Activate AutoClip…") { ActivationWindow.show() }
+            }
+            CommandGroup(replacing: .help) {
+                Button("AutoClip Help") { HelpPages.open() }
+                Button("Report a Problem…") { ProblemReports.shared.showSheet = true }
+            }
             CommandMenu("Project") {
                 Button("Import Video...") { AppState.shared.triggerImport() }
                     .keyboardShortcut("o", modifiers: .command)
@@ -46,9 +54,15 @@ struct MainWindow: View {
     }
 
     @ObservedObject private var appState = AppState.shared
+    @ObservedObject private var updater = Updater.shared
+    @ObservedObject private var reports = ProblemReports.shared
+    @ObservedObject private var activation = ActivationWindow.shared
 
     var body: some View {
         ContentView()
+            .sheet(isPresented: $updater.showSheet) { UpdateSheet() }
+            .sheet(isPresented: $reports.showSheet) { ProblemReportSheet() }
+            .sheet(isPresented: $activation.showing) { ActivationSheet() }
             .sheet(isPresented: $appState.showOnboarding) {
                 SetupView()
             }
@@ -60,7 +74,11 @@ struct MainWindow: View {
             .frame(minWidth: 900, idealWidth: 1280, minHeight: 600, idealHeight: 800)
             .tint(Theme.action)
             .preferredColorScheme(.dark)
-            .task { AutoImport.shared.start() }
+            .task {
+                AutoImport.shared.start()
+                ProblemReports.shared.start()
+                Updater.shared.checkAtLaunch()
+            }
             .modifier(CommandBarHost())
             .onAppear { Self.fillScreen() }
     }
@@ -125,4 +143,12 @@ struct ContentView: View {
             }
         }
     }
+}
+
+/// Opens the activation sheet from the menu bar.
+@MainActor
+final class ActivationWindow: ObservableObject {
+    static let shared = ActivationWindow()
+    @Published var showing = false
+    static func show() { shared.showing = true }
 }

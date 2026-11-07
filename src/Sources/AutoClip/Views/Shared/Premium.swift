@@ -263,12 +263,14 @@ struct AppSidebar: View {
             Spacer()
 
             VStack(alignment: .leading, spacing: 8) {
+                UpdateChip()
                 if !volunteer.enabled {
                     AutoImportChip()
                     AIUsageChip()
                     ContentKindMenu()
                 }
                 VolunteerChip()
+                if !volunteer.enabled { PlanChip() }
                 Button { CommandBar.shared.toggle() } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "command").font(.system(size: 10))

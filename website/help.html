@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AutoClip Help</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@600&display=swap">
+<style>
+/* Self-contained so the copy inside the app works offline. Layout: contents on the left, one reading column. */
+:root {
+  --bg: #141517; --bg2: #1b1c1f; --line: rgba(255,255,255,.09);
+  --cream: #f1e9dc; --text: rgba(255,255,255,.88); --muted: rgba(255,255,255,.62); --faint: rgba(255,255,255,.42);
+  --sand: #d9c3a0; --warn: #e3a15f;
+  --display: "Newsreader", "Iowan Old Style", Georgia, serif; --body: "Figtree", "Avenir Next", system-ui, sans-serif; --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.65 var(--body); -webkit-font-smoothing: antialiased; }
+a { color: var(--sand); }
+a:focus-visible { outline: 2px solid var(--sand); outline-offset: 3px; }
+.layout { max-width: 1080px; margin: 0 auto; display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 56px;
+  padding-inline: max(16px, env(safe-area-inset-left, 0px)) max(16px, env(safe-area-inset-right, 0px)); padding-block: 48px 80px; }
+nav.toc { position: sticky; top: max(24px, env(safe-area-inset-top, 0px)); align-self: start; display: grid; gap: 6px; font-size: .9rem; }
+nav.toc a { color: var(--muted); text-decoration: none; }
+nav.toc a:hover { color: var(--cream); }
+nav.toc .home { font: 500 1rem var(--display); letter-spacing: .16em; color: var(--cream); margin-bottom: 14px; }
+main { max-width: 42em; min-width: 0; }
+h1, h2, h3 { font-family: var(--display); color: var(--cream); font-weight: 500; text-wrap: balance; }
+h1 { font-size: clamp(2.2rem, 5vw, 3.2rem); line-height: 1.05; margin: 0 0 12px; }
+h2 { font-size: 1.7rem; margin: 56px 0 10px; padding-top: 24px; border-top: 1px solid var(--line); }
+h3 { font-size: 1.15rem; margin: 26px 0 6px; }
+p, li { color: var(--text); }
+.lede { color: var(--muted); font-size: 1.1rem; }
+ol, ul { padding-left: 1.3em; display: grid; gap: 6px; }
+kbd { font: 600 .78em var(--mono); color: var(--sand); border: 1px solid var(--line); border-radius: 5px; padding: .1em .45em; background: var(--bg2); }
+.note { border-left: 3px solid var(--warn); background: var(--bg2); padding: 12px 16px; border-radius: 0 10px 10px 0; color: var(--muted); }
+table { border-collapse: collapse; width: 100%; font-size: .93rem; }
+td { border-bottom: 1px solid var(--line); padding: 8px 10px 8px 0; vertical-align: top; }
+td:first-child { white-space: nowrap; width: 1%; }
+.scroll { overflow-x: auto; }
+@media (max-width: 760px) { .layout { grid-template-columns: minmax(0, 1fr); gap: 24px; } nav.toc { position: static; } }
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="toc" aria-label="Contents">
+  <a class="home" href="index.html">AUTOCLIP</a>
+  <a href="#install">Install</a><a href="#first">Your first sermon</a><a href="#editing">Editing a clip</a><a href="#guard">Context Guard</a>
+  <a href="#autopilot">Autopilot</a><a href="#volunteer">Volunteer Mode</a><a href="#rehearse">Rehearse</a><a href="#ai">AI and API keys</a>
+  <a href="#license">Trial and license</a><a href="#updates">Updates</a><a href="#problems">Problems</a>
+</nav>
+<main>
+<h1>AutoClip Help</h1>
+<p class="lede">Everything you need to go from a Sunday recording to clips you're glad to post.</p>
+
+<h2 id="install">Install</h2>
+<ol>
+  <li>Open <strong>AutoClip.dmg</strong> and drag AutoClip into Applications.</li>
+  <li>Open AutoClip from Applications.</li>
+  <li>If macOS says it can't check the app, open <strong>System Settings → Privacy &amp; Security</strong>, scroll down, and click <strong>Open Anyway</strong> next to AutoClip. You only do this once.</li>
+  <li>When asked, allow AutoClip to use your Documents folder. That's where it keeps your clips.</li>
+  <li>Download the speech model when prompted (about 230 MB, once). Or click <strong>See a finished example first</strong> to explore before downloading.</li>
+</ol>
+
+<h2 id="first">Your first sermon</h2>
+<ol>
+  <li>On Home, click <strong>Choose a sermon</strong>, or go to <strong>Auto Reels → New Reel</strong>.</li>
+  <li>Pick the service video. AutoClip transcribes it on your Mac and builds several clips.</li>
+  <li>Click <strong>Quick review</strong>. Press <kbd>→</kbd> to keep a clip and <kbd>←</kbd> to toss it.</li>
+  <li>Export the ones you kept. They're saved as video files, with suggested captions where available.</li>
+</ol>
+<p>Use recordings your church owns or has permission to use, including any music in them.</p>
+
+<h2 id="editing">Editing a clip</h2>
+<p>Click <strong>Edit</strong> on any clip. Click a word to cut it, and click it again to bring it back. Untick a sentence to drop it.</p>
+<h3>Say what to change</h3>
+<p>Type in the box at the top of the editor, or press <kbd>⌘K</kbd>. These work without AI:</p>
+<ul><li>remove the ums</li><li>start at the question</li><li>end on “stay in the room”</li><li>cut “these exact words”</li><li>make the captions bigger</li><li>make it square</li></ul>
+<p>Requests that need judgement, like “cut the part about my brother”, use AI if you've added a key.</p>
+<h3>Keyboard</h3>
+<div class="scroll"><table>
+<tr><td><kbd>Space</kbd></td><td>Play or pause</td></tr>
+<tr><td><kbd>J</kbd> <kbd>K</kbd> <kbd>L</kbd></td><td>Back, stop, play (press <kbd>L</kbd> again to go faster)</td></tr>
+<tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>Move 0.1 second (hold Shift for 1 second)</td></tr>
+<tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>Previous or next sentence</td></tr>
+<tr><td><kbd>I</kbd> <kbd>O</kbd></td><td>Start or end the clip here</td></tr>
+<tr><td><kbd>X</kbd></td><td>Cut or restore this sentence</td></tr>
+<tr><td><kbd>F</kbd></td><td>Focus mode</td></tr>
+<tr><td><kbd>P</kbd></td><td>Phone preview (Shorts, Reels, TikTok)</td></tr>
+<tr><td><kbd>⌘Z</kbd></td><td>Undo</td></tr>
+</table></div>
+
+<h2 id="guard">Context Guard</h2>
+<p>Context Guard looks for clips that might say something you didn't mean, such as a clip that stops just before “But…” or a cut that removes “not”. Most warnings have a one-click fix.</p>
+<p><strong>Check meaning and Scripture with AI</strong> reads the clip next to what was said around it and compares quoted verses with the translation you choose. AI can misremember Bible wording, so check the verse itself before relying on it.</p>
+
+<h2 id="autopilot">Autopilot</h2>
+<ol>
+  <li>Click <strong>Autopilot</strong> at the bottom of the sidebar.</li>
+  <li>Choose the folder your service recordings are saved to.</li>
+  <li>Click <strong>Turn on Autopilot</strong>. Videos already in the folder are skipped.</li>
+</ol>
+<p>New recordings become clips on their own and wait on Home for review. AutoClip has to be open and the Mac awake. Turn on <strong>Open AutoClip when this Mac starts</strong> to help with that. The daily limit stops a folder of old videos from running up an AI bill.</p>
+
+<h2 id="volunteer">Volunteer Mode</h2>
+<ol>
+  <li>Set up captions, size and length the way you like in Auto Reels.</li>
+  <li>Click <strong>Volunteer mode</strong> in the sidebar, name the style and click <strong>Save style</strong>.</li>
+  <li>Optionally set a PIN, then click <strong>Turn on Volunteer Mode</strong>.</li>
+</ol>
+<p>Volunteers see three steps: add the sermon, pick the best clips, export. Use <strong>Share style</strong> to copy your style to another Mac. Volunteer Mode is on the Church plan.</p>
+
+<h2 id="rehearse">Rehearse</h2>
+<p>Open <strong>Rehearse</strong>, then paste your notes, open a text file, or record a practice run. You'll see the likely length, lines that would open a clip well, and lines that lean on what came before. <strong>Ask AI what to strengthen</strong> gives specific suggestions in your own voice.</p>
+
+<h2 id="ai">AI and API keys</h2>
+<p>AutoClip works without AI. Some extras, like writing hooks, Fire Shorts and the Scripture check, use an AI service with your own API key:</p>
+<ol>
+  <li>Create a key with Anthropic (Claude), OpenAI or Google (Gemini).</li>
+  <li>In AutoClip, go to <strong>Auto Reels → New Reel</strong>, turn on <strong>Smart AI Selection</strong>, choose the provider and paste the key.</li>
+</ol>
+<p>The key is stored in your Mac's Keychain. The AI company bills you directly, and the <strong>AI</strong> chip in the sidebar shows an estimate of what you've spent. Set a spending limit in your AI account too.</p>
+
+<h2 id="license">Trial and license</h2>
+<p>The free trial makes clips from two sermons, with every feature. Trial exports carry a small “Made with AutoClip” mark. To activate, choose <strong>AutoClip → Activate AutoClip…</strong> and paste your key, or open the key file.</p>
+<p>If a plan ends, everything you made stays. You can still open, edit and export it. New sermons need an active plan.</p>
+
+<h2 id="updates">Updates</h2>
+<p>AutoClip checks for updates once a day. When one is ready, an <strong>Update</strong> button appears in the sidebar. Click it, then <strong>Install and reopen</strong>. Finish any reels in progress first. To check now, choose <strong>AutoClip → Check for Updates…</strong></p>
+
+<h2 id="problems">Problems</h2>
+<p>If AutoClip closes unexpectedly, it offers a report the next time it opens. You can read everything in it first, and nothing is sent unless you choose to. You can also choose <strong>Help → Report a Problem…</strong> at any time.</p>
+<p class="note">Nothing is posted to social media for you, and your videos stay on your Mac. AI features send what they need, usually the transcript, to the AI company you chose.</p>
+</main>
+</div>
+</body>
+</html>

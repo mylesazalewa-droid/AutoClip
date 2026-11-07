@@ -408,6 +408,7 @@ struct ReelDraft: Identifiable, Codable, Equatable {
         o.hookText = hook
         o.verseCards = showVerses
         o.overlayLook = look ?? CaptionLook.load() ?? CaptionLook(preset: CaptionStyle.all[0])
+        if License.watermarkExports { o.watermark = "Made with AutoClip" }
         return o
     }
 

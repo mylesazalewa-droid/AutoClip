@@ -29,7 +29,7 @@ struct HomeView: View {
         case .podcast: PodcastTab()
         case .rehearse: RehearseTab()
         case .assess: AssessTab()
-        case .worship: WorshipTab()
+        case .worship: PlanGate(feature: .worship) { WorshipTab() }
         case .results: ResultsTab()
         case .storage: StorageTab()
         case .search: SearchTab()

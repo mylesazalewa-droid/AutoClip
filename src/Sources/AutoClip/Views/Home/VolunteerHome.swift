@@ -184,6 +184,9 @@ private struct VolunteerSettings: View {
                 Text("Stops accidental changes. It isn't a password, so don't reuse one.").font(.system(size: 10)).foregroundColor(Theme.faint)
             }
             if let note { Text(note).font(.system(size: 11)).foregroundColor(Theme.good).fixedSize(horizontal: false, vertical: true) }
+            if !License.shared.has(.volunteerMode) {
+                Text("Volunteer Mode is on the Church plan.").font(.system(size: 11)).foregroundColor(Theme.warn)
+            }
             Button {
                 if !pin.isEmpty { mode.setPIN(pin) }
                 mode.turnOn()
@@ -191,7 +194,7 @@ private struct VolunteerSettings: View {
                 close()
             } label: { Label("Turn on Volunteer Mode", systemImage: "lock") }
             .buttonStyle(PrimaryButtonStyle(compact: true))
-            .disabled(mode.style == nil)
+            .disabled(mode.style == nil || !License.shared.has(.volunteerMode))
         }
     }
 

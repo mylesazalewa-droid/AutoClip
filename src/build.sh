@@ -11,6 +11,10 @@ mkdir -p "$APP/Contents/MacOS"
 
 cp .build/release/AutoClip "$APP/Contents/MacOS/AutoClip"
 
+# The built-in sample sermon and the help guide live outside the Swift build
+mkdir -p "$APP/Contents/Resources"
+cp Sample/sample-sermon.mp4 Sample/sample-sermon.json ../website/help.html "$APP/Contents/Resources/"
+
 # Practice mode records with the camera and microphone (added to existing bundles too)
 set_usage() {
     /usr/libexec/PlistBuddy -c "Set :$1 $2" "$APP/Contents/Info.plist" 2>/dev/null \

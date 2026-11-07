@@ -1,0 +1,38 @@
+/* AutoClip site. Dark like the app: charcoal ground, sand and terracotta from its fabric palette.
+   Layout: one narrow reading column, a wide hero with a phone, and wrapping grids that stack on phones. */
+:root {
+  --bg: #141517; --bg2: #1b1c1f; --panel: #222327; --line: rgba(255,255,255,.09);
+  --cream: #f1e9dc; --text: rgba(255,255,255,.88); --muted: rgba(255,255,255,.6); --faint: rgba(255,255,255,.42);
+  --sand: #d9c3a0; --terracotta: #b4532f; --terracotta-hi: #de7c58; --olive: #a3ae6e; --warn: #e3a15f; --navy: #1e2a4a;
+  --display: "Newsreader", "Iowan Old Style", Georgia, serif;
+  --body: "Figtree", "Avenir Next", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--text); font: 16px/1.6 var(--body); -webkit-font-smoothing: antialiased; }
+a { color: var(--sand); }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--sand); outline-offset: 3px; border-radius: 6px; }
+.wrap { max-width: 1120px; margin: 0 auto; padding-inline: max(16px, env(safe-area-inset-left, 0px)) max(16px, env(safe-area-inset-right, 0px)); }
+h1, h2, h3 { font-family: var(--display); color: var(--cream); font-weight: 500; text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(2.6rem, 6vw, 4.6rem); line-height: 1.02; letter-spacing: -.01em; }
+h2 { font-size: clamp(1.8rem, 3.6vw, 2.6rem); line-height: 1.1; }
+h3 { font-size: 1.3rem; line-height: 1.25; }
+p { margin: 0; }
+.eyebrow { font-size: .72rem; font-weight: 600; letter-spacing: .18em; text-transform: uppercase; color: var(--sand); }
+.lede { font-size: 1.15rem; color: var(--muted); max-width: 34em; }
+.btn { display: inline-flex; align-items: center; gap: .5em; padding: .8em 1.3em; border-radius: 999px; font-weight: 600; text-decoration: none; font-size: .95rem; }
+.btn-primary { background: var(--terracotta); color: var(--cream); }
+.btn-primary:hover { background: #c45f39; }
+.btn-ghost { color: var(--text); border: 1px solid var(--line); }
+.btn-ghost:hover { border-color: rgba(255,255,255,.25); }
+kbd { font: 600 .78em var(--mono); color: var(--sand); border: 1px solid var(--line); border-radius: 5px; padding: .1em .45em; background: var(--bg2); }
+nav.top { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 22px; }
+.brand { display: flex; align-items: center; gap: 10px; color: var(--cream); text-decoration: none; font: 500 1.05rem var(--display); letter-spacing: .18em; }
+.brand i { width: 30px; height: 30px; border-radius: 8px; background: var(--sand); display: grid; place-items: center; font-style: normal; color: var(--bg); font-size: 15px; }
+nav.top .links { display: flex; gap: 22px; align-items: center; flex-wrap: wrap; }
+nav.top .links a { color: var(--muted); text-decoration: none; font-size: .92rem; }
+nav.top .links a:hover { color: var(--cream); }
+@media (max-width: 640px) { nav.top .links a:not(.btn) { display: none; } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }

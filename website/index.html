@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AutoClip for Churches</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Turn Sunday's sermon into short clips for Shorts, Reels and TikTok, checked so nothing is taken out of context. For Mac.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@600&display=swap">
+<link rel="stylesheet" href="site.css">
+<style>
+/* Page-specific layout */
+.hero { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr); gap: 56px; align-items: center; padding-block: 48px 80px; }
+.hero .copy { display: grid; gap: 22px; min-width: 0; }
+.hero .actions { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+.hero .small { font-size: .82rem; color: var(--faint); }
+.stage { position: relative; display: flex; justify-content: center; min-width: 0; }
+.phone { width: min(300px, 78vw); aspect-ratio: 9 / 19.5; max-width: 100%; border-radius: 40px; padding: 10px; background: #0b0b0c; border: 1px solid rgba(255,255,255,.16); box-shadow: 0 40px 80px rgba(0,0,0,.55); }
+.screen { position: relative; height: 100%; border-radius: 31px; overflow: hidden;
+  background: radial-gradient(120% 70% at 50% 25%, #6e4a34 0%, #3a2a22 45%, #1d2b3a 100%); }
+.screen .speaker { position: absolute; left: 50%; bottom: 24%; translate: -50% 0; width: 46%; aspect-ratio: 1 / 1.5;
+  background: radial-gradient(circle at 50% 22%, #c99f80 0 17%, transparent 18%), radial-gradient(ellipse at 50% 92%, #26303f 0 52%, transparent 53%); opacity: .9; }
+.screen .hook { position: absolute; top: 30%; left: 50%; translate: -50% 0; background: #f6d33a; color: #111; font: 900 .9rem/1.15 Impact, "Arial Narrow", sans-serif; text-transform: uppercase; padding: .45em .7em; border-radius: 6px; white-space: nowrap; }
+.screen .cap { position: absolute; top: 56%; width: 100%; text-align: center; font: 900 1.25rem Impact, "Arial Narrow", sans-serif; color: #fff; letter-spacing: .02em; text-shadow: 0 2px 6px rgba(0,0,0,.7); }
+.screen .cap b { color: #f6d33a; font-weight: inherit; }
+.screen .ui { position: absolute; inset: auto 0 0 0; padding: 14px 16px 18px; background: linear-gradient(transparent, rgba(0,0,0,.55)); font-size: .72rem; color: #fff; }
+.screen .ui strong { display: block; font-size: .8rem; }
+.guard { position: absolute; right: -8px; bottom: 16%; width: min(250px, 70vw); background: var(--panel); border: 1px solid rgba(227,161,95,.45); border-radius: 14px; padding: 14px 16px; box-shadow: 0 20px 40px rgba(0,0,0,.5); font-size: .82rem; }
+.guard .t { display: flex; gap: 8px; align-items: center; font-weight: 600; color: var(--cream); margin-bottom: 4px; }
+.guard .t::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--warn); }
+.guard p { color: var(--muted); }
+.guard .fix { margin-top: 10px; display: inline-block; font-size: .75rem; padding: .3em .7em; border-radius: 6px; background: rgba(255,255,255,.08); color: var(--cream); }
+@media (max-width: 860px) { .hero { grid-template-columns: minmax(0, 1fr); gap: 40px; } .guard { right: 0; } }
+
+.band { border-top: 1px solid var(--line); padding-block: 80px; }
+.band .head { display: grid; gap: 12px; margin-bottom: 40px; max-width: 40em; }
+
+/* The real sequence from Sunday to Monday */
+.week { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; list-style: none; margin: 0; padding: 0; counter-reset: s; }
+.week li { padding: 20px; border-radius: 16px; background: var(--bg2); border: 1px solid var(--line); display: grid; gap: 8px; align-content: start; }
+.week .when { font: 600 .75rem var(--mono); color: var(--sand); letter-spacing: .04em; }
+.week p { color: var(--muted); font-size: .95rem; }
+@media (max-width: 860px) { .week { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .week { grid-template-columns: minmax(0, 1fr); } }
+
+.features { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 40px 36px; }
+.features div { display: grid; gap: 8px; align-content: start; min-width: 0; }
+.features p { color: var(--muted); }
+.features .tag { font-size: .7rem; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--olive); }
+@media (max-width: 860px) { .features { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .features { grid-template-columns: minmax(0, 1fr); } }
+
+.plans { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.plan { border: 1px solid var(--line); border-radius: 18px; padding: 24px; display: grid; gap: 14px; align-content: start; background: var(--bg2); }
+.plan.lead { border-color: rgba(217,195,160,.55); background: #22201d; }
+.plan .price { font: 500 2.2rem/1 var(--display); color: var(--cream); font-variant-numeric: tabular-nums; }
+.plan .price small { font: 400 .9rem var(--body); color: var(--muted); }
+.plan ul { margin: 0; padding-left: 1.1em; color: var(--muted); font-size: .92rem; display: grid; gap: 4px; }
+.draft { margin-top: 18px; font-size: .82rem; color: var(--warn); }
+@media (max-width: 960px) { .plans { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .plans { grid-template-columns: minmax(0, 1fr); } }
+
+.faq { display: grid; gap: 10px; max-width: 760px; }
+.faq details { border-bottom: 1px solid var(--line); padding-block: 14px; }
+.faq summary { cursor: pointer; color: var(--cream); font-weight: 600; list-style: none; }
+.faq summary::after { content: "+"; float: right; color: var(--sand); }
+.faq details[open] summary::after { content: "–"; }
+.faq p { color: var(--muted); margin-top: 8px; }
+footer { border-top: 1px solid var(--line); padding-block: 36px; color: var(--faint); font-size: .85rem; display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="top" aria-label="Main">
+    <a class="brand" href="#"><i>✂</i>AUTOCLIP</a>
+    <div class="links">
+      <a href="#how">How it works</a><a href="#features">Features</a><a href="#pricing">Pricing</a><a href="help.html">Help</a>
+      <a class="btn btn-primary" href="https://github.com/mylesazalewa-droid/AutoClip/releases/latest/download/AutoClip.dmg">Download</a>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <div class="copy">
+      <span class="eyebrow">For pastors and church media teams</span>
+      <h1>Preach Sunday. Your clips are ready Monday.</h1>
+      <p class="lede">AutoClip turns the sermon into short clips for Shorts, Reels and TikTok, with captions, hooks and verse cards. Then it checks each one so nothing you said is taken out of context.</p>
+      <div class="actions">
+        <a class="btn btn-primary" href="https://github.com/mylesazalewa-droid/AutoClip/releases/latest/download/AutoClip.dmg">Download for Mac</a>
+        <a class="btn btn-ghost" href="#pricing">See pricing</a>
+      </div>
+      <p class="small">Free trial: two sermons, no card needed. Mac with macOS 14 or later.</p>
+    </div>
+    <div class="stage" aria-hidden="true">
+      <div class="phone"><div class="screen">
+        <div class="speaker"></div>
+        <div class="hook">Your anger isn't the end</div>
+        <div class="cap">YOU <b>DON'T</b> ARGUE</div>
+        <div class="ui"><strong>@yourchurch</strong>You only argue with a God you're still talking to.</div>
+      </div></div>
+      <div class="guard"><div class="t">Context Guard</div><p>This clip stops just before “But I can't leave you there…”. Without it, this could sound like the final word.</p><span class="fix">Add the next sentence</span></div>
+    </div>
+  </header>
+</div>
+
+<section class="band" id="how"><div class="wrap">
+  <div class="head"><span class="eyebrow">How it works</span><h2>From the pulpit to your phone, without the editing night</h2></div>
+  <ol class="week">
+    <li><span class="when">Sunday, after service</span><h3>The recording lands</h3><p>Save the service video to a folder AutoClip watches, or drop it in yourself.</p></li>
+    <li><span class="when">Sunday afternoon</span><h3>AutoClip finds the moments</h3><p>It transcribes on your Mac and builds clips with a strong opening, captions and verse cards.</p></li>
+    <li><span class="when">Sunday evening</span><h3>Context Guard checks them</h3><p>Clips that stop before “but”, or drop a “not”, are marked so you can fix them in one click.</p></li>
+    <li><span class="when">Monday morning</span><h3>You keep the best ones</h3><p>Swipe through: keep, toss, export. Nothing is ever posted for you.</p></li>
+  </ol>
+</div></section>
+
+<section class="band" id="features"><div class="wrap">
+  <div class="head"><span class="eyebrow">Features</span><h2>Built for the way churches actually work</h2></div>
+  <div class="features">
+    <div><span class="tag">Trust</span><h3>Context Guard</h3><p>Warns when a clip could say something you didn't mean, and can compare quoted verses with the translation you preach from.</p></div>
+    <div><span class="tag">Teams</span><h3>Volunteer Mode</h3><p>Save your church's caption style once. Volunteers see three big steps, and every clip matches.</p></div>
+    <div><span class="tag">Before Sunday</span><h3>Rehearse</h3><p>Paste your notes or record a practice run. See which lines will make good clips while there's still time to sharpen them.</p></div>
+    <div><span class="tag">Editing</span><h3>Say what to change</h3><p>Type “start at the question” or “remove the ums” and watch it happen. Undo is always one key away.</p></div>
+    <div><span class="tag">Posting</span><h3>Phone preview</h3><p>See your clip under each app's buttons and captions, so nothing important is covered.</p></div>
+    <div><span class="tag">Privacy</span><h3>Your sermons stay yours</h3><p>Transcription runs on your Mac. AI features use your own key or a plan, and only when you choose them.</p></div>
+  </div>
+</div></section>
+
+<section class="band" id="pricing"><div class="wrap">
+  <div class="head"><span class="eyebrow">Pricing</span><h2>Start free. Pay when it's part of your week.</h2></div>
+  <div class="plans">
+    <div class="plan"><h3>Free trial</h3><div class="price">$0</div><ul><li>Two sermons</li><li>Every feature</li><li>Small “Made with AutoClip” mark</li></ul></div>
+    <div class="plan lead"><h3>Solo</h3><div class="price">$29<small>/month</small></div><ul><li>Unlimited sermons</li><li>No mark on exports</li><li>Bring your own AI key, or use on-device AI</li></ul></div>
+    <div class="plan"><h3>Church</h3><div class="price">$69<small>/month</small></div><ul><li>Everything in Solo</li><li>Volunteer Mode</li><li>Worship review</li></ul></div>
+    <div class="plan"><h3>Lifetime</h3><div class="price">$179<small> once</small></div><ul><li>Everything in Solo</li><li>Updates for this version</li><li>Your own AI key</li></ul></div>
+  </div>
+  <p class="draft">Draft prices. Confirm these before the site goes live.</p>
+</div></section>
+
+<section class="band" id="faq"><div class="wrap">
+  <div class="head"><span class="eyebrow">Questions</span><h2>Good to know</h2></div>
+  <div class="faq">
+    <details><summary>Does AutoClip post for me?</summary><p>No. It makes and checks the clips. You choose what to post and where.</p></details>
+    <details><summary>Do I need an AI subscription?</summary><p>No. Transcription and the main clip picking run on your Mac. AI features such as writing hooks or the Scripture check use an API key you add, or on-device AI where your Mac supports it.</p></details>
+    <details><summary>What Mac do I need?</summary><p>A Mac with macOS 14 or later. Apple silicon is fastest for transcription.</p></details>
+    <details><summary>Can I use clips of someone else's sermon?</summary><p>Only with permission. Use recordings your church owns or has the rights to, including any music in them.</p></details>
+    <details><summary>What happens when my trial or plan ends?</summary><p>Everything you made stays. You can still open, edit and export it. New sermons need an active plan.</p></details>
+  </div>
+</div></section>
+
+<div class="wrap"><footer><span>AutoClip for Mac</span><span><a href="help.html">Help and setup</a></span></footer></div>
+</body>
+</html>
