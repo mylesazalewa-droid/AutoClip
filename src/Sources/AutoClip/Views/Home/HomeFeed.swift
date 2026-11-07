@@ -49,7 +49,7 @@ struct HomeFeed: View {
         var items: [HeroItem] = []
         for r in reelsStore.reels {
             items.append(.init(id: "r" + r.id.uuidString, kind: "Auto Reels", title: r.title,
-                               detail: "\(r.paths.count) reel\(r.paths.count == 1 ? "" : "s") · \(r.format) · \(time(r.duration))",
+                               detail: "\(r.drafts?.count ?? r.paths.count) reel\((r.drafts?.count ?? r.paths.count) == 1 ? "" : "s") · \(r.format) · \(time(r.duration))",
                                date: Date(timeIntervalSince1970: r.dateCreated), thumb: r.sourceVideoPath ?? r.path,
                                tall: r.format.contains("9:16") || r.format.lowercased().contains("vertical"), open: { onOpenReel(r) }))
         }
@@ -68,12 +68,13 @@ struct HomeFeed: View {
                 let hero = heroItems
                 if hero.isEmpty { welcome } else { banner(hero) }
 
+                GuidedPathCard()
                 startRow
 
                 if !reelsStore.reels.isEmpty {
                     row("Auto Reels", count: reelsStore.reels.count, action: ("See all", { HomeNav.shared.open(.autoReels) })) {
                         ForEach(reelsStore.reels) { r in
-                            PosterCard(path: r.path, title: r.title, meta: "\(r.paths.count) reel\(r.paths.count == 1 ? "" : "s") · \(time(r.duration))",
+                            PosterCard(path: r.path, title: r.title, meta: "\(r.drafts?.count ?? r.paths.count) reel\((r.drafts?.count ?? r.paths.count) == 1 ? "" : "s") · \(time(r.duration))",
                                        badge: r.format) { onOpenReel(r) }
                         }
                     }

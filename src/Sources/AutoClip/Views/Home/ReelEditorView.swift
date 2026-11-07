@@ -30,6 +30,7 @@ struct ReelDraftsView: View {
     @State private var showKit = false
     @State private var showReview = false
     @State private var showCleanup = false
+    @State private var confirmDelete = false
 
     private var record: AutoReelRecord? { store.reels.first { $0.id == recordID } }
     private var drafts: [ReelDraft] { record?.drafts ?? [] }
@@ -79,12 +80,21 @@ struct ReelDraftsView: View {
             .keyboardShortcut("r", modifiers: .command)
             .help("Go through the reels one at a time: → keep, ← toss (⌘R)")
             .disabled(drafts.isEmpty)
+            .onChange(of: showReview) { on in if on { UserDefaults.standard.set(true, forKey: AutoReelsStore.reviewedKey(recordID)) } }
+            .onAppear { if store.reviewOnOpen == recordID { store.reviewOnOpen = nil; showReview = true } }
             .sheet(isPresented: $showReview) {
                 ReviewModeView(recordID: recordID, selected: $selected, onToss: { notForMe($0) }, onExport: { export($0) })
             }
-            Button(role: .destructive) { onDelete(); dismiss() } label: {
+            Button(role: .destructive) { confirmDelete = true } label: {
                 Image(systemName: "trash").foregroundColor(Color.white.opacity(0.4))
-            }.buttonStyle(.plain).help("Delete all of these reels")
+            }
+            .buttonStyle(.plain).help("Delete all of these reels")
+            .confirmationDialog("Delete all \(drafts.count) reels from this project?", isPresented: $confirmDelete, titleVisibility: .visible) {
+                Button("Delete all", role: .destructive) { onDelete(); dismiss() }
+                Button("Cancel", role: .cancel) { }
+            } message: {
+                Text("This removes the project and its edits from AutoClip. It can't be undone.")
+            }
             Button("Done") { dismiss() }.keyboardShortcut(.cancelAction)
         }
         .padding(16)
@@ -480,6 +490,23 @@ struct ReelEditorView: View {
     @State private var observer: Any?
     @State private var reloadToken = 0
     @State private var sourceAspect: CGFloat = 16.0 / 9.0
+    /// While the pointer is over the list it stays still, so buttons don't move out from under a click
+    @State private var listHovered = false
+    @State private var undoStack: [ReelDraft] = []
+    @State private var redoStack: [ReelDraft] = []
+    @State private var lastDraft: ReelDraft?
+    @State private var lastChange = Date.distantPast
+    @State private var movingInHistory = false
+    @State private var original: ReelDraft?
+    @State private var confirmDiscard = false
+    /// Every tab the same size, so the panel doesn't jump when you change tabs
+    /// and always fits its window and the screen, so Save stays reachable
+    private static var panelHeight: CGFloat {
+        let screen = (NSApp.mainWindow?.screen ?? NSScreen.main)?.visibleFrame.height ?? 900
+        let parent = NSApp.mainWindow?.frame.height ?? 800
+        return min(screen - 60, max(740, parent - 40))
+    }
+    @State private var panelSize = Self.panelHeight
     /// After a nudge, play across that cut once the preview has rebuilt
     @State private var auditionAt: Double?
     /// Reel-timeline position of every kept sentence (rebuilt with the preview)
@@ -535,7 +562,13 @@ struct ReelEditorView: View {
                 TextField("Reel title", text: $draft.title)
                     .textFieldStyle(.plain).font(.system(size: 15, weight: .semibold)).foregroundColor(.white)
                 Spacer()
-                Text(formatDur(draft.duration)).font(.system(size: 12, design: .monospaced)).foregroundColor(gold)
+                Button { undo() } label: { Image(systemName: "arrow.uturn.backward") }
+                    .buttonStyle(.plain).foregroundColor(undoStack.isEmpty ? Color.white.opacity(0.2) : .white)
+                    .disabled(undoStack.isEmpty).keyboardShortcut("z", modifiers: .command).help("Undo (⌘Z)")
+                Button { redo() } label: { Image(systemName: "arrow.uturn.forward") }
+                    .buttonStyle(.plain).foregroundColor(redoStack.isEmpty ? Color.white.opacity(0.2) : .white)
+                    .disabled(redoStack.isEmpty).keyboardShortcut("z", modifiers: [.command, .shift]).help("Redo (⇧⌘Z)")
+                Text(formatDur(draft.duration)).font(.system(size: 12, design: .monospaced)).foregroundColor(gold).padding(.leading, 8)
             }
             .padding(16)
             Divider().background(Color.white.opacity(0.08))
@@ -543,18 +576,24 @@ struct ReelEditorView: View {
             PillTabs(selection: $workspace, items: [Workspace.edit, .reframe, .audio, .captions].map { ($0, $0.rawValue) })
                 .padding(.top, 12)
 
-            switch workspace {
-            case .edit: editWorkspace
-            case .reframe:
-                ReframeWorkspace(draft: $draft, people: { p in await peopleIn(p) }) { i in framingRow(i) }
-                    .padding(16)
-            case .audio: audioWorkspace
-            case .captions: captionsWorkspace
+            Group {
+                switch workspace {
+                case .edit: editWorkspace
+                case .reframe:
+                    ReframeWorkspace(draft: $draft, people: { p in await peopleIn(p) }) { i in framingRow(i) }
+                        .padding(16)
+                case .audio: audioWorkspace
+                case .captions: captionsWorkspace
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
             Divider().background(Color.white.opacity(0.08))
             HStack {
-                Button("Cancel") { player.pause(); dismiss() }.keyboardShortcut(.cancelAction)
+                Button("Cancel") {
+                    if let original, original != draft { confirmDiscard = true } else { player.pause(); dismiss() }
+                }
+                .keyboardShortcut(.cancelAction)
                 Spacer()
                 Button("Save") { player.pause(); onSave(draft); dismiss() }
                 Button {
@@ -569,9 +608,15 @@ struct ReelEditorView: View {
             }
             .padding(16)
         }
-        .frame(minWidth: 980, minHeight: 740)
+        .frame(width: 980, height: panelSize)
         .background(Theme.bg)
         .preferredColorScheme(.dark)
+        .confirmationDialog("Discard your changes to this reel?", isPresented: $confirmDiscard) {
+            Button("Discard changes", role: .destructive) { player.pause(); dismiss() }
+            Button("Keep editing", role: .cancel) { }
+        }
+        .onAppear { if original == nil { original = draft; lastDraft = draft } }
+        .onChange(of: draft) { new in rememberForUndo(new) }
         .task(id: reloadToken) { await reloadPreview() }
         .task { await askWhoToFollow() }
         .onChange(of: draft.pieces) { _ in reloadToken += 1 }
@@ -584,6 +629,37 @@ struct ReelEditorView: View {
             if let o = observer { player.removeTimeObserver(o) }
             player.pause()
         }
+    }
+
+    // MARK: Undo
+
+    /// Quick changes in a row, like typing a title, undo together.
+    private func rememberForUndo(_ new: ReelDraft) {
+        defer { lastDraft = new }
+        if movingInHistory { movingInHistory = false; return }
+        guard let previous = lastDraft, previous != new else { return }
+        if Date().timeIntervalSince(lastChange) > 0.6 || undoStack.isEmpty {
+            undoStack.append(previous)
+            if undoStack.count > 100 { undoStack.removeFirst() }
+        }
+        lastChange = Date()
+        redoStack = []
+    }
+
+    private func undo() {
+        guard let previous = undoStack.popLast() else { return }
+        redoStack.append(draft)
+        movingInHistory = true
+        lastChange = .distantPast
+        draft = previous
+    }
+
+    private func redo() {
+        guard let next = redoStack.popLast() else { return }
+        undoStack.append(draft)
+        movingInHistory = true
+        lastChange = .distantPast
+        draft = next
     }
 
     // MARK: Workspaces
@@ -604,8 +680,9 @@ struct ReelEditorView: View {
                         .padding(.trailing, 6)
                     }
                     // Follow along while playing (not while paused, so manual scrolling isn't fought)
+                    .onHover { listHovered = $0 }
                     .onChange(of: playing?.id) { id in
-                        guard isPlaying, let id else { return }
+                        guard isPlaying, !listHovered, let id else { return }
                         withAnimation(.easeInOut(duration: 0.25)) { proxy.scrollTo(id, anchor: .center) }
                     }
                 }
@@ -629,8 +706,9 @@ struct ReelEditorView: View {
                         }
                         .padding(.trailing, 8)
                     }
+                    .onHover { listHovered = $0 }
                     .onChange(of: playing?.id) { id in
-                        guard isPlaying, let id else { return }
+                        guard isPlaying, !listHovered, let id else { return }
                         withAnimation(.easeInOut(duration: 0.25)) { proxy.scrollTo(id, anchor: .center) }
                     }
                 }
@@ -1000,8 +1078,7 @@ struct ReelEditorView: View {
 
     private func pieceCard(_ i: Int) -> some View {
         let piece = draft.pieces[i]
-        let kept = piece.sentences.filter(\.included)
-        let dur = kept.reduce(0.0) { $0 + ($1.end - $1.start) }
+        let dur = draft.playingLength(ofPiece: i)
         return VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 Text("Clip \(i + 1)").font(.system(size: 12, weight: .semibold)).foregroundColor(.white)
@@ -1074,7 +1151,7 @@ struct ReelEditorView: View {
         .padding(12)
         .background(Color.white.opacity(0.04))
         .cornerRadius(10)
-        .opacity(kept.isEmpty ? 0.5 : 1)
+        .opacity(piece.sentences.filter(\.included).isEmpty ? 0.5 : 1)
     }
 
     /// Brings in the sentence just before or after this clip from the full message.
@@ -1243,31 +1320,35 @@ struct ReelEditorView: View {
     private func nudgeRow(piece i: Int, sentence j: Int, isStart: Bool) -> some View {
         let s = draft.pieces[i].sentences[j]
         let value = (isStart ? s.startNudge : s.endNudge) ?? 0
-        return HStack(spacing: 6) {
-            Image(systemName: isStart ? "arrow.right.to.line" : "arrow.left.to.line")
-                .font(.system(size: 10)).foregroundColor(gold.opacity(0.8))
-            Text(isStart ? "Starts" : "Ends").font(.system(size: 10, weight: .semibold))
-                .foregroundColor(Color.white.opacity(0.5)).frame(width: 38, alignment: .leading)
-            nudgeButton("−0.5", i, j, isStart, -0.5)
-            nudgeButton("−0.1", i, j, isStart, -0.1)
-            Text(value == 0 ? "0.0s" : String(format: "%+.1fs", value))
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundColor(value == 0 ? Color.white.opacity(0.4) : gold)
-                .frame(width: 40)
-            nudgeButton("+0.1", i, j, isStart, 0.1)
-            nudgeButton("+0.5", i, j, isStart, 0.5)
-            Text(isStart ? "earlier ◀ ▶ later" : "shorter ◀ ▶ longer")
-                .font(.system(size: 9)).foregroundColor(Color.white.opacity(0.3))
-            Spacer(minLength: 0)
-            if value != 0 {
-                Button("Reset") { setNudge(i, j, isStart, nil) }
-                    .buttonStyle(.plain).font(.system(size: 10)).foregroundColor(Color.white.opacity(0.5))
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Image(systemName: isStart ? "arrow.right.to.line" : "arrow.left.to.line")
+                    .font(.system(size: 10)).foregroundColor(gold.opacity(0.8))
+                Text(isStart ? "Starts" : "Ends").font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(Color.white.opacity(0.5))
+                Text("drag the handle").font(.system(size: 9)).foregroundColor(Color.white.opacity(0.3))
+                Spacer(minLength: 0)
+                nudgeButton("−0.1", i, j, isStart, -0.1)
+                Text(value == 0 ? "0.0s" : String(format: "%+.2fs", value))
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(value == 0 ? Color.white.opacity(0.4) : gold)
+                    .frame(width: 48)
+                nudgeButton("+0.1", i, j, isStart, 0.1)
+                if value != 0 {
+                    Button("Reset") { setNudge(i, j, isStart, nil) }
+                        .buttonStyle(.plain).font(.system(size: 10)).foregroundColor(Color.white.opacity(0.5))
+                }
+                Button { audition(i, j, isStart) } label: { Image(systemName: "ear") }
+                    .buttonStyle(.plain).font(.system(size: 11)).foregroundColor(Color.white.opacity(0.5))
+                    .help("Play across this cut")
             }
-            Button { audition(i, j, isStart) } label: { Image(systemName: "ear") }
-                .buttonStyle(.plain).font(.system(size: 11)).foregroundColor(Color.white.opacity(0.5))
-                .help("Play across this cut")
+            CutTrimmer(path: draft.pieces[i].sourceVideoPath, base: isStart ? s.startBase : s.endBase, isStart: isStart, value: value,
+                       sentenceWords: s.words, cutIDs: Set(s.cutWordIDs ?? [])) { v in
+                setNudge(i, j, isStart, v == 0 ? nil : v)
+                audition(i, j, isStart)
+            }
         }
-        .padding(.vertical, 3).padding(.horizontal, 6)
+        .padding(.vertical, 4).padding(.horizontal, 6)
         .background(Color.white.opacity(0.03)).cornerRadius(5)
     }
 
@@ -1276,7 +1357,7 @@ struct ReelEditorView: View {
             let s = draft.pieces[i].sentences[j]
             let cur = (isStart ? s.startNudge : s.endNudge) ?? 0
             // Limit to ±5s so a cut can't swallow a neighbouring thought by accident
-            let next = (min(5, max(-5, cur + delta)) * 10).rounded() / 10
+            let next = (min(5, max(-5, cur + delta)) * 100).rounded() / 100
             setNudge(i, j, isStart, next == 0 ? nil : next)
             audition(i, j, isStart)
         }

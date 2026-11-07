@@ -194,6 +194,11 @@ class AutoReelsStore: ObservableObject {
     @Published var pendingReelName: String = ""
     @Published var rerollVariation: Int = 0
     @Published var navigateToReelID: UUID? = nil   // set by Projects tab to deep-link into a reel
+    /// Open the form for a new reel, from the guided path on Home
+    @Published var requestNewReel = false
+    /// Go straight into Quick review when this project opens
+    @Published var reviewOnOpen: UUID?
+    static func reviewedKey(_ id: UUID) -> String { "reels_reviewed_\(id.uuidString)" }
 
     private let key = "autoReelsHistory"
     private let failedJobsKey = "autoReels_failedJobs"
@@ -440,6 +445,10 @@ struct AutoReelsTab: View {
         .onAppear {
             // Opened from Home for the first time, with a reel to go to
             if let id = store.navigateToReelID { selectedReel = store.reels.first { $0.id == id }; store.navigateToReelID = nil }
+            if store.requestNewReel { store.requestNewReel = false; pickedVideoURL = nil; inputMode = .file; showingCreateSheet = true }
+        }
+        .onChange(of: store.requestNewReel) { on in
+            if on { store.requestNewReel = false; pickedVideoURL = nil; inputMode = .file; showingCreateSheet = true }
         }
         .onChange(of: store.navigateToReelID) { reelID in
             guard let reelID else { return }

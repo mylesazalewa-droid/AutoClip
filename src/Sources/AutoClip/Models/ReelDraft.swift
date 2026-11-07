@@ -18,6 +18,18 @@ struct ReelDraft: Identifiable, Codable, Equatable {
         var cutWordIDs: [UUID]?
         func isCut(_ w: Word) -> Bool { cutWordIDs?.contains(w.id) ?? false }
         var keptWords: [Word] { included ? words.filter { !isCut($0) } : [] }
+        /// Where this sentence's clip starts with no nudge
+        var startBase: Double {
+            guard let i = words.firstIndex(where: { !isCut($0) }) else { return start }
+            if i > 0 { return max(words[i].startTime - 0.03, words[i - 1].endTime) }
+            return words[i].startTime - 0.1
+        }
+        /// Where this sentence's clip ends with no nudge
+        var endBase: Double {
+            guard let i = words.lastIndex(where: { !isCut($0) }) else { return end }
+            if i < words.count - 1 { return min(words[i].endTime + 0.05, words[i + 1].startTime) }
+            return words[i].endTime + 0.25
+        }
         var text: String { words.map(\.word).joined(separator: " ") }
         var start: Double { words.first?.startTime ?? 0 }
         var end: Double { words.last?.endTime ?? 0 }
@@ -322,6 +334,14 @@ struct ReelDraft: Identifiable, Codable, Equatable {
     }
 
     var renderClips: [Clip] { renderRuns.map(\.clip) }
+
+    /// How long one clip really plays, after cuts, trims and nudges.
+    func playingLength(ofPiece i: Int) -> Double {
+        guard pieces.indices.contains(i) else { return 0 }
+        var one = self
+        one.pieces = [pieces[i]]
+        return one.duration
+    }
 
     /// Where each kept sentence (and its words) plays on the reel timeline — lets the editor
     /// highlight what's being said and jump the preview to any sentence.

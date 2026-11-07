@@ -14,13 +14,10 @@ struct DropOffCard: View {
         return issue.severity >= 3 ? Theme.danger : issue.severity == 2 ? Theme.warn : Theme.sand.opacity(0.75)
     }
 
-    /// Worst first, and everything already handled after what still needs attention
+    /// Worst first
     private var ranked: [DropOff] {
-        issues.sorted {
-            let a = DropOffMap.isFixed($0, review.choices), b = DropOffMap.isFixed($1, review.choices)
-            if a != b { return !a }
-            return $0.severity != $1.severity ? $0.severity > $1.severity : $0.start < $1.start
-        }
+        // Fixed items stay where they are, so rows never move under the pointer
+        issues.sorted { $0.severity != $1.severity ? $0.severity > $1.severity : $0.start < $1.start }
     }
 
     var body: some View {
@@ -133,7 +130,8 @@ struct HookLabCard<Extra: View>: View {
     /// Kept so playback doesn't redo this on every tick
     @State private var now: HookReading?
     @State private var options: [HookOption] = []
-    private var readKey: String { "\(review.picture?.jumps.count ?? -1)|\(review.hook?.line ?? -1)|\(review.hookOptions?.count ?? 0)" }
+    // Not the chosen hook: picking one shouldn't reorder the list under the pointer
+    private var readKey: String { "\(review.picture?.jumps.count ?? -1)|\(review.hookOptions?.count ?? 0)" }
 
     private var chosen: Int? { review.choices.useHook ? review.hook?.line : nil }
 
