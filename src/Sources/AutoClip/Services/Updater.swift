@@ -168,23 +168,22 @@ final class Updater: ObservableObject {
 
     struct Problem: LocalizedError { let errorDescription: String?; init(_ s: String) { errorDescription = s } }
 
+    /// The system downloader, with progress read from its task.
     private func download(_ url: URL, to dest: URL) async throws {
-        let (bytes, resp) = try await URLSession.shared.bytes(from: url)
-        guard (resp as? HTTPURLResponse)?.statusCode == 200 else { throw Problem("The download failed. Try again later.") }
-        let total = Double(resp.expectedContentLength)
-        FileManager.default.createFile(atPath: dest.path, contents: nil)
-        let h = try FileHandle(forWritingTo: dest)
-        defer { try? h.close() }
-        var buf = Data(); buf.reserveCapacity(1 << 20)
-        var got = 0.0
-        for try await b in bytes {
-            buf.append(b)
-            if buf.count >= 1 << 20 {
-                try h.write(contentsOf: buf); got += Double(buf.count); buf.removeAll(keepingCapacity: true)
-                if total > 0 { progress = got / total }
+        let watcher = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                let tasks = await URLSession.shared.allTasks
+                if let t = tasks.first(where: { $0.originalRequest?.url == url }), t.countOfBytesExpectedToReceive > 0 {
+                    self?.progress = Double(t.countOfBytesReceived) / Double(t.countOfBytesExpectedToReceive)
+                }
             }
         }
-        try h.write(contentsOf: buf)
+        defer { watcher.cancel() }
+        let (tmp, resp) = try await URLSession.shared.download(from: url)
+        guard (resp as? HTTPURLResponse)?.statusCode == 200 else { throw Problem("The download failed. Try again later.") }
+        try? FileManager.default.removeItem(at: dest)
+        try FileManager.default.moveItem(at: tmp, to: dest)
         progress = 1
     }
 
