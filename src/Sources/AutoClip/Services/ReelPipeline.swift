@@ -250,6 +250,7 @@ enum ReelPipeline {
                 if aiKeywords.count == reelGroups.count, !aiKeywords[i].isEmpty { d.keywords = aiKeywords[i] }
                 if !kind.usesScripture { d.verseCards = false }
                 d.motion = motionDefault
+                d.hookStyle = UserDefaults.standard.string(forKey: "ar_hookStyle")
                 if let series { d.applySeries(series) }
                 return d
             }

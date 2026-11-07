@@ -20,7 +20,8 @@ struct ReelDraftsView: View {
     @ObservedObject private var volunteer = VolunteerMode.shared
     @Environment(\.dismiss) private var dismiss
     @State private var selected: Set<UUID> = []
-    @State private var editingID: UUID?
+    @Environment(\.openWindow) private var openWindow
+    @ObservedObject private var exportRequests = ExportRequests.shared
     @State private var exporting: [UUID: Double] = [:]
     @State private var exportErrors: [UUID: String] = [:]
     @State private var moreCount = 3
@@ -56,16 +57,12 @@ struct ReelDraftsView: View {
         .frame(minWidth: 560, minHeight: 520)
         .background(Theme.bg)
         .preferredColorScheme(.dark)
-        .sheet(item: Binding(get: { editingID.map { EditTarget(id: $0) } }, set: { editingID = $0?.id })) { t in
-            if let draft = drafts.first(where: { $0.id == t.id }) {
-                ReelEditorView(draft: draft, gold: gold,
-                               onSave: { save($0) },
-                               onExport: { d in save(d); export([d.id]) })
-            }
+        .onReceive(exportRequests.$pending) { t in
+            guard let t, t.record == recordID else { return }
+            exportRequests.pending = nil
+            export([t.draft])
         }
     }
-
-    private struct EditTarget: Identifiable { let id: UUID }
 
     private var header: some View {
         HStack {
@@ -334,7 +331,7 @@ struct ReelDraftsView: View {
                     .buttonStyle(.plain).foregroundColor(Color.white.opacity(0.45))
                     .help("Not for me — remove this reel, and AutoClip learns to pick fewer like it")
             }
-            Button { editingID = d.id } label: {
+            Button { openWindow(id: "reel-editor", value: EditorTarget(record: recordID, draft: d.id)) } label: {
                 Label("Edit", systemImage: "slider.horizontal.3").font(.system(size: 12, weight: .medium))
                     .padding(.horizontal, 10).padding(.vertical, 5)
                     .background(Color.white.opacity(0.08)).cornerRadius(6)
@@ -397,20 +394,7 @@ struct ReelDraftsView: View {
 
     // MARK: Actions
 
-    private func save(_ draft: ReelDraft) {
-        guard var rec = record, var ds = rec.drafts, let i = ds.firstIndex(where: { $0.id == draft.id }) else { return }
-        var d = draft
-        // Only content changes (clips, captions, title…) make an exported reel stale —
-        // not the export bookkeeping itself
-        var a = d, b = ds[i]
-        a.exportedPath = nil; a.editedSinceExport = false; a.guardReview = nil
-        b.exportedPath = nil; b.editedSinceExport = false; b.guardReview = nil
-        if a != b, d.exportedPath != nil, d.exportedPath == ds[i].exportedPath { d.editedSinceExport = true }
-        ds[i] = d
-        rec.drafts = ds
-        rec.duration = ds.first?.duration ?? rec.duration
-        store.update(rec)
-    }
+    private func save(_ draft: ReelDraft) { store.saveDraft(draft, in: recordID) }
 
     /// Throws a reel out and remembers it as the kind the user doesn't want.
     private func notForMe(_ d: ReelDraft) {
@@ -499,8 +483,14 @@ struct ReelEditorView: View {
     @State private var mediaToken = 0
     @State private var splitNote: [UUID: String] = [:]
     let gold: Color
+    /// The project this reel belongs to, for "Apply to all clips"
+    var recordID: UUID? = nil
     var onSave: (ReelDraft) -> Void
     var onExport: (ReelDraft) -> Void
+    @State private var editorWindow: NSWindow?
+    @State private var closeGuard = CloseGuard()
+    @State private var draggingPiece: UUID?
+    @State private var applyNote: String?
 
     @Environment(\.dismiss) private var dismiss
     @State private var player = AVPlayer()
@@ -520,14 +510,6 @@ struct ReelEditorView: View {
     @State private var movingInHistory = false
     @State private var original: ReelDraft?
     @State private var confirmDiscard = false
-    /// Every tab the same size, so the panel doesn't jump when you change tabs
-    /// and always fits its window and the screen, so Save stays reachable
-    private static var panelHeight: CGFloat {
-        let screen = (NSApp.mainWindow?.screen ?? NSScreen.main)?.visibleFrame.height ?? 900
-        let parent = NSApp.mainWindow?.frame.height ?? 800
-        return min(screen - 60, max(740, parent - 40))
-    }
-    @State private var panelSize = Self.panelHeight
     /// After a nudge, play across that cut once the preview has rebuilt
     @State private var auditionAt: Double?
     /// Reel-timeline position of every kept sentence (rebuilt with the preview)
@@ -638,13 +620,13 @@ struct ReelEditorView: View {
             Divider().background(Color.white.opacity(0.08))
             HStack {
                 Button("Cancel") {
-                    if let original, original != draft { confirmDiscard = true } else { player.pause(); dismiss() }
+                    if let original, original != draft { confirmDiscard = true } else { closeEditor() }
                 }
                 .keyboardShortcut(.cancelAction)
                 Spacer()
-                Button("Save") { player.pause(); onSave(draft); dismiss() }
+                Button("Save") { onSave(draft); original = draft; closeEditor() }
                 Button {
-                    player.pause(); onExport(draft); dismiss()
+                    onExport(draft); original = draft; closeEditor()
                 } label: {
                     Text(draft.exportedPath == nil ? "Save & Export" : "Save & Re-export")
                         .font(.system(size: 13, weight: .semibold)).foregroundColor(.black)
@@ -655,11 +637,19 @@ struct ReelEditorView: View {
             }
             .padding(16)
         }
-        .frame(width: 980, height: panelSize)
+        .frame(minWidth: 960, idealWidth: 1280, minHeight: 640, idealHeight: 860)
         .background(Theme.bg)
+        .background(WindowAccessor { w in
+            editorWindow = w
+            closeGuard.allow = {
+                if let original, original != draft { confirmDiscard = true; return false }
+                player.pause(); return true
+            }
+            closeGuard.attach(to: w)
+        })
         .preferredColorScheme(.dark)
         .confirmationDialog("Discard your changes to this reel?", isPresented: $confirmDiscard) {
-            Button("Discard changes", role: .destructive) { player.pause(); dismiss() }
+            Button("Discard changes", role: .destructive) { closeEditor() }
             Button("Keep editing", role: .cancel) { }
         }
         .onAppear {
@@ -794,7 +784,7 @@ struct ReelEditorView: View {
     private func handleKey(_ event: NSEvent) -> Bool {
         guard event.modifierFlags.intersection([.command, .control, .option]).isEmpty,
               !CommandBar.shared.showing, !confirmDiscard,
-              event.window === NSApp.keyWindow, event.window?.isSheet == true,
+              event.window === NSApp.keyWindow, event.window != nil, event.window === editorWindow,
               !(NSApp.keyWindow?.firstResponder is NSText) else { return false }
         let shift = event.modifierFlags.contains(.shift)
         switch event.keyCode {
@@ -896,6 +886,11 @@ struct ReelEditorView: View {
         return out
     }
 
+    private func closeEditor() {
+        player.pause()
+        if let w = editorWindow { w.close() } else { dismiss() }
+    }
+
     // MARK: Undo
 
     /// Quick changes in a row, like typing a title, undo together.
@@ -930,8 +925,10 @@ struct ReelEditorView: View {
     // MARK: Workspaces
 
     private var editWorkspace: some View {
-            HStack(alignment: .top, spacing: 16) {
-                previewColumn.frame(width: focusMode ? 320 : 260)
+        VStack(spacing: 10) {
+            HSplitView {
+                previewColumn.padding(.trailing, 12)
+                    .frame(minWidth: 220, idealWidth: focusMode ? 420 : 320, maxWidth: 760, maxHeight: .infinity, alignment: .top)
                 ScrollViewReader { proxy in
                     ScrollView {
                         VStack(alignment: .leading, spacing: 14) {
@@ -955,8 +952,15 @@ struct ReelEditorView: View {
                         withAnimation(.easeInOut(duration: 0.25)) { proxy.scrollTo(id, anchor: .center) }
                     }
                 }
+                .padding(.leading, 12)
+                .frame(minWidth: 420, maxHeight: .infinity)
             }
-            .padding(16)
+            EditTimeline(draft: draft, timeline: timeline, zooms: zooms, overlays: overlayItems, total: total, time: time) { t in
+                time = t
+                player.seek(to: CMTime(seconds: t, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+            }
+        }
+        .padding(16)
     }
 
     private var audioWorkspace: some View {
@@ -1172,7 +1176,25 @@ struct ReelEditorView: View {
 
     private var polishSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("POLISH").font(.system(size: 10, weight: .semibold)).foregroundColor(Color.white.opacity(0.35)).tracking(1)
+            HStack {
+                Text("POLISH").font(.system(size: 10, weight: .semibold)).foregroundColor(Color.white.opacity(0.35)).tracking(1)
+                Spacer()
+                if recordID != nil, otherDraftCount > 0 {
+                    Menu("Apply to all \(otherDraftCount + 1) clips") {
+                        Button("Caption style") { applyToAll([.captions]) }
+                        Button("Hook animation") { applyToAll([.hookStyle]) }
+                        Button("Movement") { applyToAll([.motion]) }
+                        Button("Size") { applyToAll([.size]) }
+                        Button("Voice and music") { applyToAll([.audio]) }
+                        Button("Verse cards and pauses") { applyToAll([.toggles]) }
+                        Divider()
+                        Button("All of these") { applyToAll(ApplyPart.allCases) }
+                    }
+                    .menuStyle(.borderlessButton).fixedSize().font(.system(size: 11))
+                    .help("Use this clip's settings on every clip from this sermon")
+                }
+            }
+            if let applyNote { Text(applyNote).font(.system(size: 10)).foregroundColor(Theme.good) }
 
             // Hook text
             VStack(alignment: .leading, spacing: 5) {
@@ -1292,6 +1314,40 @@ struct ReelEditorView: View {
         .padding(12).background(Color.white.opacity(0.04)).cornerRadius(10)
     }
 
+    enum ApplyPart: CaseIterable { case captions, hookStyle, motion, size, audio, toggles }
+
+    private var otherDraftCount: Int {
+        guard let recordID, let rec = AutoReelsStore.shared.reels.first(where: { $0.id == recordID }) else { return 0 }
+        return (rec.drafts ?? []).filter { $0.id != draft.id }.count
+    }
+
+    /// Copies this clip's settings onto the other clips from the same sermon, and saves them.
+    private func applyToAll(_ parts: [ApplyPart]) {
+        guard let recordID, var rec = AutoReelsStore.shared.reels.first(where: { $0.id == recordID }) else { return }
+        var changed = 0
+        rec.drafts = (rec.drafts ?? []).map { other in
+            guard other.id != draft.id else { return other }
+            var o = other
+            for p in parts {
+                switch p {
+                case .captions: o.captions = draft.captions; o.look = draft.look
+                case .hookStyle: o.hookStyle = draft.hookStyle
+                case .motion: o.motion = draft.motion
+                case .size: o.formatRaw = draft.formatRaw
+                case .audio: o.audio = draft.audio
+                case .toggles: o.verseCards = draft.verseCards; o.tightenPauses = draft.tightenPauses
+                }
+            }
+            if o != other {
+                changed += 1
+                if o.exportedPath != nil { o.editedSinceExport = true }
+            }
+            return o
+        }
+        AutoReelsStore.shared.update(rec)
+        applyNote = changed == 0 ? "The other clips already match." : "Applied to \(changed) other clip\(changed == 1 ? "" : "s")."
+    }
+
     private func replayFromStart() {
         time = 0
         player.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero)
@@ -1382,7 +1438,7 @@ struct ReelEditorView: View {
             do {
                 let provider = LLMClipService.AIProvider(rawValue: UserDefaults.standard.string(forKey: "ar_provider") ?? "") ?? .google
                 guard let key = await LLMClipService.shared.loadAPIKey(for: provider), !key.isEmpty else {
-                    endingStatus = "Add an API key in Auto Reels → AI settings to use this."
+                    endingStatus = "Add an API key in AutoClip → Settings → AI to use this."
                     return
                 }
                 guard let words = TranscriptCache.load(for: source) else {
@@ -1414,7 +1470,7 @@ struct ReelEditorView: View {
                 let key = await LLMClipService.shared.loadAPIKey(for: provider) ?? ""
                 let local = key.isEmpty ? await LocalAI.ready() : false
                 guard !key.isEmpty || local else {
-                    hookStatus = "Add an API key in Auto Reels → AI settings (or turn on on-device AI) to write hooks with AI."
+                    hookStatus = "Add an API key in AutoClip → Settings → AI (or turn on on-device AI) to write hooks with AI."
                     return
                 }
                 let hook = try await LLMClipService.shared.writeHook(transcript: transcript, title: title,
@@ -1482,6 +1538,9 @@ struct ReelEditorView: View {
         let dur = draft.playingLength(ofPiece: i)
         return VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
+                Image(systemName: "line.3.horizontal").font(.system(size: 11)).foregroundColor(Color.white.opacity(0.4))
+                    .help("Drag to move this clip")
+                    .onDrag { draggingPiece = piece.id; return NSItemProvider(object: piece.id.uuidString as NSString) }
                 Text("Clip \(i + 1)").font(.system(size: 12, weight: .semibold)).foregroundColor(.white)
                 Text(formatDur(dur)).font(.system(size: 11, design: .monospaced)).foregroundColor(gold)
                 Spacer()
@@ -1550,9 +1609,10 @@ struct ReelEditorView: View {
                 .font(.system(size: 9)).foregroundColor(Color.white.opacity(0.35))
         }
         .padding(12)
-        .background(Color.white.opacity(0.04))
+        .background(Color.white.opacity(draggingPiece == piece.id ? 0.1 : 0.04))
         .cornerRadius(10)
         .opacity(piece.sentences.filter(\.included).isEmpty ? 0.5 : 1)
+        .onDrop(of: [.text], delegate: PieceDrop(target: piece.id, draft: $draft, dragging: $draggingPiece))
     }
 
     /// Brings in the sentence just before or after this clip from the full message.

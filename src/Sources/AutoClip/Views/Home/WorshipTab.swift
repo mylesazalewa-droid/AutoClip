@@ -763,7 +763,7 @@ struct WorshipTab: View {
                 let provider = LLMClipService.AIProvider(rawValue: UserDefaults.standard.string(forKey: "ar_provider") ?? "") ?? .google
                 guard let key = await LLMClipService.shared.loadAPIKey(for: provider), !key.isEmpty else {
                     coachStatus = nil
-                    coachError = "Add an API key in Auto Reels → AI settings to use the AI coach."
+                    coachError = "Add an API key in AutoClip → Settings → AI to use the AI coach."
                     return
                 }
                 let c = try await CostTag.$video.withValue(title) {

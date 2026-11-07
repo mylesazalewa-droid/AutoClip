@@ -261,7 +261,7 @@ enum ReelGenerator {
         guard let source = sourceVideoPath(for: record) else { throw err("Can't find this reel's source video.") }
         let st = settings(for: record)
         guard let key = await LLMClipService.shared.loadAPIKey(for: st.provider), !key.isEmpty else {
-            throw err("The Fire Short is written by AI — add an API key for \(st.provider.rawValue) in Auto Reels → AI settings.")
+            throw err("The Fire Short is written by AI — add an API key for \(st.provider.rawValue) in AutoClip → Settings → AI.")
         }
         let words = SermonFinder.trimCached(try await TranscriptCache.transcript(for: source, progress: progress), path: source)
         let sentences = ReelDraft.sentences(from: words)
@@ -286,7 +286,7 @@ enum ReelGenerator {
         let key = await LLMClipService.shared.loadAPIKey(for: st.provider) ?? ""
         let local = light && key.isEmpty ? await LocalAI.ready() : false
         guard !key.isEmpty || local else {
-            throw err("This needs AI — add an API key for \(st.provider.rawValue) in Auto Reels → AI settings.")
+            throw err("This needs AI — add an API key for \(st.provider.rawValue) in AutoClip → Settings → AI.")
         }
         let words = SermonFinder.trimCached(try await TranscriptCache.transcript(for: source, progress: progress), path: source)
         return (source, st, key, ReelDraft.sentences(from: words))

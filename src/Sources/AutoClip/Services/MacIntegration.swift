@@ -21,6 +21,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         Task { @MainActor in DockStatus.shared.start() }
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        Reopen.quitting = true
+    }
+
     func application(_ application: NSApplication, open urls: [URL]) {
         Task { @MainActor in IncomingVideos.handle(urls) }
     }

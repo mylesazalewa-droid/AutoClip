@@ -44,6 +44,14 @@ struct ReelWindowView: View {
         .preferredColorScheme(.dark)
         .navigationTitle(record?.title ?? "Reels")
         .frame(minWidth: 940, minHeight: 600)
+        .background(WindowAccessor { $0.setFrameAutosaveName("AutoClipReels") })
+        .onAppear { UserDefaults.standard.set(recordID.uuidString, forKey: Reopen.key) }
+        .onDisappear {
+            // Closed by hand: don't reopen it. Open at quit: do.
+            if !Reopen.quitting, UserDefaults.standard.string(forKey: Reopen.key) == recordID.uuidString {
+                UserDefaults.standard.removeObject(forKey: Reopen.key)
+            }
+        }
     }
 }
 

@@ -42,6 +42,14 @@ struct AutoClipApp: App {
         }
         .defaultSize(width: 1280, height: 820)
 
+        // The editor, as big as you like
+        WindowGroup("Edit Reel", id: "reel-editor", for: EditorTarget.self) { $t in
+            if let t { ReelEditorHost(target: t) }
+        }
+        .defaultSize(width: 1320, height: 880)
+
+        Settings { SettingsView() }
+
         MenuBarExtra(isInserted: $menuBarOn) {
             MenuBarPanel().preferredColorScheme(.dark)
         } label: {
@@ -61,6 +69,12 @@ struct MainWindow: View {
         sizedWindow = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
             guard let window = NSApp.windows.first(where: { $0.canBecomeMain && $0.isVisible }) else { return }
+            // Back where it was last time, if it was moved or resized
+            if !window.styleMask.contains(.fullScreen), window.setFrameUsingName("AutoClipMain") {
+                window.setFrameAutosaveName("AutoClipMain")
+                return
+            }
+            defer { window.setFrameAutosaveName("AutoClipMain") }
             func fill() { if let screen = window.screen ?? NSScreen.main { window.setFrame(screen.visibleFrame, display: true, animate: false) } }
             // macOS may bring back true full screen from the last run
             if window.styleMask.contains(.fullScreen) {
@@ -115,6 +129,13 @@ private struct CommandBarHost: ViewModifier {
                     HomeNav.shared.open(.autoReels)
                 }
             }
+            // Pick up where you left off
+            if !Reopen.done, !VolunteerMode.shared.enabled, let raw = UserDefaults.standard.string(forKey: Reopen.key),
+               let id = UUID(uuidString: raw), AutoReelsStore.shared.reels.contains(where: { $0.id == id && $0.drafts != nil }) {
+                Reopen.done = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { openWindow(id: "reel-window", value: id) }
+            }
+            Reopen.done = true
         }
     }
 }
@@ -168,4 +189,11 @@ final class ActivationWindow: ObservableObject {
     static let shared = ActivationWindow()
     @Published var showing = false
     static func show() { shared.showing = true }
+}
+
+/// Remembers the reel window that was open, to open it again next time.
+enum Reopen {
+    static let key = "last_open_reel"
+    static var done = false
+    static var quitting = false
 }

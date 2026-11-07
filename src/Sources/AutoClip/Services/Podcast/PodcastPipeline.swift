@@ -341,7 +341,7 @@ extension PodcastStore {
             say(id, "Writing show notes and chapters…")
             let provider = LLMClipService.AIProvider(rawValue: UserDefaults.standard.string(forKey: "ar_provider") ?? "") ?? .google
             guard let key = await LLMClipService.shared.loadAPIKey(for: provider), !key.isEmpty else {
-                throw PodcastAudio.Failure(message: "Add an API key in Auto Reels → AI settings to write show notes.")
+                throw PodcastAudio.Failure(message: "Add an API key in AutoClip → Settings → AI to write show notes.")
             }
             let paras = PodcastExports.paragraphs(e, words: words)
             let notes = try await CostTag.$video.withValue(e.title) {

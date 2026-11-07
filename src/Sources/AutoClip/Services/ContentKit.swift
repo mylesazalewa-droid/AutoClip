@@ -66,8 +66,8 @@ enum ContentKit {
         let localReady = o.posts && !hasAI ? await LocalAI.ready() : false
         let canPost = hasAI || localReady
         if !hasAI && wantsAI {
-            skipped.append(canPost ? "Notes and graphics need an AI key (Auto Reels → AI settings)."
-                                   : "Captions, notes and graphics need an AI key (Auto Reels → AI settings).")
+            skipped.append(canPost ? "Notes and graphics need an AI key (AutoClip → Settings → AI)."
+                                   : "Captions, notes and graphics need an AI key (AutoClip → Settings → AI).")
         }
 
         // Transcript + captions file for the full video

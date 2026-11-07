@@ -199,7 +199,7 @@ final class SeriesStore: ObservableObject {
                 let provider = LLMClipService.AIProvider(rawValue: UserDefaults.standard.string(forKey: "ar_provider") ?? "") ?? .google
                 guard let key = await LLMClipService.shared.loadAPIKey(for: provider), !key.isEmpty else {
                     status[id] = nil
-                    errors[id] = "Add an API key in Auto Reels → AI settings to assess a series."
+                    errors[id] = "Add an API key in AutoClip → Settings → AI to assess a series."
                     return
                 }
                 var a = try await CostTag.$video.withValue("Series: " + s.name) {

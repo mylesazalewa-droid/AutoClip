@@ -862,7 +862,7 @@ Respond with ONLY valid JSON: {"hook":"..."}
         let key = loadAPIKey(for: provider) ?? ""
         if key.isEmpty {
             guard await LocalAI.ready() else {
-                throw llmError("This needs AI. Add an API key in Auto Reels → AI settings, or turn on on-device AI.")
+                throw llmError("This needs AI. Add an API key in AutoClip → Settings → AI, or turn on on-device AI.")
             }
             return try await LocalAI.generate(prompt)
         }
