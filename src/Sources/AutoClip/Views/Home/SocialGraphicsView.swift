@@ -8,6 +8,7 @@ struct SocialGraphicsView: View {
     let gold: Color
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openWindow) private var openWindow
     @State private var cards: [SocialGraphics.Card] = []
     @State private var images: [UUID: NSImage] = [:]
     @State private var frames: [Double: CGImage] = [:]
@@ -26,10 +27,13 @@ struct SocialGraphicsView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Social graphics").font(.system(size: 15, weight: .semibold)).foregroundColor(Theme.ink)
-                    Text("Quote cards, a carousel and a thumbnail from this message")
+                    Text("Quote cards and a thumbnail from this message")
                         .font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.55))
                 }
                 Spacer()
+                Button { dismiss(); openWindow(id: "carousel-window", value: record.id) } label: {
+                    Label("Sermon carousel", systemImage: "rectangle.split.3x1")
+                }
                 if !cards.isEmpty {
                     Button("Rewrite with AI") { generate() }.disabled(status != nil)
                     Button("Export all…") { exportAll() }
@@ -48,7 +52,7 @@ struct SocialGraphicsView: View {
                         Text(status).font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.6))
                     } else {
                         Image(systemName: "photo.on.rectangle.angled").font(.system(size: 38)).foregroundColor(gold)
-                        Text("AI reads the message and writes 5 quote cards, a carousel and a thumbnail headline.")
+                        Text("AI reads the message and writes 5 quote cards and a thumbnail headline.")
                             .font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.6))
                         Button("Create graphics") { generate() }.buttonStyle(PrimaryButtonStyle())
                     }
@@ -76,7 +80,6 @@ struct SocialGraphicsView: View {
                     }
                     section("Thumbnail for the full video", kinds: [.thumbnail], min: 360)
                     section("Quote cards", kinds: [.quote], min: 220)
-                    section("Carousel", kinds: [.cover, .slide, .end], min: 220)
                 }
             }
         }
@@ -133,7 +136,7 @@ struct SocialGraphicsView: View {
                     try await ReelGenerator.graphics(for: record) { msg in Task { @MainActor in status = msg } }
                 }
                 source = r.source
-                cards = SocialGraphics.cards(from: r.plan, sentences: r.sentences)
+                cards = SocialGraphics.cards(from: r.plan, sentences: r.sentences).filter { [.quote, .thumbnail].contains($0.kind) }
                 images = [:]
                 status = "Drawing graphics…"
                 for c in cards { await draw(c) }

@@ -110,7 +110,7 @@ struct ReelDraftsView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 10) {
                 Button { generateMore() } label: {
-                    Label("Generate more", systemImage: "plus.square.on.square").font(.system(size: 13, weight: .semibold))
+                    Label("Generate more", systemImage: "plus.square.on.square").font(.system(size: 13, weight: .semibold)).lineLimit(1).fixedSize()
                         .padding(.horizontal, 10).padding(.vertical, 6)
                         .background(Theme.ink.opacity(0.08)).cornerRadius(7)
                 }.buttonStyle(.plain).foregroundColor(Theme.ink).disabled(genStatus != nil)
@@ -125,22 +125,34 @@ struct ReelDraftsView: View {
                 }
                 .buttonStyle(.plain).foregroundColor(Theme.onColor).disabled(genStatus != nil)
                 .help("One teaser clip with a title, description and hashtags, built to end on a cliffhanger")
+            }
+            // Things made from the whole message, on their own row so labels never wrap
+            HStack(spacing: 8) {
+                Text("From the full message").font(.system(size: 12)).foregroundColor(Theme.muted).lineLimit(1)
+                Spacer(minLength: 6)
                 Button { showGraphics = true } label: {
-                    Label("Graphics", systemImage: "photo.on.rectangle.angled").font(.system(size: 13, weight: .semibold))
+                    Label("Graphics", systemImage: "photo.on.rectangle.angled").font(.system(size: 13, weight: .semibold)).lineLimit(1).fixedSize()
                         .padding(.horizontal, 10).padding(.vertical, 6)
                         .background(Theme.ink.opacity(0.08)).cornerRadius(7)
                 }
                 .buttonStyle(.plain).foregroundColor(Theme.ink)
-                .help("Quote cards, a carousel and a thumbnail for the full message")
+                .help("Quote cards and a thumbnail for the full message")
+                Button { openWindow(id: "carousel-window", value: recordID) } label: {
+                    Label("Carousel", systemImage: "rectangle.split.3x1").font(.system(size: 13, weight: .semibold)).lineLimit(1).fixedSize()
+                        .padding(.horizontal, 10).padding(.vertical, 6)
+                        .background(Theme.ink.opacity(0.08)).cornerRadius(7)
+                }
+                .buttonStyle(.plain).foregroundColor(Theme.ink)
+                .help("The whole message as an Instagram carousel: big idea, main points, Scripture and a question for the week")
                 Button { showKit = true } label: {
-                    Label("Content kit", systemImage: "shippingbox").font(.system(size: 13, weight: .semibold))
+                    Label("Content kit", systemImage: "shippingbox").font(.system(size: 13, weight: .semibold)).lineLimit(1).fixedSize()
                         .padding(.horizontal, 10).padding(.vertical, 6)
                         .background(Theme.terracotta).cornerRadius(7)
                 }
                 .buttonStyle(.plain).foregroundColor(Theme.onColor)
                 .help("Every clip, captions and hashtags, notes, graphics and a posting plan — in one folder")
                 Button { showCleanup = true } label: {
-                    Label("Clean up", systemImage: "scissors").font(.system(size: 13, weight: .semibold))
+                    Label("Clean up", systemImage: "scissors").font(.system(size: 13, weight: .semibold)).lineLimit(1).fixedSize()
                         .padding(.horizontal, 10).padding(.vertical, 6)
                         .background(Theme.ink.opacity(0.08)).cornerRadius(7)
                 }

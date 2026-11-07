@@ -46,6 +46,12 @@ struct AutoClipApp: App {
         }
         .defaultSize(width: 1280, height: 820)
 
+        // The whole message as an Instagram carousel
+        WindowGroup("Carousel", id: "carousel-window", for: UUID.self) { $id in
+            if let id { CarouselWindow(recordID: id).tint(Theme.action).appLook() }
+        }
+        .defaultSize(width: 1240, height: 860)
+
         // The editor, as big as you like
         WindowGroup("Edit Clip", id: "reel-editor", for: EditorTarget.self) { $t in
             if let t { ReelEditorHost(target: t) }

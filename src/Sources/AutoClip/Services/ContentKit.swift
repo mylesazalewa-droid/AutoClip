@@ -129,7 +129,9 @@ enum ContentKit {
             await progress("Designing quote cards and a thumbnail…")
             do {
                 let g = try await ReelGenerator.graphics(for: record) { msg in Task { @MainActor in progress(msg) } }
+                // The carousel comes from the sermon carousel (below) when there is one
                 let cards = SocialGraphics.cards(from: g.plan, sentences: g.sentences)
+                    .filter { CarouselStore.load(record.id) == nil || [.quote, .thumbnail].contains($0.kind) }
                 let dir = folder.appendingPathComponent("Graphics")
                 try fm.createDirectory(at: dir, withIntermediateDirectories: true)
                 let look = drafts.first?.look ?? CaptionLook.load() ?? CaptionLook(preset: CaptionStyle.all[0])
@@ -143,6 +145,10 @@ enum ContentKit {
                     try? data?.write(to: dir.appendingPathComponent(c.fileName))
                 }
             } catch { skipped.append("Graphics: \(error.localizedDescription)") }
+        }
+        if let car = CarouselStore.load(record.id) {
+            await progress("Saving the carousel…")
+            await CarouselExport.write(car, to: folder.appendingPathComponent("Carousel"))
         }
 
         // Every reel, rendered (or copied when its export is up to date)

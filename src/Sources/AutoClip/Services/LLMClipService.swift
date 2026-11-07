@@ -929,6 +929,15 @@ Respond with ONLY valid JSON, no markdown:
         throw lastError
     }
 
+    /// The raw AI answer for a whole-message carousel (parsed by SermonCarousel). Runs on the
+    /// cloud model when there's a key, otherwise on on-device AI.
+    func composeCarousel(sentences: [(start: Double, end: Double, text: String)], title: String,
+                         kind: ContentKind, provider: AIProvider, apiKey: String) async throws -> String {
+        let prompt = SermonCarousel.prompt(sentences: numbered(sentences), title: title, kind: kind)
+        if apiKey.isEmpty { return try await LocalAI.generate(prompt) }
+        return try await ask(prompt, provider: provider, apiKey: apiKey)
+    }
+
     /// A caption and hashtags for each reel, ready to paste into Instagram, TikTok or YouTube.
     /// `reels` is (title, what's said). Returns one SEO per reel, in order.
     func postCopy(reels: [(title: String, text: String)], videoTitle: String, kind: ContentKind,
