@@ -13,6 +13,8 @@ struct AutoClipApp: App {
             CommandMenu("Project") {
                 Button("Import Video...") { AppState.shared.triggerImport() }
                     .keyboardShortcut("o", modifiers: .command)
+                Button("Command Bar…") { CommandBar.shared.toggle() }
+                    .keyboardShortcut("k", modifiers: .command)
             }
         }
 
@@ -59,7 +61,26 @@ struct MainWindow: View {
             .tint(Theme.action)
             .preferredColorScheme(.dark)
             .task { AutoImport.shared.start() }
+            .modifier(CommandBarHost())
             .onAppear { Self.fillScreen() }
+    }
+}
+
+/// Lets the command bar open reels in their own windows.
+private struct CommandBarHost: ViewModifier {
+    @Environment(\.openWindow) private var openWindow
+    func body(content: Content) -> some View {
+        content.onAppear {
+            CommandBar.shared.install()
+            CommandBar.shared.openReel = { id in
+                if AutoReelsStore.shared.reels.first(where: { $0.id == id })?.drafts != nil {
+                    openWindow(id: "reel-window", value: id)
+                } else {
+                    AutoReelsStore.shared.navigateToReelID = id
+                    HomeNav.shared.open(.autoReels)
+                }
+            }
+        }
     }
 }
 

@@ -64,6 +64,9 @@ struct DraftPreviewPane: View {
     @State private var following = false
     @State private var overlayItems: [ReelOverlays.Placed] = []
     @State private var followTask: Task<Void, Never>?
+    @AppStorage("phone_view") private var phoneRaw = PhoneView.off.rawValue
+    private var phone: PhoneView { PhoneView(rawValue: phoneRaw) ?? .off }
+    private var isVertical: Bool { draft.formatRaw == VideoExportService.ExportFormat.vertical9x16.rawValue }
 
     private var aspect: CGFloat {
         switch VideoExportService.ExportFormat(rawValue: draft.formatRaw) ?? .vertical9x16 {
@@ -88,12 +91,14 @@ struct DraftPreviewPane: View {
                    let img = look.overlayImage(words: words, time: time, size: CGSize(width: 720, height: 720 / aspect)) {
                     Image(nsImage: img).resizable().allowsHitTesting(false)
                 }
+                if phone != .off, isVertical { PhoneChrome(view: phone) }
                 if !isPlaying {
                     Image(systemName: "play.circle.fill").font(.system(size: 54)).foregroundColor(.white.opacity(0.85))
                 }
             }
             .aspectRatio(aspect, contentMode: .fit)
-            .cornerRadius(10)
+            .cornerRadius(phone == .off ? 10 : 18)
+            .phoneBezel(isVertical ? phone : .off)
             .contentShape(Rectangle())
             .onTapGesture { toggle() }
 
@@ -106,6 +111,12 @@ struct DraftPreviewPane: View {
                 Text("\(fmt(time)) / \(fmt(total))").font(.system(size: 11, design: .monospaced)).foregroundColor(Color.white.opacity(0.5))
             }
             .frame(maxWidth: 520)
+            HStack(spacing: 10) {
+                PhoneViewMenu(view: Binding(get: { phone }, set: { phoneRaw = $0.rawValue }))
+                if phone != .off, isVertical, draft.captions, phone.captionsCovered(look) {
+                    Text("Captions sit behind \(phone.label)'s text. Move them up in the editor.").font(.system(size: 10)).foregroundColor(Theme.warn)
+                }
+            }
             if following {
                 Label("Finding the speaker…", systemImage: "person.crop.rectangle")
                     .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.4))

@@ -13,7 +13,7 @@ struct AutoImportChip: View {
                 Image(systemName: auto.settings.enabled ? "dot.radiowaves.left.and.right" : "tray.and.arrow.down")
                     .font(.system(size: 11))
                     .symbolEffect(.pulse, isActive: auto.status != nil)
-                Text(auto.settings.enabled ? "Watching" : "Auto-import").font(.system(size: 12, weight: .medium))
+                Text(auto.settings.enabled ? "Autopilot on" : "Autopilot").font(.system(size: 12, weight: .medium))
             }
             .foregroundColor(auto.settings.enabled ? Theme.good : (hover ? Theme.cream : Theme.sand))
             .padding(.horizontal, 12).padding(.vertical, 6)
@@ -23,7 +23,7 @@ struct AutoImportChip: View {
         }
         .buttonStyle(.plain)
         .onHover { hover = $0 }
-        .help(auto.status ?? "New videos on your channel or in a folder become reels on their own")
+        .help(auto.status ?? "Preach Sunday. Your clips are ready Monday.")
         .popover(isPresented: $show, arrowEdge: .bottom) { AutoImportView() }
     }
 }
@@ -38,10 +38,10 @@ struct AutoImportView: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 7) {
                 Image(systemName: "diamond.fill").font(.system(size: 5)).foregroundColor(Theme.sand)
-                Text("AUTO-IMPORT").font(.system(size: 10, weight: .semibold)).tracking(2).foregroundColor(Theme.sand)
+                Text("AUTOPILOT").font(.system(size: 10, weight: .semibold)).tracking(2).foregroundColor(Theme.sand)
             }
-            Text("New video in, reels out").font(Theme.display(22)).foregroundColor(Theme.cream)
-            Text("When a new video goes up on your channel, or a video or audio file lands in a folder, AutoClip gets it, makes reels with your Auto Reels settings and builds the content kit. AutoClip needs to be open (it can be in the background).")
+            Text("Preach Sunday. Clips ready Monday.").font(Theme.display(22)).foregroundColor(Theme.cream)
+            Text("When a recording lands in a folder, or a new video goes up on your channel, AutoClip makes reels with your Auto Reels settings and checks them with Context Guard. They wait on Home for you to review. Nothing is ever posted for you.")
                 .font(.system(size: 11)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
 
             VStack(alignment: .leading, spacing: 6) {
@@ -77,6 +77,24 @@ struct AutoImportView: View {
                     .controlSize(.small)
             }
 
+            HStack {
+                Text("At most").font(.system(size: 11)).foregroundColor(Theme.muted)
+                Picker("", selection: Binding(get: { auto.settings.dailyLimit }, set: { auto.settings.maxPerDay = $0 })) {
+                    Text("1 video a day").tag(1); Text("3 videos a day").tag(3); Text("5 videos a day").tag(5); Text("10 videos a day").tag(10)
+                }
+                .labelsHidden().controlSize(.small).fixedSize()
+                .help("A limit on unattended work, so a folder of old videos can't run up your AI bill")
+                Spacer()
+            }
+            Toggle(isOn: Binding(get: { auto.opensAtLogin }, set: { auto.setOpensAtLogin($0) })) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Open AutoClip when this Mac starts").font(.system(size: 12, weight: .medium)).foregroundColor(Theme.cream)
+                    Text(auto.loginNote ?? "Autopilot only works while AutoClip is open and the Mac is awake.")
+                        .font(.system(size: 10)).foregroundColor(auto.loginNote == nil ? Theme.muted : Theme.warn).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .toggleStyle(.switch).tint(Theme.sand)
+
             if let s = auto.status {
                 HStack(spacing: 6) { ProgressView().scaleEffect(0.5); Text(s).font(.system(size: 11)).foregroundColor(Theme.muted).lineLimit(2) }
             } else if let c = auto.lastCheck {
@@ -85,7 +103,7 @@ struct AutoImportView: View {
 
             HStack(spacing: 8) {
                 if auto.settings.enabled {
-                    Button("Stop watching") { auto.settings.enabled = false }.buttonStyle(SecondaryButtonStyle(compact: true))
+                    Button("Turn off") { auto.settings.enabled = false }.buttonStyle(SecondaryButtonStyle(compact: true))
                     Button("Check now") { save(); Task { await auto.check() } }.buttonStyle(SecondaryButtonStyle(compact: true))
                         .disabled(auto.status != nil)
                     if !auto.settings.channel.isEmpty {
@@ -94,7 +112,7 @@ struct AutoImportView: View {
                             .help("Make reels from the newest video on the channel, even though it was there before you started watching")
                     }
                 } else {
-                    Button { startWatching() } label: { Label("Start watching", systemImage: "dot.radiowaves.left.and.right") }
+                    Button { startWatching() } label: { Label("Turn on Autopilot", systemImage: "dot.radiowaves.left.and.right") }
                         .buttonStyle(PrimaryButtonStyle(compact: true))
                         .disabled(starting || (channel.trimmingCharacters(in: .whitespaces).isEmpty && folder.isEmpty))
                 }

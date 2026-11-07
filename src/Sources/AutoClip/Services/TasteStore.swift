@@ -46,7 +46,13 @@ final class TasteStore: ObservableObject {
     }
 
     /// The user exported this reel, so it's the kind they want.
+    /// The sample sermon says nothing about what this person likes.
+    private func isSample(_ d: ReelDraft) -> Bool {
+        d.pieces.first.map { SampleSermon.isSample(path: $0.sourceVideoPath) } ?? false
+    }
+
     func liked(_ d: ReelDraft, kind: ContentKind) {
+        guard !isSample(d) else { return }
         taste.kept.removeAll { $0.title == d.title }
         taste.kept.append(Self.example(d, kind: kind))
         taste.kept = Array(taste.kept.suffix(Self.keep))
@@ -55,6 +61,7 @@ final class TasteStore: ObservableObject {
 
     /// The user threw this reel out.
     func rejected(_ d: ReelDraft, kind: ContentKind) {
+        guard !isSample(d) else { return }
         taste.kept.removeAll { $0.title == d.title }
         taste.rejected.append(Self.example(d, kind: kind))
         taste.rejected = Array(taste.rejected.suffix(Self.keep))

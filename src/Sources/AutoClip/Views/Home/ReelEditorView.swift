@@ -16,6 +16,7 @@ struct ReelDraftsView: View {
     var onPreview: ((UUID) -> Void)? = nil
 
     @ObservedObject private var store = AutoReelsStore.shared
+    @ObservedObject private var volunteer = VolunteerMode.shared
     @Environment(\.dismiss) private var dismiss
     @State private var selected: Set<UUID> = []
     @State private var editingID: UUID?
@@ -38,7 +39,7 @@ struct ReelDraftsView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            generateBar
+            if !volunteer.enabled { generateBar }
             Divider().background(Color.white.opacity(0.08))
             ScrollView {
                 VStack(spacing: 8) {
@@ -89,6 +90,7 @@ struct ReelDraftsView: View {
                 Image(systemName: "trash").foregroundColor(Color.white.opacity(0.4))
             }
             .buttonStyle(.plain).help("Delete all of these reels")
+            .opacity(volunteer.enabled ? 0 : 1).disabled(volunteer.enabled)
             .confirmationDialog("Delete all \(drafts.count) reels from this project?", isPresented: $confirmDelete, titleVisibility: .visible) {
                 Button("Delete all", role: .destructive) { onDelete(); dismiss() }
                 Button("Cancel", role: .cancel) { }
@@ -299,12 +301,16 @@ struct ReelDraftsView: View {
                     .font(.system(size: 18)).foregroundColor(isSel ? gold : Color.white.opacity(0.3))
             }.buttonStyle(.plain)
 
+            ScrubThumb(draft: d, path: d.pieces.first?.sourceVideoPath ?? "", faceAspect: 9 / 16)
+                .frame(width: 42, height: 74).clipShape(RoundedRectangle(cornerRadius: 5))
+
             VStack(alignment: .leading, spacing: 4) {
                 Text("\(i + 1). \(d.title)").font(.system(size: 13, weight: .semibold)).foregroundColor(.white).lineLimit(1)
                 HStack(spacing: 8) {
                     Text(formatDur(d.duration)).font(.system(size: 11, design: .monospaced)).foregroundColor(gold)
-                    Text("\(d.pieces.count) clips").font(.system(size: 11)).foregroundColor(Color.white.opacity(0.45))
+                    Text("\(d.pieces.count) clip\(d.pieces.count == 1 ? "" : "s")").font(.system(size: 11)).foregroundColor(Color.white.opacity(0.45))
                     statusPill(d)
+                    GuardBadge(draft: d)
                 }
                 if let p = exporting[d.id] {
                     ProgressView(value: p).tint(Theme.action).frame(height: 4)
@@ -318,9 +324,11 @@ struct ReelDraftsView: View {
                     Image(systemName: "folder")
                 }.buttonStyle(.plain).foregroundColor(Color.white.opacity(0.6)).help("Show in Finder")
             }
-            Button { notForMe(d) } label: { Image(systemName: "hand.thumbsdown") }
-                .buttonStyle(.plain).foregroundColor(Color.white.opacity(0.45))
-                .help("Not for me — remove this reel, and AutoClip learns to pick fewer like it")
+            if !volunteer.enabled {
+                Button { notForMe(d) } label: { Image(systemName: "hand.thumbsdown") }
+                    .buttonStyle(.plain).foregroundColor(Color.white.opacity(0.45))
+                    .help("Not for me — remove this reel, and AutoClip learns to pick fewer like it")
+            }
             Button { editingID = d.id } label: {
                 Label("Edit", systemImage: "slider.horizontal.3").font(.system(size: 12, weight: .medium))
                     .padding(.horizontal, 10).padding(.vertical, 5)
@@ -341,6 +349,7 @@ struct ReelDraftsView: View {
             .menuStyle(.borderlessButton).fixedSize()
             .help("Export a copy in another size (4:5, 1:1, original…)")
             .disabled(exporting[d.id] != nil)
+            .opacity(volunteer.enabled ? 0 : 1)
         }
         .padding(12)
         .background(previewingID == d.id ? gold.opacity(0.12) : Color.white.opacity(isSel ? 0.07 : 0.04))
@@ -386,8 +395,8 @@ struct ReelDraftsView: View {
         // Only content changes (clips, captions, title…) make an exported reel stale —
         // not the export bookkeeping itself
         var a = d, b = ds[i]
-        a.exportedPath = nil; a.editedSinceExport = false
-        b.exportedPath = nil; b.editedSinceExport = false
+        a.exportedPath = nil; a.editedSinceExport = false; a.guardReview = nil
+        b.exportedPath = nil; b.editedSinceExport = false; b.guardReview = nil
         if a != b, d.exportedPath != nil, d.exportedPath == ds[i].exportedPath { d.editedSinceExport = true }
         ds[i] = d
         rec.drafts = ds
@@ -521,6 +530,21 @@ struct ReelEditorView: View {
     @State private var fillerNote: String?
     @State private var endingStatus: String?
     @State private var neighbourNote: (piece: UUID, text: String)?
+    @ObservedObject private var volunteer = VolunteerMode.shared
+    @AppStorage("phone_view") private var phoneRaw = PhoneView.off.rawValue
+    private var phone: PhoneView {
+        get { PhoneView(rawValue: phoneRaw) ?? .off }
+        nonmutating set { phoneRaw = newValue.rawValue }
+    }
+    @AppStorage("editor_focus") private var focusMode = false
+    @State private var showKeys = false
+    @State private var keyMonitor: Any?
+    @State private var askText = ""
+    @State private var askBusy = false
+    @State private var askNote: (text: String, ok: Bool)?
+    @State private var guardBusy = false
+    @State private var guardError: String?
+    @AppStorage("guard_translation") private var translation = "Any"
 
     /// The sentence being spoken at the playhead, and which of its words.
     private var playing: (id: UUID, word: Int)? {
@@ -569,12 +593,18 @@ struct ReelEditorView: View {
                     .buttonStyle(.plain).foregroundColor(redoStack.isEmpty ? Color.white.opacity(0.2) : .white)
                     .disabled(redoStack.isEmpty).keyboardShortcut("z", modifiers: [.command, .shift]).help("Redo (⇧⌘Z)")
                 Text(formatDur(draft.duration)).font(.system(size: 12, design: .monospaced)).foregroundColor(gold).padding(.leading, 8)
+                Button { showKeys.toggle() } label: { Image(systemName: "keyboard") }
+                    .buttonStyle(.plain).foregroundColor(Color.white.opacity(0.6)).padding(.leading, 8)
+                    .help("Keyboard shortcuts (?)")
+                    .popover(isPresented: $showKeys, arrowEdge: .bottom) { EditorKeysHelp() }
             }
             .padding(16)
             Divider().background(Color.white.opacity(0.08))
 
-            PillTabs(selection: $workspace, items: [Workspace.edit, .reframe, .audio, .captions].map { ($0, $0.rawValue) })
-                .padding(.top, 12)
+            if !volunteer.enabled {
+                PillTabs(selection: $workspace, items: [Workspace.edit, .reframe, .audio, .captions].map { ($0, $0.rawValue) })
+                    .padding(.top, 12)
+            }
 
             Group {
                 switch workspace {
@@ -615,7 +645,14 @@ struct ReelEditorView: View {
             Button("Discard changes", role: .destructive) { player.pause(); dismiss() }
             Button("Keep editing", role: .cancel) { }
         }
-        .onAppear { if original == nil { original = draft; lastDraft = draft } }
+        .onAppear {
+            if original == nil { original = draft; lastDraft = draft }
+            installKeys()
+            // Keys work straight away instead of typing into the title
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { NSApp.keyWindow?.makeFirstResponder(nil) }
+            CommandBar.shared.editorItems = { editorCommands }
+            CommandBar.shared.editorAsk = { ask($0) }
+        }
         .onChange(of: draft) { new in rememberForUndo(new) }
         .task(id: reloadToken) { await reloadPreview() }
         .task { await askWhoToFollow() }
@@ -628,7 +665,214 @@ struct ReelEditorView: View {
         .onDisappear {
             if let o = observer { player.removeTimeObserver(o) }
             player.pause()
+            if let m = keyMonitor { NSEvent.removeMonitor(m); keyMonitor = nil }
+            CommandBar.shared.editorItems = nil
+            CommandBar.shared.editorAsk = nil
         }
+    }
+
+    // MARK: Asking for a change
+
+    private var askBar: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 8) {
+                Image(systemName: "text.bubble").foregroundColor(gold).font(.system(size: 12))
+                TextField("Say what to change: cut the part about my brother, start at the question…", text: $askText)
+                    .textFieldStyle(.plain).font(.system(size: 12)).foregroundColor(.white)
+                    .onSubmit { ask(askText) }
+                if askBusy { ProgressView().scaleEffect(0.5).frame(width: 16, height: 16) }
+                Button("Change") { ask(askText) }
+                    .buttonStyle(.plain).font(.system(size: 12, weight: .semibold)).foregroundColor(.black)
+                    .padding(.horizontal, 10).padding(.vertical, 4)
+                    .background(askText.trimmingCharacters(in: .whitespaces).isEmpty ? Color.white.opacity(0.15) : gold).cornerRadius(6)
+                    .disabled(askText.trimmingCharacters(in: .whitespaces).isEmpty || askBusy)
+            }
+            .padding(8).background(Color.white.opacity(0.06)).cornerRadius(8)
+            if let askNote {
+                HStack(spacing: 8) {
+                    Image(systemName: askNote.ok ? "checkmark.circle.fill" : "exclamationmark.circle")
+                        .foregroundColor(askNote.ok ? Theme.good : Theme.warn).font(.system(size: 11))
+                    Text(askNote.text).font(.system(size: 11)).foregroundColor(Color.white.opacity(0.75)).fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                    if askNote.ok, !undoStack.isEmpty {
+                        Button("Undo") { undo(); self.askNote = nil }.buttonStyle(.plain)
+                            .font(.system(size: 11, weight: .semibold)).foregroundColor(gold)
+                    }
+                }
+            }
+        }
+    }
+
+    /// What the typed request does. Plain requests are followed here. The rest go to AI, if there is any.
+    private func ask(_ raw: String) {
+        let req = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !req.isEmpty, !askBusy else { return }
+        workspace = .edit
+        askBusy = true; askNote = nil
+        let title = draft.title
+        Task { await CostTag.$video.withValue(title) {
+            // Plain requests are followed here, so they don't touch the key or cost anything
+            if let edits = AskEdit.local(req, draft: draft, aiAvailable: true) {
+                applyEdits(edits, note: "")
+                askText = ""
+            } else if await LLMClipService.shared.canComplete() {
+                do {
+                    let plan = try await AskEdit.plan(req, draft: draft)
+                    if plan.edits.isEmpty { askNote = (plan.note.isEmpty ? "AI wasn't sure what to change." : plan.note, false) }
+                    else { applyEdits(plan.edits, note: plan.note); askText = "" }
+                } catch { askNote = (error.localizedDescription, false) }
+            } else if let edits = AskEdit.local(req, draft: draft, aiAvailable: false), !edits.isEmpty {
+                applyEdits(edits, note: "")
+                askText = ""
+            } else {
+                askNote = ("I couldn't find that in this reel. Without AI I can only follow plain requests, like: cut \"these words\", start at the question, or remove the ums.", false)
+            }
+            askBusy = false
+            NSApp.keyWindow?.makeFirstResponder(nil)
+        } }
+    }
+
+    private func applyEdits(_ edits: [ReelEdit], note: String) {
+        var copy = draft
+        let r = copy.apply(edits)
+        lastChange = .distantPast
+        draft = copy
+        if r.done.isEmpty {
+            askNote = (r.skipped.first ?? "Nothing changed.", false)
+        } else {
+            askNote = ((r.done + r.skipped).joined(separator: ". ") + ".", true)
+        }
+    }
+
+    // MARK: Context Guard
+
+    private var guardCard: some View {
+        ContextGuardCard(draft: $draft, translation: $translation, busy: guardBusy, error: guardError) { deepCheck() }
+    }
+
+    private func deepCheck() {
+        guardBusy = true; guardError = nil
+        let d = draft, t = translation
+        Task { await CostTag.$video.withValue(d.title) {
+            do { draft.guardReview = try await ContextGuard.deep(d, translation: t) }
+            catch { guardError = error.localizedDescription }
+            guardBusy = false
+        } }
+    }
+
+    // MARK: Keyboard
+
+    /// Letters only act when nothing's being typed, and never while the command bar is up.
+    private func installKeys() {
+        guard keyMonitor == nil else { return }
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            MainActor.assumeIsolated { handleKey(event) ? nil : event }
+        }
+    }
+
+    private func handleKey(_ event: NSEvent) -> Bool {
+        guard event.modifierFlags.intersection([.command, .control, .option]).isEmpty,
+              !CommandBar.shared.showing, !confirmDiscard,
+              event.window === NSApp.keyWindow, event.window?.isSheet == true,
+              !(NSApp.keyWindow?.firstResponder is NSText) else { return false }
+        let shift = event.modifierFlags.contains(.shift)
+        switch event.keyCode {
+        case 49: togglePlay(); return true                                 // space
+        case 123: seekBy(shift ? -1 : -0.1); return true                   // left
+        case 124: seekBy(shift ? 1 : 0.1); return true                     // right
+        case 126: seekSentence(-1); return true                            // up
+        case 125: seekSentence(1); return true                             // down
+        case 51, 117: toggleCurrentSentence(); return true                 // delete
+        default: break
+        }
+        switch event.charactersIgnoringModifiers?.lowercased() {
+        case "j":
+            if player.currentItem?.canPlayReverse == true {
+                player.rate = player.rate < 0 ? max(-2, player.rate - 0.5) : -1
+                isPlaying = true
+            } else { seekBy(-5) }
+        case "k":
+            player.pause(); isPlaying = false
+        case "l":
+            if !isPlaying { if time >= total - 0.1 { player.seek(to: .zero) }; player.rate = 1; isPlaying = true }
+            else { player.rate = player.rate <= 0 ? 1 : min(2, player.rate + 0.5) }
+        case "i": setInOut(isIn: true)
+        case "o": setInOut(isIn: false)
+        case "x": toggleCurrentSentence()
+        case "f": if !volunteer.enabled { focusMode.toggle() }
+        case "p": phone = phone.next
+        case "?", "/": showKeys.toggle()
+        default: return false
+        }
+        return true
+    }
+
+    private func seekBy(_ delta: Double) {
+        let t = max(0, min(total, time + delta))
+        time = t
+        player.seek(to: CMTime(seconds: t, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+    }
+
+    private func seekSentence(_ step: Int) {
+        guard !timeline.isEmpty else { return }
+        let now = timeline.lastIndex { $0.start <= time + 0.05 } ?? 0
+        // Going back from partway through a sentence returns to its start first
+        let target = step < 0 && time - timeline[now].start > 0.6 ? now : now + step
+        guard timeline.indices.contains(target) else { return }
+        time = timeline[target].start
+        player.seek(to: CMTime(seconds: time, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+    }
+
+    /// The word at the playhead, even between words.
+    private var playheadWord: (id: UUID, word: Int)? {
+        guard let ts = timeline.last(where: { $0.start <= time + 0.05 }) ?? timeline.first else { return nil }
+        let word = ts.wordStarts.lastIndex { $0 >= 0 && $0 <= time + 0.05 } ?? ts.wordStarts.firstIndex { $0 >= 0 }
+        return word.map { (ts.id, $0) }
+    }
+
+    private func setInOut(isIn: Bool) {
+        guard let w = playheadWord else { return }
+        var copy = draft
+        if isIn { copy.setIn(sentence: w.id, word: w.word) } else { copy.setOut(sentence: w.id, word: w.word) }
+        guard copy.includedSentenceCount > 0 else { return }
+        lastChange = .distantPast
+        draft = copy
+    }
+
+    private func toggleCurrentSentence() {
+        guard let w = playheadWord, let (i, j) = draft.locate(sentence: w.id) else { return }
+        var copy = draft
+        copy.pieces[i].sentences[j].included.toggle()
+        guard copy.includedSentenceCount > 0 else { return }
+        lastChange = .distantPast
+        draft = copy
+    }
+
+    // MARK: Command bar
+
+    private var editorCommands: [CommandBar.Item] {
+        func item(_ id: String, _ title: String, _ icon: String, _ words: String = "", _ run: @escaping () -> Void) -> CommandBar.Item {
+            CommandBar.Item(id: id, title: title, detail: nil, icon: icon, keywords: words, run: run)
+        }
+        var out: [CommandBar.Item] = [
+            item("fillers", "Remove filler words", "scissors", "ums uhs stutters clean") { applyEdits([ReelEdit(op: "fillers")], note: "") },
+            item("pauses", draft.pausesTight ? "Leave long pauses in" : "Shorten long pauses", "pause", "silence pace") { applyEdits([ReelEdit(op: "pauses", on: !draft.pausesTight)], note: "") },
+            item("captions", draft.captions ? "Turn captions off" : "Turn captions on", "textformat", "subtitles") { applyEdits([ReelEdit(op: "captions", on: !draft.captions)], note: "") },
+            item("bigger", "Make captions bigger", "textformat.size.larger", "size font") { applyEdits([ReelEdit(op: "caption_size", value: 1.15)], note: "") },
+            item("smaller", "Make captions smaller", "textformat.size.smaller", "size font") { applyEdits([ReelEdit(op: "caption_size", value: 0.87)], note: "") },
+            item("phone", phone == .off ? "Preview on a phone" : "Next phone view", "iphone", "shorts reels tiktok safe") { phone = phone.next },
+            item("after", "Add the next sentence", "plus.circle", "extend longer") { applyEdits([ReelEdit(op: "extend", text: "after")], note: "") },
+            item("before", "Add the sentence before", "plus.circle", "extend longer") { applyEdits([ReelEdit(op: "extend", text: "before")], note: "") },
+            item("guard", "Check with Context Guard", "checkmark.shield", "meaning scripture verse") { workspace = .edit; deepCheck() },
+        ]
+        if !volunteer.enabled {
+            out.append(item("focus", focusMode ? "Leave focus mode" : "Focus mode", "rectangle.expand.vertical", "hide distraction") { focusMode.toggle() })
+            for w in [Workspace.edit, .reframe, .audio, .captions] {
+                out.append(item("tab." + w.rawValue, "Go to \(w.rawValue)", "square.on.square", "tab workspace") { workspace = w })
+            }
+        }
+        out.append(item("keys", "Keyboard shortcuts", "keyboard", "help") { showKeys = true })
+        return out
     }
 
     // MARK: Undo
@@ -666,14 +910,18 @@ struct ReelEditorView: View {
 
     private var editWorkspace: some View {
             HStack(alignment: .top, spacing: 16) {
-                previewColumn.frame(width: 260)
+                previewColumn.frame(width: focusMode ? 320 : 260)
                 ScrollViewReader { proxy in
                     ScrollView {
                         VStack(alignment: .leading, spacing: 14) {
-                            whoBanner
-                            sizeSection
-                            polishSection
-                            Text("CLIPS — click words to cut them (shift-click a range) · ▶ plays · ✏️ fixes caption text")
+                            askBar
+                            if !focusMode || volunteer.enabled { guardCard }
+                            if !focusMode && !volunteer.enabled {
+                                whoBanner
+                                sizeSection
+                                polishSection
+                            }
+                            Text("CLIPS — click words to cut them (shift-click a range) · ▶ plays · ✏️ fixes caption text · ? for shortcuts")
                                 .font(.system(size: 10, weight: .semibold)).foregroundColor(Color.white.opacity(0.35)).tracking(1)
                             ForEach(Array(draft.pieces.enumerated()), id: \.element.id) { i, _ in pieceCard(i) }
                         }
@@ -790,9 +1038,11 @@ struct ReelEditorView: View {
                 if draft.captions, let img = captionOverlay() {
                     Image(nsImage: img).resizable().allowsHitTesting(false)
                 }
+                if phone != .off, draft.formatRaw == VideoExportService.ExportFormat.vertical9x16.rawValue { PhoneChrome(view: phone) }
             }
             .aspectRatio(previewAspect, contentMode: .fit)
-            .cornerRadius(8)
+            .cornerRadius(phone == .off ? 8 : 18)
+            .phoneBezel(draft.formatRaw == VideoExportService.ExportFormat.vertical9x16.rawValue ? phone : .off)
             .onTapGesture { togglePlay() }
 
             HStack(spacing: 8) {
@@ -803,6 +1053,18 @@ struct ReelEditorView: View {
                     time = t; player.seek(to: CMTime(seconds: t, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
                 }), in: 0...max(total, 0.1)).tint(Theme.action)
                 Text(formatDur(time)).font(.system(size: 10, design: .monospaced)).foregroundColor(Color.white.opacity(0.5))
+            }
+            PhoneViewMenu(view: Binding(get: { phone }, set: { phone = $0 }))
+            if phone != .off, draft.formatRaw != VideoExportService.ExportFormat.vertical9x16.rawValue {
+                Text("Phone view is for 9:16 reels.").font(.system(size: 10)).foregroundColor(Color.white.opacity(0.4))
+            } else if phone != .off, draft.captions, phone.captionsCovered(look) {
+                VStack(spacing: 4) {
+                    Text("Captions sit behind \(phone.label)'s text.").font(.system(size: 10)).foregroundColor(Theme.warn).multilineTextAlignment(.center)
+                    Button("Move them up") { applyEdits([ReelEdit(op: "caption_position", value: phone.safeCaptionPosition)], note: "") }
+                        .controlSize(.small)
+                }
+            } else if phone != .off {
+                Text("Shaded areas are close estimates of what the app covers.").font(.system(size: 10)).foregroundColor(Color.white.opacity(0.4)).multilineTextAlignment(.center)
             }
             Text(following ? "Finding the speaker…" : "The preview follows the speaker like the export does.")
                 .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.35)).multilineTextAlignment(.center)
@@ -1297,6 +1559,7 @@ struct ReelEditorView: View {
         s.cutWordIDs = cut.isEmpty ? nil : Array(cut)
         draft.pieces[i].sentences[j] = s
         lastWordClick = (s.id, k)
+        NSApp.keyWindow?.makeFirstResponder(nil)
     }
 
     private func commitEdit(_ i: Int, _ j: Int) {

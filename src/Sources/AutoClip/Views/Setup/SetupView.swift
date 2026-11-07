@@ -87,6 +87,14 @@ struct SetupView: View {
                         .cornerRadius(10)
                     }
                     .buttonStyle(.plain)
+
+                    if SampleSermon.available {
+                        Button("See a finished example first") {
+                            AppState.shared.showOnboarding = false
+                            SampleSermon.open()
+                        }
+                        .buttonStyle(.plain).font(.system(size: 13)).foregroundColor(Theme.sand)
+                    }
                 }
             }
             .padding(.horizontal, 40)

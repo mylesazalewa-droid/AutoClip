@@ -215,6 +215,7 @@ struct AppSidebar: View {
     @ObservedObject private var reels = AutoReelsStore.shared
     @ObservedObject private var podcasts = PodcastStore.shared
     @ObservedObject private var shorts = ShortDoctorModel.shared
+    @ObservedObject private var volunteer = VolunteerMode.shared
 
     /// True while this page has work running, so it's clear it carried on when you left.
     private func working(_ tab: HomeTab) -> Bool {
@@ -241,25 +242,43 @@ struct AppSidebar: View {
             .padding(.horizontal, 10).padding(.bottom, 24)
 
             row("Home", "house", .projects, also: .autoClips)
-            group("Create")
-            row("Auto Reels", "play.rectangle.on.rectangle", .autoReels)
-            row("Improve a Short", "wand.and.stars", .improve)
-            row("Podcast", "mic", .podcast)
-            group("Review")
-            row("Assess", "waveform.badge.magnifyingglass", .assess)
-            row("Worship", "music.note", .worship)
-            row("Results", "chart.line.uptrend.xyaxis", .results)
-            group("Find")
-            row("Search", "magnifyingglass", .search)
-            group("Manage")
-            row("Storage", "internaldrive", .storage)
+            if volunteer.enabled {
+                row("Results", "chart.line.uptrend.xyaxis", .results)
+            } else {
+                group("Create")
+                row("Auto Reels", "play.rectangle.on.rectangle", .autoReels)
+                row("Improve a Short", "wand.and.stars", .improve)
+                row("Podcast", "mic", .podcast)
+                group("Review")
+                row("Rehearse", "text.book.closed", .rehearse)
+                row("Assess", "waveform.badge.magnifyingglass", .assess)
+                row("Worship", "music.note", .worship)
+                row("Results", "chart.line.uptrend.xyaxis", .results)
+                group("Find")
+                row("Search", "magnifyingglass", .search)
+                group("Manage")
+                row("Storage", "internaldrive", .storage)
+            }
 
             Spacer()
 
             VStack(alignment: .leading, spacing: 8) {
-                AutoImportChip()
-                AIUsageChip()
-                ContentKindMenu()
+                if !volunteer.enabled {
+                    AutoImportChip()
+                    AIUsageChip()
+                    ContentKindMenu()
+                }
+                VolunteerChip()
+                Button { CommandBar.shared.toggle() } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "command").font(.system(size: 10))
+                        Text("K to do anything").font(.system(size: 11))
+                    }
+                    .foregroundColor(Theme.faint).padding(.horizontal, 12).padding(.vertical, 4)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Open the command bar (⌘K)")
             }
             .padding(.horizontal, 6)
         }

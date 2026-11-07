@@ -17,6 +17,9 @@ final class AutoImport: ObservableObject {
         /// Where content kits go (empty = Documents/AutoClip/Content Kits)
         var kitFolder = ""
         var everyMinutes = 30
+        /// Most videos to take on in a day, so a folder of old files can't run up an AI bill
+        var maxPerDay: Int?
+        var dailyLimit: Int { maxPerDay ?? 3 }
     }
 
     struct Event: Codable, Identifiable {
@@ -25,6 +28,10 @@ final class AutoImport: ObservableObject {
         var title: String
         var detail: String
         var ok: Bool
+        /// The reels this made, for the Home card
+        var recordID: UUID?
+        /// Quick Context Guard warnings across those reels
+        var flagged: Int?
     }
 
     @Published var settings: Settings { didSet { if settings != oldValue { saveSettings() } } }
@@ -35,6 +42,7 @@ final class AutoImport: ObservableObject {
     private var seen: Set<String>
     private var timer: Timer?
     private var running = false
+    fileprivate var loginError: String?
 
     private init() {
         let d = UserDefaults.standard
@@ -53,9 +61,43 @@ final class AutoImport: ObservableObject {
         if let d = try? JSONEncoder().encode(Array(log.suffix(50))) { UserDefaults.standard.set(d, forKey: "autoimport_log") }
     }
 
-    private func note(_ title: String, _ detail: String, ok: Bool) {
-        log.append(Event(date: Date().timeIntervalSince1970, title: title, detail: detail, ok: ok))
+    private func note(_ title: String, _ detail: String, ok: Bool, recordID: UUID? = nil, flagged: Int? = nil) {
+        log.append(Event(date: Date().timeIntervalSince1970, title: title, detail: detail, ok: ok, recordID: recordID, flagged: flagged))
         saveState()
+    }
+
+    // MARK: Daily limit
+
+    private var startedToday: Int {
+        let cal = Calendar.current
+        return (UserDefaults.standard.array(forKey: "autoimport_started") as? [Double] ?? [])
+            .filter { cal.isDateInToday(Date(timeIntervalSince1970: $0)) }.count
+    }
+
+    private func countStart() {
+        let recent = (UserDefaults.standard.array(forKey: "autoimport_started") as? [Double] ?? []).suffix(50)
+        UserDefaults.standard.set(Array(recent) + [Date().timeIntervalSince1970], forKey: "autoimport_started")
+    }
+
+    /// Autopilot reels that haven't been looked at yet, newest first.
+    var waiting: [(event: Event, record: AutoReelRecord)] {
+        log.reversed().compactMap { e in
+            guard let id = e.recordID, !UserDefaults.standard.bool(forKey: AutoReelsStore.reviewedKey(id)),
+                  let r = AutoReelsStore.shared.reels.first(where: { $0.id == id }), !(r.drafts ?? []).isEmpty else { return nil }
+            return (e, r)
+        }
+    }
+
+    /// Hides a record from the Home card without reviewing it.
+    func dismissWaiting(_ id: UUID) {
+        UserDefaults.standard.set(true, forKey: AutoReelsStore.reviewedKey(id))
+        objectWillChange.send()
+    }
+
+    /// Reels from one file right now, with the saved settings. Used by Volunteer Mode.
+    func makeReelsNow(from url: URL) async {
+        await process(title: YTDLP.title(fromFile: url), makeKit: false) { url }
+        status = nil
     }
 
     var kitFolder: URL {
@@ -158,7 +200,9 @@ final class AutoImport: ObservableObject {
                 let items = try await Self.latest(channel: settings.channel)
                 // Oldest new one first
                 for item in items.reversed() where !seen.contains(item.id) {
+                    guard startedToday < settings.dailyLimit else { limitReached(); break }
                     seen.insert(item.id); saveState()
+                    countStart()
                     await process(title: item.title) {
                         try await YTDLP.download("https://www.youtube.com/watch?v=\(item.id)") { p, msg in
                             Task { @MainActor in AutoImport.shared.status = "“\(item.title)”: \(msg)" }
@@ -171,12 +215,23 @@ final class AutoImport: ObservableObject {
             }
         }
         for f in newFiles() {
+            // Left unmarked, so it's picked up tomorrow
+            guard startedToday < settings.dailyLimit else { limitReached(); break }
             seen.insert(f.path); saveState()
+            countStart()
             await process(title: YTDLP.title(fromFile: f)) { f }
         }
     }
 
-    private func process(title: String, fetch: () async throws -> URL) async {
+    private func limitReached() {
+        // One note a day is enough
+        let already = log.last.map { Calendar.current.isDateInToday(Date(timeIntervalSince1970: $0.date)) && $0.title == "Daily limit reached" } ?? false
+        if !already {
+            note("Daily limit reached", "Autopilot made reels from \(settings.dailyLimit) today. Anything else waits until tomorrow.", ok: false)
+        }
+    }
+
+    private func process(title: String, makeKit: Bool? = nil, fetch: () async throws -> URL) async {
         do {
             status = "Getting “\(title)”…"
             let url = try await fetch()
@@ -216,7 +271,7 @@ final class AutoImport: ObservableObject {
                 return
             }
             var detail = "\(rec.drafts?.count ?? 0) reels ready"
-            if settings.makeKit, !(rec.drafts ?? []).isEmpty {
+            if makeKit ?? settings.makeKit, !(rec.drafts ?? []).isEmpty {
                 status = "Building the content kit for “\(title)”…"
                 try? FileManager.default.createDirectory(at: kitFolder, withIntermediateDirectories: true)
                 do {
@@ -230,8 +285,12 @@ final class AutoImport: ObservableObject {
                     detail += ", content kit in \(r.folder.lastPathComponent)"
                 } catch { detail += ", but the content kit failed: \(error.localizedDescription)" }
             }
-            note(title, detail, ok: true)
-            notify("New reels ready", "\(title): \(detail)")
+            // Runs on this Mac and costs nothing
+            let latest = AutoReelsStore.shared.reels.first { $0.id == rec.id } ?? rec
+            let flagged = (latest.drafts ?? []).filter { d in ContextGuard.quick(d).contains(where: \.serious) }.count
+            if flagged > 0 { detail += ", \(flagged) to double-check" }
+            note(title, detail, ok: true, recordID: rec.id, flagged: flagged)
+            notify("Your clips are ready", "\(title): \(detail)")
         } catch {
             note(title, error.localizedDescription, ok: false)
         }
@@ -244,6 +303,31 @@ final class AutoImport: ObservableObject {
             let n = UNMutableNotificationContent()
             n.title = title; n.body = body
             c.add(UNNotificationRequest(identifier: UUID().uuidString, content: n, trigger: nil))
+        }
+    }
+}
+
+// MARK: - Opening at login
+
+import ServiceManagement
+
+extension AutoImport {
+    var opensAtLogin: Bool { SMAppService.mainApp.status == .enabled }
+
+    var loginNote: String? {
+        switch SMAppService.mainApp.status {
+        case .requiresApproval: return "Turn on AutoClip in System Settings → General → Login Items."
+        default: return loginError
+        }
+    }
+
+    func setOpensAtLogin(_ on: Bool) {
+        objectWillChange.send()
+        do {
+            if on { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
+            loginError = nil
+        } catch {
+            loginError = "macOS wouldn't change this: \(error.localizedDescription) Add AutoClip in System Settings → General → Login Items instead."
         }
     }
 }

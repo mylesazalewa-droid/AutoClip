@@ -51,6 +51,13 @@ struct SearchTab: View {
     }
 
     var body: some View {
+        page
+            .onReceive(HomeNav.shared.$searchQuery) { q in
+                if let q { query = q; HomeNav.shared.searchQuery = nil }
+            }
+    }
+
+    private var page: some View {
         HStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 0) {
                 PageHeader(eyebrow: "Search", title: "Everything you've preached",

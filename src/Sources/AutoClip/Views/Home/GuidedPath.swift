@@ -7,7 +7,10 @@ struct GuidedPathCard: View {
 
     private enum Step: Int, CaseIterable { case add, review, export, results }
 
-    private var latest: AutoReelRecord? { reels.reels.first { !($0.drafts ?? []).isEmpty } }
+    /// The newest real sermon. The built-in sample doesn't count as this week's.
+    private var latest: AutoReelRecord? {
+        reels.reels.first { !($0.drafts ?? []).isEmpty && !SampleSermon.isSample(path: $0.sourceVideoPath ?? "") }
+    }
     private var drafts: [ReelDraft] { latest?.drafts ?? [] }
     private var exported: [ReelDraft] { drafts.filter { $0.exportedPath != nil } }
     private var reviewed: Bool {

@@ -93,6 +93,8 @@ struct ReelDraft: Identifiable, Codable, Equatable {
     var hookText: String?
     /// Words the captions colour in the emphasis colour (from the AI, or typed by the user)
     var keywords: [String]?
+    /// The last AI read from Context Guard
+    var guardReview: GuardReview?
     /// The caption look with this reel's highlighted words filled in. Bible references are
     /// highlighted too when verse cards are on.
     var styledLook: CaptionLook {

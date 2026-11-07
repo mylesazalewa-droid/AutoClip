@@ -1372,7 +1372,7 @@ private struct ReelCard: View {
             ZStack(alignment: .topLeading) {
                 Color.clear
                     .aspectRatio(9 / 16, contentMode: .fit)
-                    .overlay(ReelThumbnailView(path: reel.path, faceAspect: 9 / 16))
+                    .overlay(ScrubThumb(draft: reel.drafts?.first, path: reel.path, faceAspect: 9 / 16))
                     .frame(minWidth: 0, maxWidth: .infinity)
                     .clipped()
                 // Shade for the labels
@@ -1390,7 +1390,7 @@ private struct ReelCard: View {
                 .padding(9)
                 // Hover: play, show in Finder, delete
                 if isHovered {
-                    Color.black.opacity(0.35)
+                    Color.black.opacity(reel.drafts == nil ? 0.35 : 0).allowsHitTesting(false)
                     VStack(spacing: 12) {
                         Button {
                             let pts = reel.cutPointsPerReel.first ?? reel.cutPoints

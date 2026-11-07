@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
-enum HomeTab: String { case projects, autoClips, autoReels, improve, podcast, assess, worship, results, storage, search }
+enum HomeTab: String { case projects, autoClips, autoReels, improve, podcast, rehearse, assess, worship, results, storage, search }
 
 struct HomeView: View {
     @ObservedObject private var library = LibraryService.shared
@@ -20,13 +20,14 @@ struct HomeView: View {
     @State private var visited: Set<HomeTab> = []
     /// Each page's backdrop, to go back to when you return to it
     @State private var backdrops: [HomeTab: String] = [:]
-    private static let allTabs: [HomeTab] = [.projects, .autoClips, .autoReels, .improve, .podcast, .assess, .worship, .results, .storage, .search]
+    private static let allTabs: [HomeTab] = [.projects, .autoClips, .autoReels, .improve, .podcast, .rehearse, .assess, .worship, .results, .storage, .search]
 
     @ViewBuilder private func page(_ tab: HomeTab) -> some View {
         switch tab {
         case .autoReels: AutoReelsTab()
         case .improve: ImproveShortTab()
         case .podcast: PodcastTab()
+        case .rehearse: RehearseTab()
         case .assess: AssessTab()
         case .worship: WorshipTab()
         case .results: ResultsTab()
@@ -124,6 +125,9 @@ struct HomeView: View {
             if show { activeTab = .autoReels; AutoReelsHandoff.shared.showTab = false }
         }
         // Cards and tiles on Home open other tabs
+        .onReceive(VolunteerMode.shared.$enabled) { on in
+            if on, activeTab != .results { activeTab = .projects }
+        }
         .onReceive(HomeNav.shared.$tab) { tab in
             if let tab { withAnimation(.easeInOut(duration: 0.15)) { activeTab = tab }; HomeNav.shared.tab = nil }
         }

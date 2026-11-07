@@ -855,6 +855,28 @@ Respond with ONLY valid JSON: {"hook":"..."}
         return hook.trimmingCharacters(in: CharacterSet(charactersIn: "\"“”' ").union(.whitespacesAndNewlines))
     }
 
+    /// A reply to any prompt, using the provider chosen in Auto Reels. Without a key it runs on
+    /// this Mac's on-device AI when that's on. Features in other files come through here.
+    func complete(_ prompt: String, light: Bool) async throws -> String {
+        let provider = AIProvider(rawValue: UserDefaults.standard.string(forKey: "ar_provider") ?? "") ?? .google
+        let key = loadAPIKey(for: provider) ?? ""
+        if key.isEmpty {
+            guard await LocalAI.ready() else {
+                throw llmError("This needs AI. Add an API key in Auto Reels → AI settings, or turn on on-device AI.")
+            }
+            return try await LocalAI.generate(prompt)
+        }
+        return light ? try await askLight(prompt, provider: provider, apiKey: key)
+                     : try await ask(prompt, provider: provider, apiKey: key)
+    }
+
+    /// Whether `complete` has anything to run on.
+    func canComplete() async -> Bool {
+        let provider = AIProvider(rawValue: UserDefaults.standard.string(forKey: "ar_provider") ?? "") ?? .google
+        if let k = loadAPIKey(for: provider), !k.isEmpty { return true }
+        return await LocalAI.ready()
+    }
+
     // MARK: - Social graphics (quote cards, carousel, thumbnail)
 
     struct GraphicsPlan: Equatable {

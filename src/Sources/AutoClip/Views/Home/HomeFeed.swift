@@ -8,6 +8,8 @@ final class HomeNav: ObservableObject {
     @Published var tab: HomeTab?
     /// A sermon to open in Assess
     @Published var assessPath: String?
+    /// Words to look for on the Search page
+    @Published var searchQuery: String?
 
     func open(_ tab: HomeTab) { self.tab = tab }
     func openPodcast(_ id: String) {
@@ -62,19 +64,26 @@ struct HomeFeed: View {
         return Array(items.sorted { $0.date > $1.date }.prefix(5))
     }
 
+    @ObservedObject private var volunteer = VolunteerMode.shared
+
     var body: some View {
+        if volunteer.enabled { VolunteerHome() } else { feed }
+    }
+
+    private var feed: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 36) {
                 let hero = heroItems
                 if hero.isEmpty { welcome } else { banner(hero) }
 
+                AutopilotCard()
                 GuidedPathCard()
                 startRow
 
                 if !reelsStore.reels.isEmpty {
                     row("Auto Reels", count: reelsStore.reels.count, action: ("See all", { HomeNav.shared.open(.autoReels) })) {
                         ForEach(reelsStore.reels) { r in
-                            PosterCard(path: r.path, title: r.title, meta: "\(r.drafts?.count ?? r.paths.count) reel\((r.drafts?.count ?? r.paths.count) == 1 ? "" : "s") · \(time(r.duration))",
+                            PosterCard(draft: r.drafts?.first, path: r.path, title: r.title, meta: "\(r.drafts?.count ?? r.paths.count) reel\((r.drafts?.count ?? r.paths.count) == 1 ? "" : "s") · \(time(r.duration))",
                                        badge: r.format) { onOpenReel(r) }
                         }
                     }
@@ -191,6 +200,10 @@ struct HomeFeed: View {
                         .buttonStyle(PrimaryButtonStyle())
                     Button { HomeNav.shared.open(.podcast) } label: { Label("Start a podcast", systemImage: "mic.fill") }
                         .buttonStyle(SecondaryButtonStyle())
+                    if SampleSermon.available {
+                        Button { SampleSermon.open() } label: { Label("See a finished example", systemImage: "sparkles") }
+                            .buttonStyle(SecondaryButtonStyle())
+                    }
                 }
             }
             .padding(36)
@@ -249,6 +262,7 @@ struct HomeFeed: View {
 
 /// A tall 9:16 card, like a film poster, with its title on the picture.
 struct PosterCard: View {
+    var draft: ReelDraft? = nil
     let path: String
     let title: String
     let meta: String
@@ -259,7 +273,7 @@ struct PosterCard: View {
     var body: some View {
         Button(action: open) {
             ZStack(alignment: .bottomLeading) {
-                ReelThumbnailView(path: path, faceAspect: 200 / 340).frame(width: 200, height: 340).clipped()
+                ScrubThumb(draft: draft, path: path, faceAspect: 200 / 340).frame(width: 200, height: 340).clipped()
                 LinearGradient(colors: [.clear, .clear, .black.opacity(0.9)], startPoint: .top, endPoint: .bottom)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title).font(.system(size: 13, weight: .semibold)).foregroundColor(.white).lineLimit(2)
@@ -271,7 +285,7 @@ struct PosterCard: View {
                         .padding(.horizontal, 7).padding(.vertical, 3).background(Capsule().fill(Color.black.opacity(0.6)))
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).padding(10)
                 }
-                if hover { playBadge }
+                if hover && draft == nil { playBadge }
             }
             .frame(width: 200, height: 340)
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
