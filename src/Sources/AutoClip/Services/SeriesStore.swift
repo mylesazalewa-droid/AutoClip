@@ -7,6 +7,8 @@ struct SermonSeries: Codable, Identifiable, Equatable {
     /// Video paths in teaching order
     var videos: [String]
     var analysis: SeriesAnalysis?
+    /// Captions, hook, movement and label shared by the series' clips
+    var look: SeriesLook?
 }
 
 struct SeriesAnalysis: Codable, Equatable {

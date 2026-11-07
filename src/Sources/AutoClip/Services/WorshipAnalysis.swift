@@ -556,6 +556,16 @@ enum WorshipAnalysis {
         return out
     }
 
+    /// Only the sermon's start and end, from the sound alone (no transcript or picture).
+    static func locateMessage(path: String, duration: Double, progress: @escaping (Double) -> Void) async throws -> (start: Double, end: Double)? {
+        let url = URL(fileURLWithPath: path)
+        var r = WorshipReport(videoPath: path, title: YTDLP.title(fromFile: url), duration: duration, rangeStart: 0, rangeEnd: duration)
+        try await classify(url, duration: duration, into: &r) { progress($0 * 0.75) }
+        try Task.checkCancellation()
+        try await measureSound(AVURLAsset(url: url), into: &r) { progress(0.75 + $0 * 0.25) }
+        return WorshipStats.message(r).map { ($0.start, $0.end) }
+    }
+
     /// The whole job: sound, then talking, then the picture for the worship part.
     static func run(path: String, progress: @escaping (Double, String) -> Void) async throws -> WorshipReport {
         let url = URL(fileURLWithPath: path)

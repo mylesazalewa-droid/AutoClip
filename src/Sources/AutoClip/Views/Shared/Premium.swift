@@ -1,4 +1,5 @@
 import SwiftUI
+import TipKit
 import AVFoundation
 import CoreImage
 import Vision
@@ -281,6 +282,7 @@ struct AppSidebar: View {
                 }
                 .buttonStyle(.plain)
                 .help("Open the command bar (⌘K)")
+                .popoverTip(CommandBarTip(), arrowEdge: .leading)
             }
             .padding(.horizontal, 6)
         }

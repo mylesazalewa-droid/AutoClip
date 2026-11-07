@@ -290,7 +290,6 @@ final class AutoImport: ObservableObject {
             let flagged = (latest.drafts ?? []).filter { d in ContextGuard.quick(d).contains(where: \.serious) }.count
             if flagged > 0 { detail += ", \(flagged) to double-check" }
             note(title, detail, ok: true, recordID: rec.id, flagged: flagged)
-            notify("Your clips are ready", "\(title): \(detail)")
         } catch {
             note(title, error.localizedDescription, ok: false)
         }

@@ -65,6 +65,7 @@ cat > "$APP/Contents/Info.plist" << 'PLIST'
 </plist>
 PLIST
 fi
+./plist-extras.sh "$APP"
 set_usage NSMicrophoneUsageDescription "AutoClip records your practice runs so it can assess your delivery."
 set_usage NSCameraUsageDescription "AutoClip records your practice runs on camera so it can assess your stage presence."
 

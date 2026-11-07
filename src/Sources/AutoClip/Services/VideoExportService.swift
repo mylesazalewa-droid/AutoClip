@@ -65,6 +65,11 @@ class VideoExportService {
         var overlayLook: CaptionLook? = nil
         /// Small mark on trial exports
         var watermark: String? = nil
+        /// Punch-ins and slow pushes, in reel time
+        var zooms: [ReelMotion.Zoom] = []
+        var hookStyle: HookStyle = .pop
+        /// Series label, top right
+        var seriesTag: String? = nil
     }
 
     enum ExportError: LocalizedError {
@@ -1617,12 +1622,13 @@ class VideoExportService {
         let reelDuration = reelOffset
         // Hook text + verse cards, laid out for the final frame size
         let verses = options.verseCards ? VerseDetector.find(in: remappedWords) : []
-        let overlays = (options.hookText != nil || !verses.isEmpty)
+        let overlays = (options.hookText != nil || !verses.isEmpty || options.seriesTag != nil)
             ? ReelOverlays.layout(hook: options.hookText, verses: verses,
                                   look: options.overlayLook ?? options.captionLook ?? CaptionLook(preset: options.captionStyle),
-                                  size: renderSize, duration: reelDuration)
+                                  size: renderSize, duration: reelDuration, hookStyle: options.hookStyle, tag: options.seriesTag)
             : []
         let needsEncode  = options.format != .original || (options.burnCaptions && !remappedWords.isEmpty) || !overlays.isEmpty
+            || options.watermark != nil || !options.zooms.isEmpty
 
         // ── Pass 2: per-segment face tracking + build video composition ───────
         var videoComposition: AVMutableVideoComposition? = nil
@@ -1731,9 +1737,11 @@ class VideoExportService {
             vc.instructions = instructions
 
             let burn = options.burnCaptions && !remappedWords.isEmpty
-            if burn || !overlays.isEmpty || options.watermark != nil {
+            if burn || !overlays.isEmpty || options.watermark != nil || !options.zooms.isEmpty {
                 let parent = CALayer(); parent.frame = CGRect(origin: .zero, size: renderSize); parent.isGeometryFlipped = true
+                parent.masksToBounds = true
                 let vl = CALayer(); vl.frame = CGRect(origin: .zero, size: renderSize); parent.addSublayer(vl)
+                if let zoom = ReelMotion.animation(options.zooms, duration: reelDuration) { vl.add(zoom, forKey: "zoom") }
                 if !overlays.isEmpty {
                     parent.addSublayer(ReelOverlays.layer(for: overlays, size: renderSize, duration: reelDuration))
                 }

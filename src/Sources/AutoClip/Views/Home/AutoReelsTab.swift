@@ -894,6 +894,7 @@ struct AutoReelsTab: View {
             .padding(14).background(Color.white.opacity(0.04)).cornerRadius(10)
 
             chatSection
+            serviceSection
             reelCountSection
             storylineSection
             aiSettingsSection
@@ -901,6 +902,35 @@ struct AutoReelsTab: View {
     }
 
     // MARK: - Settings sub-sections (reused in sheet)
+
+    @AppStorage("ar_findSermon") private var findSermon = true
+    @AppStorage("ar_motion") private var motionDefault = ReelMotion.Style.both.rawValue
+
+    /// Whole services, and movement in new reels.
+    private var serviceSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Toggle(isOn: $findSermon) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Find the sermon in a full service").font(.system(size: 12, weight: .semibold)).foregroundColor(.white)
+                    Text("For recordings over 30 minutes. Clips come from the sermon only, not worship or announcements.")
+                        .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.45)).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .toggleStyle(.switch).tint(Theme.action)
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Movement").font(.system(size: 12, weight: .semibold)).foregroundColor(.white)
+                    Text("Punch-ins on strong lines and a slow push through long stretches").font(.system(size: 11)).foregroundColor(Color.white.opacity(0.45))
+                }
+                Spacer()
+                Picker("", selection: $motionDefault) {
+                    ForEach(ReelMotion.Style.allCases) { Text($0.label).tag($0.rawValue) }
+                }
+                .labelsHidden().fixedSize()
+            }
+        }
+        .padding(14).background(Color.white.opacity(0.04)).cornerRadius(10)
+    }
 
     private var chatSection: some View {
         VStack(alignment: .leading, spacing: 10) {

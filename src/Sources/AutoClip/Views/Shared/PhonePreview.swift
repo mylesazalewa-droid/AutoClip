@@ -1,4 +1,5 @@
 import SwiftUI
+import TipKit
 
 /// How much of a vertical video each app covers with its own buttons and text. These are close
 /// approximations: the apps change them and they differ by phone.
@@ -125,6 +126,7 @@ struct PhoneViewMenu: View {
                 .font(.system(size: 11)).foregroundColor(view == .off ? Color.white.opacity(0.6) : Theme.sand)
         }
         .menuStyle(.borderlessButton).fixedSize()
+        .onChange(of: view) { v in if v != .off { PhoneViewTip().invalidate(reason: .actionPerformed) } }
         .help("See the reel with an app's buttons and text on top, to check nothing important is covered (P)")
     }
 }

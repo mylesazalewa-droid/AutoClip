@@ -1,4 +1,5 @@
 import SwiftUI
+import TipKit
 import AVFoundation
 import AppKit
 import UniformTypeIdentifiers
@@ -32,6 +33,7 @@ struct ReelDraftsView: View {
     @State private var showReview = false
     @State private var showCleanup = false
     @State private var confirmDelete = false
+    @State private var celebrating: Set<UUID> = []
 
     private var record: AutoReelRecord? { store.reels.first { $0.id == recordID } }
     private var drafts: [ReelDraft] { record?.drafts ?? [] }
@@ -39,6 +41,7 @@ struct ReelDraftsView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
+            TipView(QuickReviewTip()).padding(.horizontal, 16).padding(.bottom, 8)
             if !volunteer.enabled { generateBar }
             Divider().background(Color.white.opacity(0.08))
             ScrollView {
@@ -81,7 +84,9 @@ struct ReelDraftsView: View {
             .keyboardShortcut("r", modifiers: .command)
             .help("Go through the reels one at a time: → keep, ← toss (⌘R)")
             .disabled(drafts.isEmpty)
-            .onChange(of: showReview) { on in if on { UserDefaults.standard.set(true, forKey: AutoReelsStore.reviewedKey(recordID)) } }
+            .onChange(of: showReview) { on in
+                if on { UserDefaults.standard.set(true, forKey: AutoReelsStore.reviewedKey(recordID)); QuickReviewTip().invalidate(reason: .actionPerformed) }
+            }
             .onAppear { if store.reviewOnOpen == recordID { store.reviewOnOpen = nil; showReview = true } }
             .sheet(isPresented: $showReview) {
                 ReviewModeView(recordID: recordID, selected: $selected, onToss: { notForMe($0) }, onExport: { export($0) })
@@ -355,6 +360,9 @@ struct ReelDraftsView: View {
         .background(previewingID == d.id ? gold.opacity(0.12) : Color.white.opacity(isSel ? 0.07 : 0.04))
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(previewingID == d.id ? gold.opacity(0.6) : .clear, lineWidth: 1))
         .cornerRadius(10)
+        .overlay(alignment: .trailing) {
+            if celebrating.contains(d.id) { CelebrationBurst(size: 26).padding(.trailing, 70).transition(.opacity) }
+        }
         .contentShape(Rectangle())
         .onTapGesture { onPreview?(d.id) }
     }
@@ -434,6 +442,10 @@ struct ReelDraftsView: View {
                     done.exportedPath = url.path
                     done.editedSinceExport = false
                     save(done)
+                    Delight.success()
+                    celebrating.insert(d.id)
+                    let id = d.id
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { celebrating.remove(id) }
                     if let rec = record { TasteStore.shared.liked(done, kind: rec.kind) }
                     // keep the record's file list in step so cards/Finder actions see exports
                     if var rec = record {
@@ -545,6 +557,11 @@ struct ReelEditorView: View {
     @State private var guardBusy = false
     @State private var guardError: String?
     @AppStorage("guard_translation") private var translation = "Any"
+    @State private var zooms: [ReelMotion.Zoom] = []
+    @ObservedObject private var seriesStore = SeriesStore.shared
+    @State private var newSeriesName = ""
+    @State private var showNewSeries = false
+    @State private var seriesNote: String?
 
     /// The sentence being spoken at the playhead, and which of its words.
     private var playing: (id: UUID, word: Int)? {
@@ -662,6 +679,10 @@ struct ReelEditorView: View {
         .onChange(of: draft.verseCards) { _ in rebuildOverlays() }
         .onChange(of: draft.look) { _ in rebuildOverlays() }
         .onChange(of: draft.formatRaw) { _ in rebuildOverlays() }
+        .onChange(of: draft.motion) { _ in rebuildOverlays() }
+        .onChange(of: draft.hookStyle) { _ in rebuildOverlays() }
+        .onChange(of: draft.seriesTag) { _ in rebuildOverlays() }
+        .onChange(of: draft.keywords) { _ in rebuildOverlays() }
         .onDisappear {
             if let o = observer { player.removeTimeObserver(o) }
             player.pause()
@@ -1032,6 +1053,8 @@ struct ReelEditorView: View {
             ZStack {
                 Color.black
                 FillPlayerView(player: player)
+                    .scaleEffect(ReelMotion.scale(at: time, zooms))
+                    .animation(.linear(duration: 0.05), value: time)
                 if let img = ReelOverlays.previewImage(overlayItems, time: time, size: overlaySize) {
                     Image(nsImage: img).resizable().allowsHitTesting(false)
                 }
@@ -1041,6 +1064,7 @@ struct ReelEditorView: View {
                 if phone != .off, draft.formatRaw == VideoExportService.ExportFormat.vertical9x16.rawValue { PhoneChrome(view: phone) }
             }
             .aspectRatio(previewAspect, contentMode: .fit)
+            .clipped()
             .cornerRadius(phone == .off ? 8 : 18)
             .phoneBezel(draft.formatRaw == VideoExportService.ExportFormat.vertical9x16.rawValue ? phone : .off)
             .onTapGesture { togglePlay() }
@@ -1055,6 +1079,7 @@ struct ReelEditorView: View {
                 Text(formatDur(time)).font(.system(size: 10, design: .monospaced)).foregroundColor(Color.white.opacity(0.5))
             }
             PhoneViewMenu(view: Binding(get: { phone }, set: { phone = $0 }))
+            TipView(PhoneViewTip())
             if phone != .off, draft.formatRaw != VideoExportService.ExportFormat.vertical9x16.rawValue {
                 Text("Phone view is for 9:16 reels.").font(.system(size: 10)).foregroundColor(Color.white.opacity(0.4))
             } else if phone != .off, draft.captions, phone.captionsCovered(look) {
@@ -1133,8 +1158,10 @@ struct ReelEditorView: View {
 
     private func rebuildOverlays() {
         let verses = draft.showVerses ? VerseDetector.find(in: reelWords) : []
+        zooms = ReelMotion.zooms(draft)
         overlayItems = ReelOverlays.layout(hook: draft.hook, verses: verses, look: look,
-                                           size: overlaySize, duration: max(total, draft.duration))
+                                           size: overlaySize, duration: max(total, draft.duration),
+                                           hookStyle: draft.hookAnimation, tag: draft.seriesTag)
     }
 
     private var detectedVerses: [String] {
@@ -1168,6 +1195,38 @@ struct ReelEditorView: View {
                     Text(hookStatus).font(.system(size: 10)).foregroundColor(Color.white.opacity(0.45))
                 }
             }
+
+            // How the hook arrives
+            HStack(spacing: 8) {
+                Text("Hook animation").font(.system(size: 12)).foregroundColor(.white)
+                Spacer()
+                Picker("", selection: Binding(get: { draft.hookAnimation }, set: { draft.hookStyle = $0.rawValue })) {
+                    ForEach(HookStyle.allCases) { Text($0.label).tag($0) }
+                }
+                .pickerStyle(.segmented).labelsHidden().frame(width: 330)
+                Button { replayFromStart() } label: { Image(systemName: "play.circle") }
+                    .buttonStyle(.plain).foregroundColor(Color.white.opacity(0.6)).help("Watch the opening again")
+            }
+
+            TipView(MovementTip())
+            // Movement in the picture
+            HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Movement").font(.system(size: 12)).foregroundColor(.white)
+                    Text(zooms.isEmpty ? "A punch-in on the strongest lines, a slow push through long stretches"
+                                       : "\(zooms.filter(\.punch).count) punch-in\(zooms.filter(\.punch).count == 1 ? "" : "s"), \(zooms.filter { !$0.punch }.count) slow push\(zooms.filter { !$0.punch }.count == 1 ? "" : "es")")
+                        .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.4))
+                }
+                Spacer()
+                Picker("", selection: Binding(get: { ReelMotion.Style(rawValue: draft.motion ?? "") ?? .off }, set: { draft.motion = $0.rawValue; MovementTip().invalidate(reason: .actionPerformed) })) {
+                    ForEach(ReelMotion.Style.allCases) { Text($0.label).tag($0) }
+                }
+                .pickerStyle(.segmented).labelsHidden().frame(width: 300)
+            }
+
+            seriesRow
+
+            Divider().background(Color.white.opacity(0.06))
 
             // Highlighted caption words
             VStack(alignment: .leading, spacing: 5) {
@@ -1231,6 +1290,86 @@ struct ReelEditorView: View {
             }
         }
         .padding(12).background(Color.white.opacity(0.04)).cornerRadius(10)
+    }
+
+    private func replayFromStart() {
+        time = 0
+        player.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero)
+        player.play(); isPlaying = true
+    }
+
+    // MARK: Series look
+
+    private var sourcePath: String { draft.pieces.first?.sourceVideoPath ?? "" }
+
+    @ViewBuilder private var seriesRow: some View {
+        let series = seriesStore.series(containing: sourcePath)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Image(systemName: "square.stack.3d.up").font(.system(size: 11)).foregroundColor(gold.opacity(0.8))
+                if let series {
+                    Text("Series: \(series.name)").font(.system(size: 12)).foregroundColor(.white).lineLimit(1)
+                    Spacer()
+                    if series.look != nil {
+                        Button("Use series look") { draft.applySeries(series); seriesNote = "Series look applied." }.controlSize(.small)
+                    }
+                    Button(series.look == nil ? "Save as series look" : "Update series look") { saveSeriesLook(series) }.controlSize(.small)
+                        .help("Every new clip from this series' messages will look like this one")
+                } else {
+                    Text("Not part of a series").font(.system(size: 12)).foregroundColor(Color.white.opacity(0.6))
+                    Spacer()
+                    Menu("Add to a series") {
+                        ForEach(seriesStore.series) { s in Button(s.name) { addToSeries(s) } }
+                        if !seriesStore.series.isEmpty { Divider() }
+                        Button("New series…") { showNewSeries = true }
+                    }
+                    .menuStyle(.borderlessButton).fixedSize()
+                }
+            }
+            if let series {
+                Toggle(isOn: Binding(get: { draft.seriesTag != nil }, set: { on in
+                    if on {
+                        let part = series.videos.firstIndex(of: sourcePath).map { " · PART \($0 + 1)" } ?? ""
+                        draft.seriesTag = ((series.look?.tag?.isEmpty == false ? series.look!.tag! : series.name) + part).uppercased()
+                    } else { draft.seriesTag = nil }
+                })) {
+                    Text("Show the series name on the clip").font(.system(size: 11)).foregroundColor(Color.white.opacity(0.7))
+                }
+                .toggleStyle(.switch).controlSize(.mini).tint(Theme.action)
+            }
+            if showNewSeries {
+                HStack {
+                    TextField("Series name, like Baggage", text: $newSeriesName).textFieldStyle(.roundedBorder).font(.system(size: 12))
+                        .onSubmit { createSeries() }
+                    Button("Create") { createSeries() }.controlSize(.small).disabled(newSeriesName.trimmingCharacters(in: .whitespaces).isEmpty)
+                    Button("Cancel") { showNewSeries = false }.controlSize(.small)
+                }
+            }
+            if let seriesNote { Text(seriesNote).font(.system(size: 10)).foregroundColor(Theme.good) }
+        }
+    }
+
+    private func saveSeriesLook(_ s: SermonSeries) {
+        var copy = s
+        copy.look = SeriesLook(look: draft.look ?? CaptionLook.load(), hookStyle: draft.hookStyle, motion: draft.motion,
+                               tag: copy.look?.tag, showTag: draft.seriesTag != nil)
+        seriesStore.upsert(copy)
+        seriesNote = "Saved. New clips from \(s.name) will use this look."
+    }
+
+    private func addToSeries(_ s: SermonSeries) {
+        var copy = s
+        if !copy.videos.contains(sourcePath) { copy.videos.append(sourcePath) }
+        seriesStore.upsert(copy)
+        if copy.look != nil { draft.applySeries(copy); seriesNote = "Added, and the series look applied." } else { seriesNote = "Added to \(s.name)." }
+    }
+
+    private func createSeries() {
+        let name = newSeriesName.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return }
+        seriesStore.upsert(SermonSeries(name: name, videos: [sourcePath]))
+        newSeriesName = ""; showNewSeries = false
+        seriesNote = "Created \(name). Save this clip's look to use it for the whole series."
     }
 
     /// Appends the talk's "But God…" moment (picked by AI) as a final clip.

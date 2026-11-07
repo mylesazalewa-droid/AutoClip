@@ -68,7 +68,11 @@ struct ReviewModeView: View {
 
     private var finished: some View {
         VStack(spacing: 14) {
-            Image(systemName: "checkmark.seal").font(.system(size: 34)).foregroundColor(gold)
+            if kept.isEmpty {
+                Image(systemName: "checkmark.seal").font(.system(size: 34)).foregroundColor(gold)
+            } else {
+                CelebrationBurst(size: 40)
+            }
             Text("You kept \(kept.count) of \(queue.count)").font(Theme.display(24)).foregroundColor(Theme.cream)
             Text("Kept reels are selected in the list. AutoClip will pick more like them next time.")
                 .font(.system(size: 12)).foregroundColor(Theme.muted)
@@ -104,6 +108,7 @@ struct ReviewModeView: View {
 
     private func decide(keep: Bool) {
         guard let d = current, let rec = record else { return }
+        Delight.tick()
         history.append((d.id, keep ? .keep : .toss))
         if keep {
             kept.append(d.id)

@@ -2,8 +2,12 @@ import SwiftUI
 
 @main
 struct AutoClipApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @AppStorage("menubar_on") private var menuBarOn = true
+    @AppStorage("sounds_on") private var soundsOn = true
+
     var body: some Scene {
-        WindowGroup {
+        WindowGroup(id: "main") {
             MainWindow()
         }
         .windowStyle(.hiddenTitleBar)
@@ -16,7 +20,13 @@ struct AutoClipApp: App {
             }
             CommandGroup(replacing: .help) {
                 Button("AutoClip Help") { HelpPages.open() }
+                Button("Show Tips Again") { UserDefaults.standard.set(true, forKey: "tips_reset") }
+                    .help("Tips come back the next time AutoClip opens")
                 Button("Report a Problem…") { ProblemReports.shared.showSheet = true }
+            }
+            CommandGroup(after: .toolbar) {
+                Toggle("Show in Menu Bar", isOn: $menuBarOn)
+                Toggle("Play Sounds", isOn: $soundsOn)
             }
             CommandMenu("Project") {
                 Button("Import Video...") { AppState.shared.triggerImport() }
@@ -31,6 +41,13 @@ struct AutoClipApp: App {
             if let id { ReelWindowView(recordID: id).tint(Theme.action).preferredColorScheme(.dark) }
         }
         .defaultSize(width: 1280, height: 820)
+
+        MenuBarExtra(isInserted: $menuBarOn) {
+            MenuBarPanel().preferredColorScheme(.dark)
+        } label: {
+            Image(systemName: "scissors")
+        }
+        .menuBarExtraStyle(.window)
     }
 }
 

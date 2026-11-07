@@ -64,6 +64,7 @@ struct DraftPreviewPane: View {
     @State private var following = false
     @State private var overlayItems: [ReelOverlays.Placed] = []
     @State private var followTask: Task<Void, Never>?
+    @State private var zooms: [ReelMotion.Zoom] = []
     @AppStorage("phone_view") private var phoneRaw = PhoneView.off.rawValue
     private var phone: PhoneView { PhoneView(rawValue: phoneRaw) ?? .off }
     private var isVertical: Bool { draft.formatRaw == VideoExportService.ExportFormat.vertical9x16.rawValue }
@@ -84,6 +85,7 @@ struct DraftPreviewPane: View {
             ZStack {
                 Color.black
                 FillPlayerView(player: player)
+                    .scaleEffect(ReelMotion.scale(at: time, zooms))
                 if let img = ReelOverlays.previewImage(overlayItems, time: time, size: CGSize(width: 720, height: 720 / aspect)) {
                     Image(nsImage: img).resizable().allowsHitTesting(false)
                 }
@@ -97,6 +99,7 @@ struct DraftPreviewPane: View {
                 }
             }
             .aspectRatio(aspect, contentMode: .fit)
+            .clipped()
             .cornerRadius(phone == .off ? 10 : 18)
             .phoneBezel(isVertical ? phone : .off)
             .contentShape(Rectangle())
@@ -144,8 +147,9 @@ struct DraftPreviewPane: View {
         words = ws
         overlayItems = ReelOverlays.layout(hook: draft.hook, verses: draft.showVerses ? VerseDetector.find(in: ws) : [],
                                            look: look, size: CGSize(width: 720, height: 720 / aspect),
-                                           duration: max(0.1, draft.duration))
+                                           duration: max(0.1, draft.duration), hookStyle: draft.hookAnimation, tag: draft.seriesTag)
         total = max(0.1, draft.duration)
+        zooms = ReelMotion.zooms(draft)
         time = 0; isPlaying = false
         if let track = try? await item.asset.loadTracks(withMediaType: .video).first,
            let size = try? await track.load(.naturalSize), let t = try? await track.load(.preferredTransform) {

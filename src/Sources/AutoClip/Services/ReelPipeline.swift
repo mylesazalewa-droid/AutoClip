@@ -86,16 +86,24 @@ enum ReelPipeline {
                 Task { await upd(0.10, msg) }
             }
 
-            let words: [Word]
+            let allWords: [Word]
             if let cached = TranscriptCache.load(for: workingURL.path) {
                 await upd(0.44, "Using saved transcript…")
-                words = cached
+                allWords = cached
             } else {
                 await upd(0.12, "Transcribing audio…")
-                words = try await whisper.transcribe(audioURL: workingURL) { p in
+                allWords = try await whisper.transcribe(audioURL: workingURL) { p in
                     Task { await upd(0.12 + p * 0.33, "Transcribing: \(Int(p * 100))%") }
                 }
-                TranscriptCache.save(words, for: workingURL.path)
+                TranscriptCache.save(allWords, for: workingURL.path)
+            }
+            // A whole service: keep to the sermon
+            var words = allWords
+            if ContentKind.current == .sermon, SermonFinder.enabled {
+                await upd(0.45, "Finding the sermon in the service…")
+                let found = await SermonFinder.find(workingURL.path) { p in Task { await upd(0.45, "Finding the sermon in the service: \(Int(p * 100))%") } }
+                words = SermonFinder.trim(allWords, to: found)
+                if let found { await upd(0.45, "Sermon found at \(SermonFinder.label(found))") }
             }
             guard !words.isEmpty else {
                 throw NSError(domain: "AutoClip", code: 3, userInfo: [NSLocalizedDescriptionKey: "No speech detected in video."])
@@ -229,6 +237,10 @@ enum ReelPipeline {
                 perReelTitles = zip(aiTitles, perReelTitles).map { $0.isEmpty ? $1 : $0 }
             }
             let look = captions ? (opts.captionLook ?? CaptionLook.load()) : nil
+            let series = await MainActor.run {
+                SeriesStore.shared.series(containing: workingURL.path) ?? SeriesStore.shared.series(containing: videoURL.path)
+            }
+            let motionDefault = UserDefaults.standard.string(forKey: "ar_motion") ?? ReelMotion.Style.both.rawValue
             let drafts = reelGroups.enumerated().map { i, group in
                 var d = ReelDraft(title: perReelTitles[i], clips: group, sourceVideoPath: workingURL.path,
                                   formatRaw: format.rawValue, captions: captions, look: look,
@@ -237,6 +249,8 @@ enum ReelPipeline {
                 if aiHooks.count == reelGroups.count, !aiHooks[i].isEmpty { d.hookText = aiHooks[i] }
                 if aiKeywords.count == reelGroups.count, !aiKeywords[i].isEmpty { d.keywords = aiKeywords[i] }
                 if !kind.usesScripture { d.verseCards = false }
+                d.motion = motionDefault
+                if let series { d.applySeries(series) }
                 return d
             }
             let firstReelDur = drafts.first?.duration ?? 0
@@ -257,6 +271,7 @@ enum ReelPipeline {
             let finalRecord = rec
             await MainActor.run {
                 AutoReelsStore.shared.add(finalRecord)
+                Task { await Notifier.reelsReady(finalRecord) }
                 store.updateJob(AutoReelJob(id: jobID, title: retryParams?.sourceTitle ?? finalReelTitle, progress: 1.0,
                                            statusMsg: "\(drafts.count) reel\(drafts.count == 1 ? "" : "s") ready — open to review & export",
                                            isFinished: true, error: nil))

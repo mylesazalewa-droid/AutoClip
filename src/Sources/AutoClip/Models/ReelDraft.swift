@@ -95,6 +95,12 @@ struct ReelDraft: Identifiable, Codable, Equatable {
     var keywords: [String]?
     /// The last AI read from Context Guard
     var guardReview: GuardReview?
+    /// Punch-ins and slow pushes (ReelMotion.Style). nil = none
+    var motion: String?
+    /// How the hook arrives (HookStyle). nil = pop
+    var hookStyle: String?
+    /// Small series label shown on the clip
+    var seriesTag: String?
     /// The caption look with this reel's highlighted words filled in. Bible references are
     /// highlighted too when verse cards are on.
     var styledLook: CaptionLook {
@@ -409,6 +415,9 @@ struct ReelDraft: Identifiable, Codable, Equatable {
         o.verseCards = showVerses
         o.overlayLook = look ?? CaptionLook.load() ?? CaptionLook(preset: CaptionStyle.all[0])
         if License.watermarkExports { o.watermark = "Made with AutoClip" }
+        o.zooms = ReelMotion.zooms(self)
+        o.hookStyle = hookAnimation
+        o.seriesTag = seriesTag
         return o
     }
 

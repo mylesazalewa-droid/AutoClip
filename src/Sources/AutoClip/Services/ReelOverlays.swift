@@ -141,6 +141,28 @@ enum ReelOverlays {
         var start: Double
         var end: Double
         var pop: Bool              // hook pops in, verses slide in
+        /// How the hook arrives
+        var style: HookStyle = .pop
+        /// Shown the whole time with no entrance (series label)
+        var still = false
+    }
+
+    /// Series label: small spaced capitals on a dark pill.
+    static func tagImage(_ text: String, look: CaptionLook, width: CGFloat) -> NSImage {
+        let fs = max(12, width * 0.028)
+        let str = NSAttributedString(string: text, attributes: [
+            .font: NSFont.systemFont(ofSize: fs, weight: .bold), .foregroundColor: NSColor.white, .kern: fs * 0.12])
+        let r = str.boundingRect(with: CGSize(width: width, height: 200), options: [.usesLineFragmentOrigin])
+        let padX = fs * 0.8, padY = fs * 0.4
+        let size = CGSize(width: ceil(r.width) + padX * 2, height: ceil(r.height) + padY * 2)
+        return NSImage(size: size, flipped: true) { _ in
+            NSColor.black.withAlphaComponent(0.45).setFill()
+            NSBezierPath(roundedRect: CGRect(origin: .zero, size: size), xRadius: size.height / 2, yRadius: size.height / 2).fill()
+            look.highlightColor.nsColor.setFill()
+            NSBezierPath(ovalIn: CGRect(x: padX * 0.45, y: size.height / 2 - fs * 0.18, width: fs * 0.36, height: fs * 0.36)).fill()
+            str.draw(with: CGRect(x: padX, y: padY, width: ceil(r.width) + 2, height: ceil(r.height) + 2), options: [.usesLineFragmentOrigin])
+            return true
+        }
     }
 
     /// Hook: bold text on a highlight-coloured box near the top.
@@ -190,7 +212,8 @@ enum ReelOverlays {
     }
 
     /// Everything to show, laid out for `size`. Verses that would collide with the hook wait for it.
-    static func layout(hook: String?, verses: [VerseRef], look: CaptionLook, size: CGSize, duration: Double) -> [Placed] {
+    static func layout(hook: String?, verses: [VerseRef], look: CaptionLook, size: CGSize, duration: Double,
+                       hookStyle: HookStyle = .pop, tag: String? = nil) -> [Placed] {
         var out: [Placed] = []
         // Sit just above the captions (faces are usually in the top third of a vertical crop);
         // if captions are placed high, go just below them instead.
@@ -203,7 +226,7 @@ enum ReelOverlays {
            let img = cg(hookImage(hook, look: look, width: size.width)) {
             let w = CGFloat(img.width), h = CGFloat(img.height)
             out.append(Placed(image: img, frame: CGRect(x: (size.width - w) / 2, y: y(h), width: w, height: h),
-                              start: 0, end: min(duration, hookDuration), pop: true))
+                              start: 0, end: min(duration, hookDuration), pop: true, style: hookStyle))
         }
         let hookEnd = out.first?.end ?? 0
         var lastEnd = 0.0
@@ -216,6 +239,12 @@ enum ReelOverlays {
             out.append(Placed(image: img, frame: CGRect(x: (size.width - w) / 2, y: y(h), width: w, height: h),
                               start: start, end: end, pop: false))
             lastEnd = end
+        }
+        // The series label sits top right, below the apps' top bar
+        if let tag, !tag.isEmpty, let img = cg(tagImage(tag, look: look, width: size.width)) {
+            let w = CGFloat(img.width), h = CGFloat(img.height)
+            out.append(Placed(image: img, frame: CGRect(x: size.width - w - size.width * 0.04, y: size.height * 0.115, width: w, height: h),
+                              start: 0, end: duration, pop: false, still: true))
         }
         return out
     }
@@ -230,9 +259,29 @@ enum ReelOverlays {
             l.contents = p.image
             l.frame = p.frame
             l.contentsGravity = .resize
+            if p.still { container.addSublayer(l); continue }
             l.opacity = 0
             l.add(fade(p.start, p.end, duration), forKey: "opacity")
-            l.add(p.pop ? popScale(p.start, duration) : slide(p.start, p.frame, duration), forKey: p.pop ? "scale" : "slide")
+            if !p.pop {
+                l.add(slide(p.start, p.frame, duration), forKey: "slide")
+            } else {
+                let s = p.start, f = p.frame
+                switch p.style {
+                case .pop: l.add(popScale(s, duration), forKey: "scale")
+                case .slide: l.add(keyframes("position.x", [(s, -f.width / 2), (s + 0.26, f.midX + f.width * 0.04), (s + 0.36, f.midX)], total: duration), forKey: "x")
+                case .drop: l.add(keyframes("position.y", [(s, f.midY - f.height * 1.4), (s + 0.22, f.midY + f.height * 0.1), (s + 0.32, f.midY)], total: duration), forKey: "y")
+                case .stamp:
+                    l.add(keyframes("transform.scale", [(s, 1.8), (s + 0.14, 0.94), (s + 0.24, 1.0)], total: duration), forKey: "scale")
+                    l.add(keyframes("transform.rotation.z", [(s, -0.12), (s + 0.14, 0.02), (s + 0.24, -0.03)], total: duration), forKey: "turn")
+                case .wipe:
+                    let m = CALayer()
+                    m.backgroundColor = CGColor(gray: 1, alpha: 1)
+                    m.anchorPoint = CGPoint(x: 0, y: 0.5)
+                    m.frame = CGRect(origin: .zero, size: f.size)
+                    m.add(keyframes("bounds.size.width", [(s, 0.0), (s + 0.4, f.width)], total: duration), forKey: "wipe")
+                    l.mask = m
+                }
+            }
             container.addSublayer(l)
         }
         return container
@@ -274,16 +323,34 @@ enum ReelOverlays {
         return NSImage(size: size, flipped: true) { _ in
             for p in live {
                 let t = time - p.start, left = p.end - time
-                let alpha = min(1, t / 0.15, left / 0.25)
+                let alpha = p.still ? 1 : min(1, t / 0.15, left / 0.25)
                 var f = p.frame
-                if p.pop {
-                    let sc = t < 0.16 ? 0.6 + 0.48 * t / 0.16 : (t < 0.28 ? 1.08 - 0.08 * (t - 0.16) / 0.12 : 1)
-                    f = f.insetBy(dx: f.width * (1 - sc) / 2, dy: f.height * (1 - sc) / 2)
-                } else if t < 0.25 {
-                    f.origin.y -= f.height * 0.6 * (1 - t / 0.25)
+                var src = CGRect(origin: .zero, size: p.frame.size)
+                func ease(_ x: Double) -> CGFloat { CGFloat(max(0, min(1, x))) }
+                if p.still {
+                } else if !p.pop {
+                    if t < 0.25 { f.origin.y -= f.height * 0.6 * (1 - t / 0.25) }
+                } else {
+                    switch p.style {
+                    case .pop:
+                        let sc = t < 0.16 ? 0.6 + 0.48 * t / 0.16 : (t < 0.28 ? 1.08 - 0.08 * (t - 0.16) / 0.12 : 1)
+                        f = f.insetBy(dx: f.width * (1 - sc) / 2, dy: f.height * (1 - sc) / 2)
+                    case .slide:
+                        if t < 0.36 { f.origin.x = -f.width + (p.frame.minX + f.width) * ease(t / 0.36) }
+                    case .drop:
+                        if t < 0.32 { f.origin.y -= f.height * 1.4 * (1 - ease(t / 0.32)) }
+                    case .stamp:
+                        let sc = t < 0.14 ? 1.8 - 0.86 * t / 0.14 : (t < 0.24 ? 0.94 + 0.06 * (t - 0.14) / 0.1 : 1)
+                        f = f.insetBy(dx: f.width * (1 - sc) / 2, dy: f.height * (1 - sc) / 2)
+                    case .wipe:
+                        let w = p.frame.width * ease(t / 0.4)
+                        f.size.width = w
+                        src.size.width = w
+                    }
                 }
-                NSImage(cgImage: p.image, size: f.size)
-                    .draw(in: f, from: .zero, operation: .sourceOver, fraction: max(0, alpha), respectFlipped: true, hints: nil)
+                guard f.width > 0.5 else { continue }
+                let img = NSImage(cgImage: p.image, size: p.frame.size)
+                img.draw(in: f, from: p.style == .wipe && p.pop ? src : .zero, operation: .sourceOver, fraction: max(0, alpha), respectFlipped: true, hints: nil)
             }
             return true
         }

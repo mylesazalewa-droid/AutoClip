@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import TipKit
 
 /// ⌘K from anywhere: jump to a page, open a reel, search your sermons or, inside the reel
 /// editor, ask for a change. It floats in its own panel so it works over sheets and windows.
@@ -56,6 +57,7 @@ final class CommandBar: ObservableObject {
     func toggle() { showing ? close() : open() }
 
     func open() {
+        CommandBarTip().invalidate(reason: .actionPerformed)
         previousKey = NSApp.keyWindow
         query = ""; selection = 0
         let p = panel ?? makePanel()

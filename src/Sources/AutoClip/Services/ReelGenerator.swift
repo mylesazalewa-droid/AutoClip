@@ -207,7 +207,7 @@ enum ReelGenerator {
                            progress: @escaping (String) -> Void) async throws -> [ReelDraft] {
         guard let source = sourceVideoPath(for: record) else { throw err("Can't find this reel's source video.") }
         let st = settings(for: record)
-        let words = try await TranscriptCache.transcript(for: source, progress: progress)
+        let words = SermonFinder.trimCached(try await TranscriptCache.transcript(for: source, progress: progress), path: source)
         let sentences = ReelDraft.sentences(from: words)
         var used = usedSentenceIndices(sentences, record: record)
         let key = await LLMClipService.shared.loadAPIKey(for: st.provider) ?? ""
@@ -263,7 +263,7 @@ enum ReelGenerator {
         guard let key = await LLMClipService.shared.loadAPIKey(for: st.provider), !key.isEmpty else {
             throw err("The Fire Short is written by AI — add an API key for \(st.provider.rawValue) in Auto Reels → AI settings.")
         }
-        let words = try await TranscriptCache.transcript(for: source, progress: progress)
+        let words = SermonFinder.trimCached(try await TranscriptCache.transcript(for: source, progress: progress), path: source)
         let sentences = ReelDraft.sentences(from: words)
         progress("AI is building the Fire Short…")
         let target = min(60, max(30, st.targetDuration * 0.6))
@@ -288,7 +288,7 @@ enum ReelGenerator {
         guard !key.isEmpty || local else {
             throw err("This needs AI — add an API key for \(st.provider.rawValue) in Auto Reels → AI settings.")
         }
-        let words = try await TranscriptCache.transcript(for: source, progress: progress)
+        let words = SermonFinder.trimCached(try await TranscriptCache.transcript(for: source, progress: progress), path: source)
         return (source, st, key, ReelDraft.sentences(from: words))
     }
 
