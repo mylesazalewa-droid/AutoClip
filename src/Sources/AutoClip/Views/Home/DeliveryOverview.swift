@@ -61,7 +61,7 @@ struct DeliveryOverviewCard: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Delivery Analysis").font(Theme.display(22)).foregroundColor(Theme.cream)
                     Text("\(report.title) · Analyzed \(report.analyzedAt.formatted(.relative(presentation: .named)))")
-                        .font(.system(size: 11)).foregroundColor(Theme.muted).lineLimit(1)
+                        .font(.system(size: 12)).foregroundColor(Theme.muted).lineLimit(1)
                 }
             }
 
@@ -76,20 +76,20 @@ struct DeliveryOverviewCard: View {
             } else {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
-                    Text(status ?? "Measuring your delivery…").font(.system(size: 12)).foregroundColor(Theme.muted)
+                    Text(status ?? "Measuring your delivery…").font(.system(size: 13)).foregroundColor(Theme.muted)
                 }
             }
 
             Rectangle().fill(Theme.line).frame(height: 1)
 
             VStack(alignment: .leading, spacing: 10) {
-                Text("FILLER WORDS").font(.system(size: 9, weight: .semibold)).tracking(1.4).foregroundColor(Theme.muted)
+                Text("FILLER WORDS").font(.system(size: 11, weight: .semibold)).tracking(1.4).foregroundColor(Theme.muted)
                 if rows.isEmpty {
-                    Text("None found.").font(.system(size: 12)).foregroundColor(Theme.good)
+                    Text("None found.").font(.system(size: 13)).foregroundColor(Theme.good)
                 }
                 ForEach(rows.prefix(Self.maxRows), id: \.kind) { row in fillerRow(row.kind, row.marks) }
                 if rows.count > Self.maxRows {
-                    Text("+\(rows.count - Self.maxRows) more").font(.system(size: 10)).foregroundColor(Theme.faint)
+                    Text("+\(rows.count - Self.maxRows) more").font(.system(size: 11.5)).foregroundColor(Theme.faint)
                 }
             }
         }
@@ -116,7 +116,7 @@ struct ScoreRing: View {
         let color = value == nil ? Theme.muted : strong ? Theme.good : (value ?? 0) >= 55 ? Theme.sand : Theme.warn
         HStack(spacing: 12) {
             ZStack {
-                Circle().stroke(Color.white.opacity(0.12), lineWidth: 5)
+                Circle().stroke(Theme.ink.opacity(0.12), lineWidth: 5)
                 Circle().trim(from: 0, to: CGFloat(value ?? 0) / 100)
                     .stroke(color, style: StrokeStyle(lineWidth: 5, lineCap: .round))
                     .rotationEffect(.degrees(-90))
@@ -126,7 +126,7 @@ struct ScoreRing: View {
             VStack(alignment: .leading, spacing: 5) {
                 Text(title).font(Theme.display(15)).foregroundColor(Theme.cream).lineLimit(1)
                 Text(value == nil ? "Not readable" : strong ? "Strong" : (value ?? 0) >= 55 ? "Suggestions" : "Focus here")
-                    .font(.system(size: 10, weight: .medium)).foregroundColor(color)
+                    .font(.system(size: 11.5, weight: .medium)).foregroundColor(color)
                     .padding(.horizontal, 8).padding(.vertical, 3)
                     .background(Capsule().fill(color.opacity(0.14)))
             }
@@ -146,14 +146,14 @@ struct TimelineDotRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Text("\(marks.count)").font(.system(size: 10, weight: .bold)).foregroundColor(marks.isEmpty ? Theme.muted : Theme.bg).monospacedDigit()
+            Text("\(marks.count)").font(.system(size: 11.5, weight: .bold)).foregroundColor(marks.isEmpty ? Theme.muted : Theme.bg).monospacedDigit()
                 .frame(minWidth: 32).padding(.vertical, 3)
                 .background(Capsule().fill(marks.isEmpty ? Theme.raised2 : Theme.sandDeep))
             Text(label).font(italic ? Theme.display(13).italic() : Theme.display(13)).foregroundColor(Theme.text)
                 .lineLimit(1).minimumScaleFactor(0.8).frame(width: 130, alignment: .leading)
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    Capsule().fill(Color.white.opacity(0.09))
+                    Capsule().fill(Theme.ink.opacity(0.09))
                     ForEach(Array(marks.enumerated()), id: \.offset) { _, m in
                         let inset: CGFloat = 8
                         Circle().fill(Theme.sand).frame(width: 7, height: 7)

@@ -29,14 +29,14 @@ struct CaptionsPanel: View {
             .padding(.horizontal, 14)
             .padding(.top, 12)
 
-            Divider().background(Color.white.opacity(0.08)).padding(.horizontal, 14)
+            Divider().background(Theme.ink.opacity(0.08)).padding(.horizontal, 14)
 
             // Caption Background
             VStack(alignment: .leading, spacing: 12) {
                 Toggle(isOn: $bgEnabled) {
                     Text("Caption Background")
                         .font(.system(size: 13))
-                        .foregroundColor(.white)
+                        .foregroundColor(Theme.ink)
                 }
                 .toggleStyle(CheckboxToggleStyle())
                 .padding(.horizontal, 14)
@@ -45,21 +45,21 @@ struct CaptionsPanel: View {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             Text("Opacity")
-                                .font(.system(size: 12))
-                                .foregroundColor(Color.white.opacity(0.5))
+                                .font(.system(size: 13))
+                                .foregroundColor(Theme.ink.opacity(0.55))
                             Slider(value: $bgOpacity, in: 0...1)
                                 .accentColor(Theme.sand)
                             Text("\(Int(bgOpacity * 100))%")
-                                .font(.system(size: 12, design: .monospaced))
-                                .foregroundColor(Color.white.opacity(0.6))
+                                .font(.system(size: 13, design: .monospaced))
+                                .foregroundColor(Theme.ink.opacity(0.6))
                                 .frame(width: 36)
                         }
                         .padding(.horizontal, 14)
 
                         HStack {
                             Text("Bg Color")
-                                .font(.system(size: 12))
-                                .foregroundColor(Color.white.opacity(0.5))
+                                .font(.system(size: 13))
+                                .foregroundColor(Theme.ink.opacity(0.55))
                             Spacer()
                             ColorPicker("", selection: Binding(
                                 get: { Color(nsColor: bgColor) },
@@ -87,7 +87,7 @@ struct CaptionStyleCard: View {
                     .fill(Color(red: 0.05, green: 0.06, blue: 0.10))
                     .overlay(
                         RoundedRectangle(cornerRadius: 8)
-                            .stroke(isSelected ? Theme.sand : Color.white.opacity(0.1), lineWidth: isSelected ? 2 : 1)
+                            .stroke(isSelected ? Theme.sand : Theme.ink.opacity(0.1), lineWidth: isSelected ? 2 : 1)
                     )
 
                 // Caption preview
@@ -99,7 +99,7 @@ struct CaptionStyleCard: View {
                                 .foregroundColor(Color(red: 1.0, green: 0.9, blue: 0.0))
                             Text(" IS")
                                 .font(.system(size: 14, weight: .heavy))
-                                .foregroundColor(.white)
+                                .foregroundColor(Theme.ink)
                         }
                     } else {
                         Text("LIFE IS")
@@ -107,15 +107,15 @@ struct CaptionStyleCard: View {
                             .foregroundColor(style.textColor)
                     }
                     Text("GOOD")
-                        .font(.system(size: 11, weight: .bold))
+                        .font(.system(size: 12, weight: .bold))
                         .foregroundColor(style.textColor.opacity(0.8))
                 }
             }
             .frame(height: 60)
 
             Text(style.name)
-                .font(.system(size: 11))
-                .foregroundColor(isSelected ? Theme.sand : Color.white.opacity(0.6))
+                .font(.system(size: 12))
+                .foregroundColor(isSelected ? Theme.sand : Theme.ink.opacity(0.6))
         }
     }
 }
@@ -125,12 +125,12 @@ struct CheckboxToggleStyle: ToggleStyle {
         HStack(spacing: 8) {
             ZStack {
                 RoundedRectangle(cornerRadius: 3)
-                    .fill(configuration.isOn ? Theme.sand : Color.white.opacity(0.1))
+                    .fill(configuration.isOn ? Theme.sand : Theme.ink.opacity(0.1))
                     .frame(width: 16, height: 16)
                 if configuration.isOn {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(.black)
+                        .font(.system(size: 11.5, weight: .bold))
+                        .foregroundColor(Theme.onSand)
                 }
             }
             .onTapGesture { configuration.isOn.toggle() }

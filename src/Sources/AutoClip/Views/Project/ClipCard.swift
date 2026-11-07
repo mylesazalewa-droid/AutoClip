@@ -35,8 +35,8 @@ struct ClipCard: View {
                 // Time indicators
                 HStack {
                     Text(clip.formattedStartTime)
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(.white)
+                        .font(.system(size: 11.5, weight: .medium))
+                        .foregroundColor(Theme.ink)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background(Color.black.opacity(0.6))
@@ -47,8 +47,8 @@ struct ClipCard: View {
                             .fill(Color(red: 1, green: 0.2, blue: 0.2))
                             .frame(width: 6, height: 6)
                         Text(clip.formattedDuration)
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(.white)
+                            .font(.system(size: 11.5, weight: .medium))
+                            .foregroundColor(Theme.ink)
                     }
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
@@ -64,8 +64,8 @@ struct ClipCard: View {
                         HStack {
                             Spacer()
                             Image(systemName: "xmark")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundColor(.white)
+                                .font(.system(size: 11.5, weight: .bold))
+                                .foregroundColor(Theme.ink)
                                 .padding(5)
                                 .background(Color.black.opacity(0.7))
                                 .clipShape(Circle())
@@ -84,15 +84,15 @@ struct ClipCard: View {
 
             // Transcript excerpt
             Text(clip.transcriptText)
-                .font(.system(size: 11))
-                .foregroundColor(Color.white.opacity(0.6))
+                .font(.system(size: 12))
+                .foregroundColor(Theme.ink.opacity(0.6))
                 .lineLimit(2)
                 .padding(.horizontal, 8)
                 .padding(.bottom, 6)
                 .frame(height: 32, alignment: .top)
 
             Divider()
-                .background(Color.white.opacity(0.06))
+                .background(Theme.ink.opacity(0.06))
 
             // Bottom: score + stars + heart
             HStack(spacing: 8) {
@@ -103,8 +103,8 @@ struct ClipCard: View {
                 Spacer()
 
                 Image(systemName: clip.isLiked ? "heart.fill" : "heart")
-                    .font(.system(size: 12))
-                    .foregroundColor(clip.isLiked ? Theme.danger : Color.white.opacity(0.35))
+                    .font(.system(size: 13))
+                    .foregroundColor(clip.isLiked ? Theme.danger : Theme.ink.opacity(0.35))
                     .frame(width: 28, height: 28)
                     .contentShape(Rectangle())
                     .onTapGesture {
@@ -116,8 +116,8 @@ struct ClipCard: View {
 
             // Title
             Text(clip.title)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(Color.white.opacity(0.8))
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(Theme.ink.opacity(0.8))
                 .lineLimit(2)
                 .padding(.horizontal, 8)
                 .padding(.bottom, 10)
@@ -132,7 +132,7 @@ struct ClipCard: View {
         .overlay(
             RoundedRectangle(cornerRadius: 10)
                 .stroke(
-                    isSelected ? Theme.sand.opacity(0.6) : Color.white.opacity(0.07),
+                    isSelected ? Theme.sand.opacity(0.6) : Theme.ink.opacity(0.07),
                     lineWidth: isSelected ? 1.5 : 1
                 )
         )
@@ -151,7 +151,7 @@ struct ClipCard: View {
                 .overlay(
                     Image(systemName: "film")
                         .font(.system(size: 28))
-                        .foregroundColor(Color.white.opacity(0.1))
+                        .foregroundColor(Theme.ink.opacity(0.55))
                 )
         }
     }
@@ -161,7 +161,7 @@ struct ClipCard: View {
         let preview = words.map(\.word).joined(separator: " ")
         return Text(preview.isEmpty ? "" : preview)
             .font(.system(size: 13, weight: .heavy))
-            .foregroundColor(.white)
+            .foregroundColor(Theme.ink)
             .shadow(color: .black, radius: 2, x: 0, y: 1)
             .multilineTextAlignment(.center)
             .lineLimit(2)
@@ -174,7 +174,7 @@ struct ClipCard: View {
             ForEach(0..<24, id: \.self) { i in
                 let h = waveformHeight(for: i)
                 RoundedRectangle(cornerRadius: 1)
-                    .fill(Color.white.opacity(0.25))
+                    .fill(Theme.ink.opacity(0.25))
                     .frame(width: 2.5, height: h)
             }
         }

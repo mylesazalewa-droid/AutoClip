@@ -41,7 +41,7 @@ enum ContextGuard {
         for (i, piece) in draft.pieces.enumerated() {
             let playing = piece.sentences.enumerated().filter { !$0.element.keptWords.isEmpty }
             guard let first = playing.first, let last = playing.last else { continue }
-            let label = draft.pieces.count > 1 ? "Clip \(i + 1) " : "This clip "
+            let label = draft.pieces.count > 1 ? "Moment \(i + 1) " : "This clip "
 
             if sentencesBySource[piece.sourceVideoPath] == nil, let words = transcript(piece.sourceVideoPath) {
                 sentencesBySource[piece.sourceVideoPath] = ReelDraft.sentences(from: words)

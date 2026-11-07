@@ -252,7 +252,7 @@ enum ShortDoctor {
         let asset = AVURLAsset(url: url)
         let duration = try await asset.load(.duration).seconds
         guard duration > 3 else { throw fail("This video is too short to review.") }
-        guard duration <= maxLength else { throw fail("This is built for shorts of up to 10 minutes. Use Auto Reels to cut shorts from longer videos.") }
+        guard duration <= maxLength else { throw fail("This is built for shorts of up to 10 minutes. Use Clips to cut shorts from longer videos.") }
         progress(0.08, "Listening to what's said…")
         let words = try await TranscriptCache.transcript(for: path) { _ in }
         guard words.count >= 4 else { throw fail("No speech found. This looks at what's said, so it needs someone talking.") }

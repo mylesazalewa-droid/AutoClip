@@ -16,26 +16,26 @@ struct MenuBarPanel: View {
             HStack {
                 Text("AutoClip").font(.system(size: 13, weight: .semibold))
                 Spacer()
-                Text(auto.settings.enabled ? "Autopilot on" : "Autopilot off").font(.system(size: 11)).foregroundColor(auto.settings.enabled ? Theme.good : .secondary)
+                Text(auto.settings.enabled ? "Autopilot on" : "Autopilot off").font(.system(size: 12)).foregroundColor(auto.settings.enabled ? Theme.good : .secondary)
             }
             if !jobs.isEmpty {
                 ForEach(jobs) { j in
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(j.title).font(.system(size: 12, weight: .medium)).lineLimit(1)
+                        Text(j.title).font(.system(size: 13, weight: .medium)).lineLimit(1)
                         ProgressView(value: j.progress).tint(Theme.sand)
-                        Text(j.statusMsg).font(.system(size: 10)).foregroundColor(.secondary).lineLimit(1)
+                        Text(j.statusMsg).font(.system(size: 11.5)).foregroundColor(.secondary).lineLimit(1)
                     }
                 }
             } else if let s = auto.status {
-                Text(s).font(.system(size: 11)).foregroundColor(.secondary).lineLimit(2)
+                Text(s).font(.system(size: 12)).foregroundColor(.secondary).lineLimit(2)
             }
             let waiting = Array(auto.waiting.prefix(4))
             if !waiting.isEmpty {
                 Divider()
-                Text("READY TO REVIEW").font(.system(size: 9, weight: .semibold)).tracking(1).foregroundColor(.secondary)
+                Text("READY TO REVIEW").font(.system(size: 11, weight: .semibold)).tracking(1).foregroundColor(.secondary)
                 ForEach(waiting, id: \.record.id) { item in
                     HStack {
-                        Text(item.record.title).font(.system(size: 12)).lineLimit(1)
+                        Text(item.record.title).font(.system(size: 13)).lineLimit(1)
                         Spacer()
                         Button("Review") { review(item.record.id) }.controlSize(.small)
                     }
@@ -44,7 +44,7 @@ struct MenuBarPanel: View {
             Divider()
             VStack(spacing: 6) {
                 Image(systemName: "arrow.down.doc").font(.system(size: 18)).foregroundColor(dropping ? Theme.sand : .secondary)
-                Text("Drop a sermon here to make clips").font(.system(size: 11)).foregroundColor(.secondary)
+                Text("Drop a sermon here to make clips").font(.system(size: 12)).foregroundColor(.secondary)
             }
             .frame(maxWidth: .infinity).padding(.vertical, 14)
             .background(RoundedRectangle(cornerRadius: 10).strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [5, 4])).foregroundColor(dropping ? Theme.sand : Color.secondary.opacity(0.4)))
@@ -59,7 +59,7 @@ struct MenuBarPanel: View {
             HStack {
                 Button("Open AutoClip") { openMain() }
                 Spacer()
-                Button("Hide this icon") { menuBarOn = false }.buttonStyle(.link).font(.system(size: 11))
+                Button("Hide this icon") { menuBarOn = false }.buttonStyle(.link).font(.system(size: 12))
             }
         }
         .padding(14)

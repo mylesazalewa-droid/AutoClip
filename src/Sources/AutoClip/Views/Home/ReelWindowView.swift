@@ -29,20 +29,20 @@ struct ReelWindowView: View {
                         if let d = previewDraft {
                             DraftPreviewPane(draft: d, gold: gold).id(d.id)
                         } else {
-                            Text("No reels yet").foregroundColor(Color.white.opacity(0.4))
+                            Text("No clips yet").foregroundColor(Theme.ink.opacity(0.55))
                         }
                     }
                     .frame(minWidth: 380, maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color.black)
                 }
             } else {
-                Text("This reel was deleted.").foregroundColor(Color.white.opacity(0.5))
+                Text("This clip was deleted.").foregroundColor(Theme.ink.opacity(0.55))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .background(AmbientBackdrop())
-        .preferredColorScheme(.dark)
-        .navigationTitle(record?.title ?? "Reels")
+        .appLook()
+        .navigationTitle(record?.title ?? "Clips")
         .frame(minWidth: 940, minHeight: 600)
         .background(WindowAccessor { $0.setFrameAutosaveName("AutoClipReels") })
         .onAppear { UserDefaults.standard.set(recordID.uuidString, forKey: Reopen.key) }
@@ -89,7 +89,7 @@ struct DraftPreviewPane: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            Text(draft.title).font(.system(size: 14, weight: .semibold)).foregroundColor(.white).lineLimit(1)
+            Text(draft.title).font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.ink).lineLimit(1)
             ZStack {
                 Color.black
                 FillPlayerView(player: player)
@@ -119,21 +119,22 @@ struct DraftPreviewPane: View {
                 Slider(value: Binding(get: { time }, set: { t in
                     time = t; player.seek(to: CMTime(seconds: t, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
                 }), in: 0...max(total, 0.1)).tint(Theme.action)
-                Text("\(fmt(time)) / \(fmt(total))").font(.system(size: 11, design: .monospaced)).foregroundColor(Color.white.opacity(0.5))
+                Text("\(fmt(time)) / \(fmt(total))").font(.system(size: 12, design: .monospaced)).foregroundColor(Theme.ink.opacity(0.55))
             }
             .frame(maxWidth: 520)
             HStack(spacing: 10) {
                 PhoneViewMenu(view: Binding(get: { phone }, set: { phoneRaw = $0.rawValue }))
                 if phone != .off, isVertical, draft.captions, phone.captionsCovered(look) {
-                    Text("Captions sit behind \(phone.label)'s text. Move them up in the editor.").font(.system(size: 10)).foregroundColor(Theme.warn)
+                    Text("Captions sit behind \(phone.label)'s text. Move them up in the editor.").font(.system(size: 11.5)).foregroundColor(Theme.warn)
                 }
             }
             if following {
                 Label("Finding the speaker…", systemImage: "person.crop.rectangle")
-                    .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.4))
+                    .font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
             }
         }
         .padding(20)
+        .environment(\.colorScheme, .dark)
         .task { await load() }
         .onChange(of: draft) { _ in Task { await load() } }
         .onDisappear { if let o = observer { player.removeTimeObserver(o) }; player.pause() }

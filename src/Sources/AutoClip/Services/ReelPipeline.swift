@@ -114,7 +114,7 @@ enum ReelPipeline {
             await upd(0.45, "Finding best moments…")
             let segments = svc.autoSegmentsFromWords(words)
             guard !segments.isEmpty else {
-                throw NSError(domain: "AutoClip", code: 4, userInfo: [NSLocalizedDescriptionKey: "Not enough speech segments to build a reel."])
+                throw NSError(domain: "AutoClip", code: 4, userInfo: [NSLocalizedDescriptionKey: "Not enough speech segments to build a clip."])
             }
 
             let totalSpeechDur = words.last.map { $0.endTime } ?? 0
@@ -156,12 +156,12 @@ enum ReelPipeline {
             var usedClipIDs: Set<UUID> = []
             for i in 0..<autoReels {
                 await upd(0.40 + Double(i) / Double(autoReels) * 0.10,
-                          "Selecting clips for reel \(i + 1) of \(autoReels)…")
+                          "Selecting clips for clip \(i + 1) of \(autoReels)…")
                 let localVariation = baseVariation + i + 1
                 var reelClips: [Clip]
                 if useAI && !apiKey.isEmpty {
                     await upd(0.40 + Double(i) / Double(autoReels) * 0.10,
-                              "AI is writing the story for reel \(i + 1)…")
+                              "AI is writing the story for clip \(i + 1)…")
                     do {
                         let plan = try await LLMClipService.shared.composeStory(
                             sentences: storySentences.map { ($0.start, $0.end, $0.text) },
@@ -184,11 +184,11 @@ enum ReelPipeline {
                         aiHooks.append(plan.hook)
                         aiKeywords.append(plan.keywords)
                         await upd(0.40 + Double(i) / Double(autoReels) * 0.10,
-                                  "AI built reel \(i + 1) ✓")
+                                  "AI built clip \(i + 1) ✓")
                     } catch {
                         // Surface the real error — don't silently fall back
                         throw NSError(domain: "AutoClip", code: 99, userInfo: [
-                            NSLocalizedDescriptionKey: "AI clip selection failed for reel \(i + 1): \(error.localizedDescription)"
+                            NSLocalizedDescriptionKey: "AI clip selection failed for clip \(i + 1): \(error.localizedDescription)"
                         ])
                     }
                 } else if single {
@@ -217,7 +217,7 @@ enum ReelPipeline {
 
             // Reels are saved as editable drafts — nothing is rendered until the user
             // picks which ones to export (and can trim / restyle them first).
-            await upd(0.95, "Preparing \(reelGroups.count) reel\(reelGroups.count == 1 ? "" : "s") for review…")
+            await upd(0.95, "Preparing \(reelGroups.count) clip\(reelGroups.count == 1 ? "" : "s") for review…")
             func snippetFrom(_ words: [Word], range: Range<Int>) -> String {
                 let slice = Array(words)[range.clamped(to: 0..<words.count)]
                 return slice.map { $0.word }.joined(separator: " ")
@@ -226,7 +226,7 @@ enum ReelPipeline {
             for startOffset in [3, 6, 9] where Set(perReelTitles).count < perReelTitles.count {
                 perReelTitles = reelGroups.enumerated().map { i, group in
                     let s = snippetFrom(group.first?.words ?? [], range: startOffset..<(startOffset + 6))
-                    return s.isEmpty ? "Reel \(i + 1)" : s
+                    return s.isEmpty ? "Clip \(i + 1)" : s
                 }
             }
             if Set(perReelTitles).count < perReelTitles.count {
@@ -274,7 +274,7 @@ enum ReelPipeline {
                 AutoReelsStore.shared.add(finalRecord)
                 Task { await Notifier.reelsReady(finalRecord) }
                 store.updateJob(AutoReelJob(id: jobID, title: retryParams?.sourceTitle ?? finalReelTitle, progress: 1.0,
-                                           statusMsg: "\(drafts.count) reel\(drafts.count == 1 ? "" : "s") ready — open to review & export",
+                                           statusMsg: "\(drafts.count) clip\(drafts.count == 1 ? "" : "s") ready — open to review & export",
                                            isFinished: true, error: nil))
             }
 

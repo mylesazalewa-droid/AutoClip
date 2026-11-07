@@ -89,7 +89,7 @@ final class License: ObservableObject {
         return trialLeft == 0 ? "Free trial used" : "Free trial · \(trialLeft) sermon\(trialLeft == 1 ? "" : "s") left"
     }
 
-    static let trialMessage = "Your free trial has made reels from \(trialSermons) sermons. Activate AutoClip to make more. Your existing reels can still be edited and exported."
+    static let trialMessage = "Your free trial has made clips from \(trialSermons) sermons. Activate AutoClip to make more. Your existing clips can still be edited and exported."
 
     /// True when this video may become reels. Each new video in the trial counts once.
     func allowSermon(_ path: String) -> Bool {

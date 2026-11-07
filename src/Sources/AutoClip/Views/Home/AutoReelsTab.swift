@@ -211,7 +211,7 @@ class AutoReelsStore: ObservableObject {
         let busy = activeJobs.contains { !$0.isFinished }
         if busy, backgroundActivity == nil {
             backgroundActivity = ProcessInfo.processInfo.beginActivity(
-                options: [.userInitiated, .idleSystemSleepDisabled], reason: "Creating Auto Reels")
+                options: [.userInitiated, .idleSystemSleepDisabled], reason: "Creating Clips")
         } else if !busy, let a = backgroundActivity {
             ProcessInfo.processInfo.endActivity(a)
             backgroundActivity = nil
@@ -467,26 +467,26 @@ struct AutoReelsTab: View {
                 ZStack {
                     RoundedRectangle(cornerRadius: 16)
                         .stroke(
-                            isDropTargeted ? gold : Color.white.opacity(0.15),
+                            isDropTargeted ? gold : Theme.ink.opacity(0.15),
                             style: StrokeStyle(lineWidth: 2, dash: [8, 6])
                         )
                         .background(
                             RoundedRectangle(cornerRadius: 16)
-                                .fill(isDropTargeted ? gold.opacity(0.06) : Color.white.opacity(0.03))
+                                .fill(isDropTargeted ? gold.opacity(0.06) : Theme.ink.opacity(0.03))
                         )
 
                     VStack(spacing: 16) {
                         Image(systemName: "film.stack")
                             .font(.system(size: 44))
-                            .foregroundColor(Color.white.opacity(isDropTargeted ? 0.7 : 0.3))
+                            .foregroundColor(Theme.ink.opacity(isDropTargeted ? 0.7 : 0.3))
 
                         VStack(spacing: 6) {
                             Text("Drop your video or audio here")
                                 .font(.system(size: 20, weight: .semibold))
-                                .foregroundColor(.white)
+                                .foregroundColor(Theme.ink)
                             Text("MP4, MOV, MKV — any format works")
                                 .font(.system(size: 14))
-                                .foregroundColor(Color.white.opacity(0.4))
+                                .foregroundColor(Theme.ink.opacity(0.55))
                         }
 
                         HStack(spacing: 12) {
@@ -507,9 +507,9 @@ struct AutoReelsTab: View {
                                     Image(systemName: "square.and.arrow.down").font(.system(size: 13))
                                     Text("Browse Files").font(.system(size: 14, weight: .semibold))
                                 }
-                                .foregroundColor(.white)
+                                .foregroundColor(Theme.ink)
                                 .padding(.horizontal, 20).padding(.vertical, 10)
-                                .background(Color.white.opacity(0.12))
+                                .background(Theme.ink.opacity(0.12))
                                 .cornerRadius(9)
                             }
                             .buttonStyle(.plain)
@@ -522,7 +522,7 @@ struct AutoReelsTab: View {
                                     Image(systemName: "link").font(.system(size: 13))
                                     Text("YouTube URL").font(.system(size: 14, weight: .semibold))
                                 }
-                                .foregroundColor(.white)
+                                .foregroundColor(Theme.onColor)
                                 .padding(.horizontal, 20).padding(.vertical, 10)
                                 .background(Theme.terracotta)
                                 .cornerRadius(9)
@@ -553,8 +553,8 @@ struct AutoReelsTab: View {
 
                 HStack(spacing: 14) {
                     reelFeatureCard(icon: "rectangle.stack.fill", emoji: nil,
-                                   title: "Multi-Reel Mode", subtitle: "Up to 10 unique reels")
-                    reelFeatureCard(icon: nil, emoji: "😊",
+                                   title: "Multi-Clip Mode", subtitle: "Up to 10 unique clips")
+                    reelFeatureCard(icon: "face.smiling", emoji: nil,
                                    title: "Face Tracking", subtitle: "Smart vertical crop")
                     reelFeatureCard(icon: "text.bubble", emoji: nil,
                                    title: "Auto Captions", subtitle: "Viral-style text")
@@ -577,22 +577,22 @@ struct AutoReelsTab: View {
             } else if let icon = icon {
                 Image(systemName: icon)
                     .font(.system(size: 26))
-                    .foregroundColor(Color.white.opacity(0.5))
+                    .foregroundColor(Theme.ink.opacity(0.55))
             }
             VStack(spacing: 3) {
                 Text(title)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.white)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(Theme.ink)
                 Text(subtitle)
-                    .font(.system(size: 11))
-                    .foregroundColor(Color.white.opacity(0.4))
+                    .font(.system(size: 12))
+                    .foregroundColor(Theme.ink.opacity(0.55))
                     .multilineTextAlignment(.center)
             }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 20)
         .padding(.horizontal, 8)
-        .background(Color.white.opacity(0.05))
+        .background(Theme.ink.opacity(0.05))
         .cornerRadius(12)
     }
 
@@ -602,14 +602,14 @@ struct AutoReelsTab: View {
         VStack(spacing: 0) {
             let displayCount = reelSearch.isEmpty ? store.reels.count
                 : store.reels.filter { $0.title.localizedCaseInsensitiveContains(reelSearch) }.count
-            PageHeader(eyebrow: "Auto Reels", title: "My Reels",
+            PageHeader(eyebrow: "Clips", title: "My Clips",
                        subtitle: "\(displayCount) project\(displayCount == 1 ? "" : "s") · short vertical clips cut from your messages") {
-                SearchPill(text: $reelSearch, placeholder: "Search reels", width: 200)
+                SearchPill(text: $reelSearch, placeholder: "Search clips", width: 200)
                 Button(action: {
                     pickedVideoURL = nil
                     inputMode = .file
                     showingCreateSheet = true
-                }) { Label("New Reel", systemImage: "plus") }
+                }) { Label("New Clip", systemImage: "plus") }
                 .buttonStyle(PrimaryButtonStyle())
             }
 
@@ -617,11 +617,11 @@ struct AutoReelsTab: View {
                 VStack(alignment: .leading, spacing: 24) {
                     if reelSearch.isEmpty, let latest = store.reels.first {
                         CinematicHero(path: latest.sourceVideoPath ?? latest.path, eyebrow: "Latest project", title: latest.title,
-                                      detail: "\(latest.drafts?.count ?? latest.paths.count) reels ready to review", height: 400) {
+                                      detail: "\(latest.drafts?.count ?? latest.paths.count) clips ready to review", height: 400) {
                             Button { selectedReel = latest } label: { Label("Open", systemImage: "play.fill") }.buttonStyle(PrimaryButtonStyle())
                             Button {
                                 pickedVideoURL = nil; inputMode = .file; showingCreateSheet = true
-                            } label: { Label("New reel", systemImage: "plus") }.buttonStyle(SecondaryButtonStyle())
+                            } label: { Label("New clip", systemImage: "plus") }.buttonStyle(SecondaryButtonStyle())
                         }
                         .padding(.horizontal, 32)
                         SectionTitle(title: "All projects", count: store.reels.count).padding(.horizontal, 32)
@@ -675,14 +675,14 @@ struct AutoReelsTab: View {
                     // Source
                     VStack(alignment: .leading, spacing: 10) {
                         Text("SOURCE")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundColor(Color.white.opacity(0.35))
+                            .font(.system(size: 11.5, weight: .semibold))
+                            .foregroundColor(Theme.ink.opacity(0.55))
 
                         if let url = pickedVideoURL, inputMode == .file {
                             HStack {
                                 Image(systemName: "checkmark.circle.fill").foregroundColor(gold)
                                 Text(url.lastPathComponent)
-                                    .font(.system(size: 13)).foregroundColor(.white).lineLimit(1)
+                                    .font(.system(size: 13)).foregroundColor(Theme.ink).lineLimit(1)
                                 Spacer()
                                 Button("Change") {
                                     let panel = NSOpenPanel()
@@ -693,20 +693,20 @@ struct AutoReelsTab: View {
                                         if response == .OK, let u = panel.url { pickedVideoURL = u }
                                     }
                                 }
-                                .font(.system(size: 12))
-                                .foregroundColor(Color.white.opacity(0.4))
+                                .font(.system(size: 13))
+                                .foregroundColor(Theme.ink.opacity(0.55))
                                 .buttonStyle(.plain)
                             }
                             .padding(12)
-                            .background(Color.white.opacity(0.06))
+                            .background(Theme.ink.opacity(0.06))
                             .cornerRadius(8)
                         } else {
                             // Mode toggle
                             HStack(spacing: 0) {
                                 Button(action: { inputMode = .file; youtubeURL = "" }) {
                                     Text("Video File")
-                                        .font(.system(size: 12, weight: inputMode == .file ? .semibold : .regular))
-                                        .foregroundColor(inputMode == .file ? .black : Color.white.opacity(0.5))
+                                        .font(.system(size: 13, weight: inputMode == .file ? .semibold : .regular))
+                                        .foregroundColor(inputMode == .file ? .black : Theme.ink.opacity(0.5))
                                         .padding(.horizontal, 14).padding(.vertical, 6)
                                         .background(inputMode == .file ? gold : Color.clear)
                                         .cornerRadius(7)
@@ -714,15 +714,15 @@ struct AutoReelsTab: View {
                                 .buttonStyle(.plain)
                                 Button(action: { inputMode = .youtube; pickedVideoURL = nil }) {
                                     Text("YouTube")
-                                        .font(.system(size: 12, weight: inputMode == .youtube ? .semibold : .regular))
-                                        .foregroundColor(inputMode == .youtube ? .black : Color.white.opacity(0.5))
+                                        .font(.system(size: 13, weight: inputMode == .youtube ? .semibold : .regular))
+                                        .foregroundColor(inputMode == .youtube ? .black : Theme.ink.opacity(0.5))
                                         .padding(.horizontal, 14).padding(.vertical, 6)
                                         .background(inputMode == .youtube ? gold : Color.clear)
                                         .cornerRadius(7)
                                 }
                                 .buttonStyle(.plain)
                             }
-                            .background(Color.white.opacity(0.06))
+                            .background(Theme.ink.opacity(0.06))
                             .cornerRadius(8)
 
                             if inputMode == .file {
@@ -736,34 +736,34 @@ struct AutoReelsTab: View {
                                     }
                                 }) {
                                     HStack(spacing: 6) {
-                                        Image(systemName: "square.and.arrow.down").font(.system(size: 12))
+                                        Image(systemName: "square.and.arrow.down").font(.system(size: 13))
                                         Text("Browse Files").font(.system(size: 13, weight: .medium))
                                     }
-                                    .foregroundColor(.white)
+                                    .foregroundColor(Theme.ink)
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, 10)
-                                    .background(Color.white.opacity(0.08))
+                                    .background(Theme.ink.opacity(0.08))
                                     .cornerRadius(8)
                                 }
                                 .buttonStyle(.plain)
                             } else {
                                 HStack(spacing: 8) {
                                     Image(systemName: "link")
-                                        .font(.system(size: 12))
-                                        .foregroundColor(Color.white.opacity(0.4))
+                                        .font(.system(size: 13))
+                                        .foregroundColor(Theme.ink.opacity(0.55))
                                     TextField("https://youtube.com/watch?v=...", text: $youtubeURL)
                                         .textFieldStyle(.plain)
                                         .font(.system(size: 13))
-                                        .foregroundColor(.white)
+                                        .foregroundColor(Theme.ink)
                                         .onChange(of: youtubeURL) { _ in downloadError = nil }
                                 }
                                 .padding(10)
-                                .background(Color.white.opacity(0.07))
+                                .background(Theme.ink.opacity(0.07))
                                 .cornerRadius(8)
 
                                 if let err = downloadError {
                                     Text(err)
-                                        .font(.system(size: 11))
+                                        .font(.system(size: 12))
                                         .foregroundColor(Theme.danger)
                                         .fixedSize(horizontal: false, vertical: true)
                                 }
@@ -771,14 +771,14 @@ struct AutoReelsTab: View {
                         }
                     }
 
-                    Divider().background(Color.white.opacity(0.08))
+                    Divider().background(Theme.ink.opacity(0.08))
 
                     sheetSettingsSection
                 }
                 .padding(20)
             }
             .background(Theme.bg)
-            .navigationTitle("Create Auto Reel")
+            .navigationTitle("Create Auto Clip")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
@@ -786,7 +786,7 @@ struct AutoReelsTab: View {
                         pickedVideoURL = nil
                         downloadError = nil
                     }
-                    .foregroundColor(Color.white.opacity(0.6))
+                    .foregroundColor(Theme.ink.opacity(0.6))
                 }
             }
             .safeAreaInset(edge: .bottom) {
@@ -801,12 +801,12 @@ struct AutoReelsTab: View {
                         pickedVideoURL = nil
                     }
                 }) {
-                    Text("Create Auto Reel")
+                    Text("Create Auto Clip")
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(canCreate ? .black : Color.white.opacity(0.3))
+                        .foregroundColor(canCreate ? .black : Theme.ink.opacity(0.3))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
-                        .background(canCreate ? gold : Color.white.opacity(0.08))
+                        .background(canCreate ? gold : Theme.ink.opacity(0.08))
                         .cornerRadius(12)
                 }
                 .buttonStyle(.plain)
@@ -817,7 +817,7 @@ struct AutoReelsTab: View {
             }
         }
         .frame(minWidth: 420, minHeight: 500)
-        .preferredColorScheme(.dark)
+        .appLook()
     }
 
     // MARK: - Sheet Settings
@@ -825,19 +825,19 @@ struct AutoReelsTab: View {
     var sheetSettingsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("SETTINGS")
-                .font(.system(size: 10, weight: .semibold)).foregroundColor(Color.white.opacity(0.35))
+                .font(.system(size: 11.5, weight: .semibold)).foregroundColor(Theme.ink.opacity(0.55))
 
             VStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Format").font(.system(size: 12)).foregroundColor(Color.white.opacity(0.6))
+                    Text("Format").font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.6))
                     HStack(spacing: 6) {
                         ForEach([VideoExportService.ExportFormat.vertical9x16, .square1x1, .original], id: \.self) { fmt in
                             Button(action: { selectedFormat = fmt }) {
                                 Text(fmtLabel(fmt))
-                                    .font(.system(size: 11, weight: selectedFormat == fmt ? .semibold : .regular))
-                                    .foregroundColor(selectedFormat == fmt ? .black : Color.white.opacity(0.6))
+                                    .font(.system(size: 12, weight: selectedFormat == fmt ? .semibold : .regular))
+                                    .foregroundColor(selectedFormat == fmt ? .black : Theme.ink.opacity(0.6))
                                     .padding(.horizontal, 10).padding(.vertical, 5)
-                                    .background(selectedFormat == fmt ? gold : Color.white.opacity(0.07))
+                                    .background(selectedFormat == fmt ? gold : Theme.ink.opacity(0.07))
                                     .cornerRadius(6)
                             }
                             .buttonStyle(.plain)
@@ -845,25 +845,25 @@ struct AutoReelsTab: View {
                     }
                 }
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Style").font(.system(size: 12)).foregroundColor(Color.white.opacity(0.6))
+                    Text("Style").font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.6))
                     Picker("", selection: $singleClip) {
                         Text("Story (stitched)").tag(false)
                         Text("Single clip").tag(true)
                     }
                     .pickerStyle(.segmented).labelsHidden()
                     Text(singleClip
-                         ? "Each reel is one continuous moment from the video — no cuts."
-                         : "Each reel stitches the best lines into one story.")
-                        .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.4))
+                         ? "Each clip is one continuous moment from the video — no cuts."
+                         : "Each clip stitches the best lines into one story.")
+                        .font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
                 }
                 HStack {
-                    Text("Target length").font(.system(size: 12)).foregroundColor(Color.white.opacity(0.6))
+                    Text("Target length").font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.6))
                     Spacer()
-                    Text(formatDur(targetDuration)).font(.system(size: 12, design: .monospaced)).foregroundColor(gold)
+                    Text(formatDur(targetDuration)).font(.system(size: 13, design: .monospaced)).foregroundColor(gold)
                 }
                 Slider(value: $targetDuration, in: 30...300, step: 10).tint(Theme.action)
                 HStack {
-                    Text("Captions").font(.system(size: 12)).foregroundColor(Color.white.opacity(0.6))
+                    Text("Captions").font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.6))
                     Spacer()
                     Toggle("", isOn: $burnCaptions).toggleStyle(.switch).tint(Theme.action)
                 }
@@ -876,10 +876,10 @@ struct AutoReelsTab: View {
                                     captionLook = CaptionLook(preset: captionStyles[i])
                                 }) {
                                     Text(captionStyles[i].name)
-                                        .font(.system(size: 11, weight: captionStyleIndex == i ? .semibold : .regular))
-                                        .foregroundColor(captionStyleIndex == i ? .black : Color.white.opacity(0.6))
+                                        .font(.system(size: 12, weight: captionStyleIndex == i ? .semibold : .regular))
+                                        .foregroundColor(captionStyleIndex == i ? .black : Theme.ink.opacity(0.6))
                                         .padding(.horizontal, 10).padding(.vertical, 5)
-                                        .background(captionStyleIndex == i ? gold : Color.white.opacity(0.07))
+                                        .background(captionStyleIndex == i ? gold : Theme.ink.opacity(0.07))
                                         .cornerRadius(6)
                                 }
                                 .buttonStyle(.plain)
@@ -891,7 +891,7 @@ struct AutoReelsTab: View {
                         .onChange(of: captionLook) { $0.save() }
                 }
             }
-            .padding(14).background(Color.white.opacity(0.04)).cornerRadius(10)
+            .padding(14).background(Theme.ink.opacity(0.04)).cornerRadius(10)
 
             chatSection
             serviceSection
@@ -911,16 +911,16 @@ struct AutoReelsTab: View {
         VStack(alignment: .leading, spacing: 10) {
             Toggle(isOn: $findSermon) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Find the sermon in a full service").font(.system(size: 12, weight: .semibold)).foregroundColor(.white)
+                    Text("Find the sermon in a full service").font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.ink)
                     Text("For recordings over 30 minutes. Clips come from the sermon only, not worship or announcements.")
-                        .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.45)).fixedSize(horizontal: false, vertical: true)
+                        .font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.55)).fixedSize(horizontal: false, vertical: true)
                 }
             }
             .toggleStyle(.switch).tint(Theme.action)
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Movement").font(.system(size: 12, weight: .semibold)).foregroundColor(.white)
-                    Text("Punch-ins on strong lines and a slow push through long stretches").font(.system(size: 11)).foregroundColor(Color.white.opacity(0.45))
+                    Text("Movement").font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.ink)
+                    Text("Punch-ins on strong lines and a slow push through long stretches").font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.55))
                 }
                 Spacer()
                 Picker("", selection: $motionDefault) {
@@ -929,58 +929,58 @@ struct AutoReelsTab: View {
                 .labelsHidden().fixedSize()
             }
         }
-        .padding(14).background(Color.white.opacity(0.04)).cornerRadius(10)
+        .padding(14).background(Theme.ink.opacity(0.04)).cornerRadius(10)
     }
 
     private var chatSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
                 Image(systemName: "bubble.left.and.bubble.right.fill")
-                    .foregroundColor(gold).font(.system(size: 11))
-                Text("What's this reel about?")
-                    .font(.system(size: 12, weight: .semibold)).foregroundColor(.white)
+                    .foregroundColor(gold).font(.system(size: 12))
+                Text("What's this clip about?")
+                    .font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.ink)
             }
             TextField("faith, business, motivation...", text: $topicText)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
-                .foregroundColor(.white)
+                .foregroundColor(Theme.ink)
                 .padding(10)
-                .background(Color.white.opacity(0.09))
+                .background(Theme.ink.opacity(0.09))
                 .cornerRadius(8)
                 .overlay(RoundedRectangle(cornerRadius: 8)
                     .stroke(topicText.isEmpty ? Color.clear : gold.opacity(0.45), lineWidth: 1))
             if !topicText.isEmpty {
                 Text("AI will prioritize segments and highlight keywords matching this theme.")
-                    .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.4))
+                    .font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.55))
                     .fixedSize(horizontal: false, vertical: true)
             }
             HStack(spacing: 16) {
                 HStack(spacing: 6) {
                     Toggle("", isOn: $crossDissolve).toggleStyle(.switch).tint(Theme.action).labelsHidden()
-                    Text("Dissolve cuts").font(.system(size: 11)).foregroundColor(Color.white.opacity(0.7))
+                    Text("Dissolve cuts").font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.7))
                 }
                 HStack(spacing: 6) {
                     Toggle("", isOn: $emojiOverlays).toggleStyle(.switch).tint(Theme.action).labelsHidden()
-                    Text("Emoji overlays").font(.system(size: 11)).foregroundColor(Color.white.opacity(0.7))
+                    Text("Emoji overlays").font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.7))
                 }
             }
         }
-        .padding(14).background(Color.white.opacity(0.04)).cornerRadius(10)
+        .padding(14).background(Theme.ink.opacity(0.04)).cornerRadius(10)
     }
 
     private var reelCountSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Image(systemName: "rectangle.stack.fill").foregroundColor(gold).font(.system(size: 11))
-                Text("Number of Reels").font(.system(size: 12, weight: .semibold)).foregroundColor(.white)
+                Image(systemName: "rectangle.stack.fill").foregroundColor(gold).font(.system(size: 12))
+                Text("Number of Clips").font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.ink)
                 Spacer()
                 HStack(spacing: 0) {
                     Button(action: { if desiredReelCount > 0 { desiredReelCount -= 1 } }) {
                         Image(systemName: "minus")
-                            .font(.system(size: 12))
-                            .foregroundColor(desiredReelCount == 0 ? Color.white.opacity(0.2) : Color.white.opacity(0.7))
+                            .font(.system(size: 13))
+                            .foregroundColor(desiredReelCount == 0 ? Theme.ink.opacity(0.2) : Theme.ink.opacity(0.7))
                             .frame(width: 28, height: 28)
-                            .background(Color.white.opacity(0.07))
+                            .background(Theme.ink.opacity(0.07))
                     }
                     .buttonStyle(.plain).disabled(desiredReelCount == 0)
 
@@ -989,34 +989,34 @@ struct AutoReelsTab: View {
                         .foregroundColor(desiredReelCount == 0 ? gold : .white)
                         .frame(width: 40)
                         .padding(.vertical, 4)
-                        .background(Color.white.opacity(0.05))
+                        .background(Theme.ink.opacity(0.05))
 
                     Button(action: { if desiredReelCount < 10 { desiredReelCount += 1 } }) {
                         Image(systemName: "plus")
-                            .font(.system(size: 12))
-                            .foregroundColor(desiredReelCount == 10 ? Color.white.opacity(0.2) : Color.white.opacity(0.7))
+                            .font(.system(size: 13))
+                            .foregroundColor(desiredReelCount == 10 ? Theme.ink.opacity(0.2) : Theme.ink.opacity(0.7))
                             .frame(width: 28, height: 28)
-                            .background(Color.white.opacity(0.07))
+                            .background(Theme.ink.opacity(0.07))
                     }
                     .buttonStyle(.plain).disabled(desiredReelCount == 10)
                 }
                 .cornerRadius(7)
-                .overlay(RoundedRectangle(cornerRadius: 7).stroke(Color.white.opacity(0.12), lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: 7).stroke(Theme.ink.opacity(0.12), lineWidth: 1))
             }
             Text(desiredReelCount == 0
-                 ? "Auto-calculated from video length — longer videos produce more reels (up to 10)."
-                 : "Creates exactly \(desiredReelCount) distinct reel\(desiredReelCount == 1 ? "" : "s"), each with a unique mix of the best moments.")
-                .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.4))
+                 ? "Auto-calculated from video length — longer videos produce more clips (up to 10)."
+                 : "Creates exactly \(desiredReelCount) distinct clip\(desiredReelCount == 1 ? "" : "s"), each with a unique mix of the best moments.")
+                .font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.55))
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(14).background(Color.white.opacity(0.04)).cornerRadius(10)
+        .padding(14).background(Theme.ink.opacity(0.04)).cornerRadius(10)
     }
 
     private var storylineSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
-                Image(systemName: "film.stack").foregroundColor(gold).font(.system(size: 12))
-                Text("Storyline").font(.system(size: 12, weight: .semibold)).foregroundColor(.white)
+                Image(systemName: "film.stack").foregroundColor(gold).font(.system(size: 13))
+                Text("Storyline").font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.ink)
                 Spacer()
                 Toggle("", isOn: $useStoryline).toggleStyle(.switch).tint(Theme.action)
             }
@@ -1026,26 +1026,26 @@ struct AutoReelsTab: View {
                         Button(action: { storylineMode = mode }) {
                             HStack(spacing: 8) {
                                 Image(systemName: mode.icon)
-                                    .font(.system(size: 11))
+                                    .font(.system(size: 12))
                                     .foregroundColor(storylineMode == mode ? .black : gold.opacity(0.7))
                                     .frame(width: 16)
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text(mode.rawValue)
-                                        .font(.system(size: 11, weight: storylineMode == mode ? .semibold : .regular))
+                                        .font(.system(size: 12, weight: storylineMode == mode ? .semibold : .regular))
                                         .foregroundColor(storylineMode == mode ? .black : .white)
                                     Text(mode.description)
-                                        .font(.system(size: 10))
-                                        .foregroundColor(storylineMode == mode ? .black.opacity(0.6) : Color.white.opacity(0.4))
+                                        .font(.system(size: 11.5))
+                                        .foregroundColor(storylineMode == mode ? .black.opacity(0.6) : Theme.ink.opacity(0.4))
                                         .lineLimit(1)
                                 }
                                 Spacer()
                                 if storylineMode == mode {
-                                    Image(systemName: "checkmark").font(.system(size: 10, weight: .bold))
-                                        .foregroundColor(.black)
+                                    Image(systemName: "checkmark").font(.system(size: 11.5, weight: .bold))
+                                        .foregroundColor(Theme.onSand)
                                 }
                             }
                             .padding(.horizontal, 10).padding(.vertical, 7)
-                            .background(storylineMode == mode ? gold : Color.white.opacity(0.04))
+                            .background(storylineMode == mode ? gold : Theme.ink.opacity(0.04))
                             .cornerRadius(7)
                         }
                         .buttonStyle(.plain)
@@ -1053,42 +1053,42 @@ struct AutoReelsTab: View {
                 }
             }
         }
-        .padding(14).background(Color.white.opacity(0.04)).cornerRadius(10)
+        .padding(14).background(Theme.ink.opacity(0.04)).cornerRadius(10)
     }
 
     private var aiSettingsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
-                Image(systemName: "sparkles").foregroundColor(gold).font(.system(size: 12))
+                Image(systemName: "sparkles").foregroundColor(gold).font(.system(size: 13))
                 Text("Smart AI Selection")
-                    .font(.system(size: 12, weight: .semibold)).foregroundColor(.white)
+                    .font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.ink)
                 Spacer()
                 Toggle("", isOn: $useAI).toggleStyle(.switch).tint(Theme.action)
             }
 
             if useAI {
                 Text("AI understands context, complete thoughts, and emotional tone — not just sentence length.")
-                    .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.45))
+                    .font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.55))
                     .fixedSize(horizontal: false, vertical: true)
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Provider").font(.system(size: 11)).foregroundColor(Color.white.opacity(0.5))
+                    Text("Provider").font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.55))
                     HStack(spacing: 6) {
                         ForEach(LLMClipService.AIProvider.allCases) { p in
                             Button(action: { aiProvider = p }) {
                                 Text(providerShortLabel(p))
-                                    .font(.system(size: 11, weight: aiProvider == p ? .semibold : .regular))
-                                    .foregroundColor(aiProvider == p ? .black : Color.white.opacity(0.6))
+                                    .font(.system(size: 12, weight: aiProvider == p ? .semibold : .regular))
+                                    .foregroundColor(aiProvider == p ? .black : Theme.ink.opacity(0.6))
                                     .padding(.horizontal, 8).padding(.vertical, 5)
-                                    .background(aiProvider == p ? gold : Color.white.opacity(0.07))
+                                    .background(aiProvider == p ? gold : Theme.ink.opacity(0.07))
                                     .cornerRadius(6)
                             }
                             .buttonStyle(.plain)
                         }
                     }
                     Text("Model: \(aiProvider.modelLabel)")
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundColor(Color.white.opacity(0.3))
+                        .font(.system(size: 11.5, design: .monospaced))
+                        .foregroundColor(Theme.ink.opacity(0.55))
 
                     let estTokens = max(400, Int(targetDuration * 2.5))
                     let estCost: String = {
@@ -1099,16 +1099,16 @@ struct AutoReelsTab: View {
                         }
                     }()
                     HStack(spacing: 5) {
-                        Image(systemName: "dollarsign.circle").font(.system(size: 10))
-                        Text("Estimated cost per reel: \(estCost)").font(.system(size: 10))
+                        Image(systemName: "dollarsign.circle").font(.system(size: 11.5))
+                        Text("Estimated cost per clip: \(estCost)").font(.system(size: 11.5))
                     }
-                    .foregroundColor(Color.white.opacity(0.4))
+                    .foregroundColor(Theme.ink.opacity(0.55))
                     .padding(.horizontal, 8).padding(.vertical, 5)
-                    .background(Color.white.opacity(0.05)).cornerRadius(6)
+                    .background(Theme.ink.opacity(0.05)).cornerRadius(6)
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("API Key").font(.system(size: 11)).foregroundColor(Color.white.opacity(0.5))
+                    Text("API Key").font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.55))
                     HStack(spacing: 6) {
                         let binding = Binding<String>(
                             get: { apiKeys[aiProvider] ?? "" },
@@ -1124,31 +1124,31 @@ struct AutoReelsTab: View {
                                 SecureField(aiProvider.keyPlaceholder, text: binding)
                             }
                         }
-                        .font(.system(size: 11, design: .monospaced))
+                        .font(.system(size: 12, design: .monospaced))
                         .textFieldStyle(.plain)
                         .padding(.horizontal, 8).padding(.vertical, 6)
-                        .background(Color.white.opacity(0.06)).cornerRadius(6)
+                        .background(Theme.ink.opacity(0.06)).cornerRadius(6)
 
                         Button(action: { showKey.toggle() }) {
                             Image(systemName: showKey ? "eye.slash" : "eye")
-                                .font(.system(size: 11))
-                                .foregroundColor(Color.white.opacity(0.4))
+                                .font(.system(size: 12))
+                                .foregroundColor(Theme.ink.opacity(0.55))
                         }
                         .buttonStyle(.plain)
                     }
                     Text("Stored in macOS Keychain. Only sent to the selected provider's API.")
-                        .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.3))
+                        .font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
                 }
             } else {
                 Text("Fast on-device mode — no API key needed. Uses rule-based sentence detection.")
-                    .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.45))
+                    .font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.55))
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(Color.white.opacity(0.04))
+                .fill(Theme.ink.opacity(0.04))
                 .overlay(RoundedRectangle(cornerRadius: 10)
                     .stroke(useAI ? gold.opacity(0.35) : Color.clear, lineWidth: 1))
         )
@@ -1177,23 +1177,23 @@ struct AutoReelsTab: View {
                         .overlay(Color.black.opacity(0.35))  // dim so overlay text is readable
                 } else {
                     Rectangle()
-                        .fill(Color.white.opacity(0.05))
+                        .fill(Theme.ink.opacity(0.05))
                         .aspectRatio(9 / 16, contentMode: .fit)
                         .overlay(
                             Image(systemName: job.error != nil ? "exclamationmark.triangle" : "film.stack")
                                 .font(.system(size: 36))
-                                .foregroundColor(Color.white.opacity(0.10))
+                                .foregroundColor(Theme.ink.opacity(0.55))
                         )
                 }
 
                 if job.isFinished && job.error == nil {
                     // Done state: green check + file count
                     HStack(spacing: 6) {
-                        Image(systemName: "checkmark.circle.fill").foregroundColor(gold).font(.system(size: 11))
+                        Image(systemName: "checkmark.circle.fill").foregroundColor(gold).font(.system(size: 12))
                         Text(job.outputURLs != nil
-                             ? "\(job.outputURLs!.count) reels saved to \(job.outputURLs!.first?.deletingLastPathComponent().lastPathComponent ?? "folder")"
-                             : "Reel saved to \(job.outputURL?.deletingLastPathComponent().lastPathComponent ?? "folder")")
-                            .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.8))
+                             ? "\(job.outputURLs!.count) clips saved to \(job.outputURLs!.first?.deletingLastPathComponent().lastPathComponent ?? "folder")"
+                             : "Clip saved to \(job.outputURL?.deletingLastPathComponent().lastPathComponent ?? "folder")")
+                            .font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.8))
                         Spacer()
                     }
                     .padding(.horizontal, 8).padding(.vertical, 6)
@@ -1201,10 +1201,10 @@ struct AutoReelsTab: View {
                 } else if let err = job.error {
                     // Error state — tap for full error detail
                     HStack(spacing: 6) {
-                        Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.orange).font(.system(size: 10))
-                        Text(err).font(.system(size: 10)).foregroundColor(Color(red: 1, green: 0.55, blue: 0.4)).lineLimit(2)
+                        Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.orange).font(.system(size: 11.5))
+                        Text(err).font(.system(size: 11.5)).foregroundColor(Color(red: 1, green: 0.55, blue: 0.4)).lineLimit(2)
                         Spacer()
-                        Image(systemName: "info.circle").font(.system(size: 10)).foregroundColor(Color.white.opacity(0.3))
+                        Image(systemName: "info.circle").font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
                     }
                     .padding(.horizontal, 8).padding(.vertical, 6)
                     .background(Color.black.opacity(0.80))
@@ -1214,15 +1214,15 @@ struct AutoReelsTab: View {
                     // Processing overlay — matches ProjectCard style
                     VStack(spacing: 4) {
                         HStack(spacing: 4) {
-                            Image(systemName: "waveform").font(.system(size: 10)).foregroundColor(gold)
-                            Text(job.statusMsg).font(.system(size: 10)).foregroundColor(Color.white.opacity(0.7)).lineLimit(1)
+                            Image(systemName: "waveform").font(.system(size: 11.5)).foregroundColor(gold)
+                            Text(job.statusMsg).font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.7)).lineLimit(1)
                             Spacer()
                             Text("\(Int(job.progress * 100))%")
-                                .font(.system(size: 10, design: .monospaced)).foregroundColor(gold)
+                                .font(.system(size: 11.5, design: .monospaced)).foregroundColor(gold)
                         }
                         GeometryReader { geo in
                             ZStack(alignment: .leading) {
-                                RoundedRectangle(cornerRadius: 2).fill(Color.white.opacity(0.15)).frame(height: 3)
+                                RoundedRectangle(cornerRadius: 2).fill(Theme.ink.opacity(0.15)).frame(height: 3)
                                 RoundedRectangle(cornerRadius: 2).fill(gold)
                                     .frame(width: geo.size.width * job.progress, height: 3)
                                     .animation(.easeOut(duration: 0.3), value: job.progress)
@@ -1242,17 +1242,17 @@ struct AutoReelsTab: View {
             // Title row
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(job.title).font(.system(size: 13, weight: .semibold)).foregroundColor(.white).lineLimit(1)
+                    Text(job.title).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.ink).lineLimit(1)
                     Text(job.isFinished && job.error == nil ? "Complete" : job.error != nil ? "Failed" : "Processing…")
-                        .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.4))
+                        .font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.55))
                 }
                 Spacer()
                 if job.isFinished {
                     if job.error != nil, let params = job.retryParams {
                         Button(action: { retryJob(params: params, oldJobID: job.id) }) {
                             Text("Retry")
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundColor(.black)
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(Theme.onSand)
                                 .padding(.horizontal, 9).padding(.vertical, 4)
                                 .background(gold)
                                 .cornerRadius(6)
@@ -1261,16 +1261,16 @@ struct AutoReelsTab: View {
                     }
                     Button(action: { store.clearJob(id: job.id) }) {
                         Image(systemName: "xmark.circle.fill").font(.system(size: 16))
-                            .foregroundColor(Color.white.opacity(0.25))
+                            .foregroundColor(Theme.ink.opacity(0.55))
                     }
                     .buttonStyle(.plain)
                 } else {
                     Button(action: { store.cancelJob(id: job.id) }) {
                         Text("Cancel")
-                            .font(.system(size: 11))
-                            .foregroundColor(Color.white.opacity(0.5))
+                            .font(.system(size: 12))
+                            .foregroundColor(Theme.ink.opacity(0.55))
                             .padding(.horizontal, 9).padding(.vertical, 4)
-                            .background(Color.white.opacity(0.08))
+                            .background(Theme.ink.opacity(0.08))
                             .cornerRadius(6)
                     }
                     .buttonStyle(.plain)
@@ -1287,9 +1287,9 @@ struct AutoReelsTab: View {
                             }
                         }) {
                             Label("Show in Finder", systemImage: "folder")
-                                .font(.system(size: 12)).foregroundColor(Color.white.opacity(0.6))
+                                .font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.6))
                                 .padding(.horizontal, 10).padding(.vertical, 5)
-                                .background(Color.white.opacity(0.08)).cornerRadius(6)
+                                .background(Theme.ink.opacity(0.08)).cornerRadius(6)
                         }
                         .buttonStyle(.plain)
 
@@ -1298,11 +1298,11 @@ struct AutoReelsTab: View {
                                 ForEach(Array(urls.enumerated()), id: \.offset) { i, url in
                                     HStack(spacing: 8) {
                                         Text("\(i + 1)")
-                                            .font(.system(size: 10, design: .monospaced))
-                                            .foregroundColor(Color.white.opacity(0.4))
+                                            .font(.system(size: 11.5, design: .monospaced))
+                                            .foregroundColor(Theme.ink.opacity(0.55))
                                             .frame(width: 18, alignment: .trailing)
                                         Text(url.deletingPathExtension().lastPathComponent)
-                                            .font(.system(size: 11)).foregroundColor(.white).lineLimit(1)
+                                            .font(.system(size: 12)).foregroundColor(Theme.ink).lineLimit(1)
                                         Spacer()
                                         Button(action: { showPreview(url: url, id: job.id) }) {
                                             Image(systemName: "play.circle.fill")
@@ -1311,7 +1311,7 @@ struct AutoReelsTab: View {
                                         .buttonStyle(.plain)
                                     }
                                     .padding(.horizontal, 8).padding(.vertical, 5)
-                                    .background(Color.white.opacity(0.04)).cornerRadius(6)
+                                    .background(Theme.ink.opacity(0.04)).cornerRadius(6)
                                 }
                             }
                         }
@@ -1321,14 +1321,14 @@ struct AutoReelsTab: View {
                     HStack(spacing: 8) {
                         Button(action: { NSWorkspace.shared.activateFileViewerSelecting([url]) }) {
                             Label("Finder", systemImage: "folder")
-                                .font(.system(size: 12)).foregroundColor(Color.white.opacity(0.6))
+                                .font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.6))
                                 .padding(.horizontal, 10).padding(.vertical, 5)
-                                .background(Color.white.opacity(0.08)).cornerRadius(6)
+                                .background(Theme.ink.opacity(0.08)).cornerRadius(6)
                         }
                         .buttonStyle(.plain)
                         Button(action: { showPreview(url: url, id: job.id) }) {
                             Label("Preview", systemImage: "play.circle.fill")
-                                .font(.system(size: 12, weight: .semibold)).foregroundColor(.black)
+                                .font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.onSand)
                                 .padding(.horizontal, 10).padding(.vertical, 5)
                                 .background(gold).cornerRadius(6)
                         }
@@ -1409,12 +1409,12 @@ private struct ReelCard: View {
                 LinearGradient(colors: [.black.opacity(0.45), .clear, .clear, .black.opacity(0.6)], startPoint: .top, endPoint: .bottom)
                 HStack(spacing: 6) {
                     if isMulti {
-                        Text("\(reel.paths.count) REELS").font(.system(size: 9, weight: .bold)).tracking(1)
-                            .foregroundColor(Theme.bg)
+                        Text("\(reel.paths.count) REELS").font(.system(size: 11, weight: .bold)).tracking(1)
+                            .foregroundColor(Theme.onSand)
                             .padding(.horizontal, 7).padding(.vertical, 3).background(Capsule().fill(Theme.sand))
                     }
                     Spacer()
-                    Text(formatReelDur(reel.duration)).font(.system(size: 9, weight: .semibold)).foregroundColor(Theme.cream)
+                    Text(formatReelDur(reel.duration)).font(.system(size: 11, weight: .semibold)).foregroundColor(Theme.cream)
                         .padding(.horizontal, 7).padding(.vertical, 3).background(Capsule().fill(Color.black.opacity(0.55)))
                 }
                 .padding(9)
@@ -1426,7 +1426,7 @@ private struct ReelCard: View {
                             let pts = reel.cutPointsPerReel.first ?? reel.cutPoints
                             onPlay(primaryURL, pts, reel.duration)
                         } label: {
-                            Image(systemName: "play.fill").font(.system(size: 18)).foregroundColor(Theme.cream)
+                            Image(systemName: "play.fill").font(.system(size: 18)).foregroundColor(Theme.onColor)
                                 .frame(width: 48, height: 48).background(Circle().fill(Theme.terracotta.opacity(0.95)))
                                 .shadow(color: .black.opacity(0.4), radius: 8, y: 3)
                         }
@@ -1436,12 +1436,12 @@ private struct ReelCard: View {
                                 let urls = reel.paths.map { URL(fileURLWithPath: $0) }.filter { FileManager.default.fileExists(atPath: $0.path) }
                                 onFinder(urls.isEmpty ? [primaryURL] : urls)
                             } label: {
-                                Image(systemName: "folder").font(.system(size: 11)).foregroundColor(Theme.cream)
+                                Image(systemName: "folder").font(.system(size: 12)).foregroundColor(Theme.cream)
                                     .frame(width: 28, height: 28).background(Circle().fill(Color.black.opacity(0.55)))
                             }
                             .buttonStyle(.plain).help("Show in Finder")
                             Button(action: onDelete) {
-                                Image(systemName: "trash").font(.system(size: 11)).foregroundColor(Theme.danger)
+                                Image(systemName: "trash").font(.system(size: 12)).foregroundColor(Theme.danger)
                                     .frame(width: 28, height: 28).background(Circle().fill(Color.black.opacity(0.55)))
                             }
                             .buttonStyle(.plain).help("Delete")
@@ -1451,6 +1451,7 @@ private struct ReelCard: View {
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .environment(\.colorScheme, .dark)
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .stroke(isSelected ? Theme.sand : isHovered ? Theme.sand.opacity(0.6) : Theme.line, lineWidth: isSelected || isHovered ? 1.5 : 1)
@@ -1462,27 +1463,27 @@ private struct ReelCard: View {
             VStack(alignment: .leading, spacing: 3) {
                 if renaming {
                     TextField("Title", text: $newTitle)
-                        .textFieldStyle(.plain).font(.system(size: 12, weight: .semibold)).foregroundColor(Theme.cream)
+                        .textFieldStyle(.plain).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.cream)
                         .padding(.horizontal, 6).padding(.vertical, 3)
-                        .background(RoundedRectangle(cornerRadius: 5).fill(Color.white.opacity(0.08)))
+                        .background(RoundedRectangle(cornerRadius: 5).fill(Theme.ink.opacity(0.08)))
                         .focused($titleFocused)
                         .onSubmit { AutoReelsStore.shared.rename(id: reel.id, to: newTitle); renaming = false }
                         .onExitCommand { renaming = false }
                         .onAppear { titleFocused = true }
                 } else {
                     HStack(alignment: .top, spacing: 4) {
-                        Text(reel.title).font(.system(size: 12, weight: .semibold)).foregroundColor(Theme.text)
+                        Text(reel.title).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.text)
                             .lineLimit(2).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
                             .onTapGesture(count: 2) { newTitle = reel.title; renaming = true }
                         if isHovered {
                             Button { newTitle = reel.title; renaming = true } label: {
-                                Image(systemName: "pencil").font(.system(size: 10)).foregroundColor(Theme.muted)
+                                Image(systemName: "pencil").font(.system(size: 11.5)).foregroundColor(Theme.muted)
                             }
                             .buttonStyle(.plain).help("Rename")
                         }
                     }
                 }
-                Text("\(reel.format) · \(relativeDate(reel.dateCreated))").font(.system(size: 10)).foregroundColor(Theme.muted)
+                Text("\(reel.format) · \(relativeDate(reel.dateCreated))").font(.system(size: 11.5)).foregroundColor(Theme.muted)
             }
             .padding(.horizontal, 2)
         }
@@ -1586,7 +1587,7 @@ private struct ReelDetailSidebar: View {
                     HStack {
                         Button(action: { dismiss() }) {
                             Image(systemName: "xmark")
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(.system(size: 12, weight: .semibold))
                                 .foregroundColor(.white.opacity(0.7))
                                 .padding(6)
                                 .background(Color.black.opacity(0.5))
@@ -1597,7 +1598,7 @@ private struct ReelDetailSidebar: View {
                         Spacer()
                         Button(action: { showFullPreview = true }) {
                             Image(systemName: "arrow.up.left.and.arrow.down.right")
-                                .font(.system(size: 11))
+                                .font(.system(size: 12))
                                 .foregroundColor(.white.opacity(0.7))
                                 .padding(6)
                                 .background(Color.black.opacity(0.5))
@@ -1629,7 +1630,7 @@ private struct ReelDetailSidebar: View {
             // Scrubber + cut markers
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    Capsule().fill(Color.white.opacity(0.12)).frame(height: 3)
+                    Capsule().fill(Theme.ink.opacity(0.12)).frame(height: 3)
                     let progress = duration > 0 ? min(1, currentTime / duration) : 0
                     Capsule().fill(gold).frame(width: max(3, geo.size.width * progress), height: 3)
                     ForEach(Array(reel.cutPoints.enumerated()), id: \.offset) { _, frac in
@@ -1657,13 +1658,13 @@ private struct ReelDetailSidebar: View {
             .padding(.vertical, 6)
 
             HStack {
-                Text(formatSecs(currentTime)).font(.system(size: 10, design: .monospaced)).foregroundColor(Color.white.opacity(0.4))
+                Text(formatSecs(currentTime)).font(.system(size: 11.5, design: .monospaced)).foregroundColor(Theme.ink.opacity(0.55))
                 Spacer()
-                Text(formatSecs(duration)).font(.system(size: 10, design: .monospaced)).foregroundColor(Color.white.opacity(0.4))
+                Text(formatSecs(duration)).font(.system(size: 11.5, design: .monospaced)).foregroundColor(Theme.ink.opacity(0.55))
             }
             .padding(.horizontal, 12).padding(.bottom, 6)
 
-            Divider().background(Color.white.opacity(0.08))
+            Divider().background(Theme.ink.opacity(0.08))
 
             if isMulti {
                 VStack(spacing: 0) {
@@ -1677,22 +1678,22 @@ private struct ReelDetailSidebar: View {
                         }) {
                             HStack(spacing: 8) {
                                 Image(systemName: "film")
-                                    .font(.system(size: 10))
+                                    .font(.system(size: 11.5))
                                     .foregroundColor(isActive ? gold : gold.opacity(0.4))
-                                Text(i < reel.reelTitles.count ? reel.reelTitles[i] : "Reel \(i + 1)")
-                                    .font(.system(size: 12, weight: isActive ? .semibold : .medium))
-                                    .foregroundColor(exists ? (isActive ? gold : .white) : Color.white.opacity(0.3))
+                                Text(i < reel.reelTitles.count ? reel.reelTitles[i] : "Clip \(i + 1)")
+                                    .font(.system(size: 13, weight: isActive ? .semibold : .medium))
+                                    .foregroundColor(exists ? (isActive ? gold : .white) : Theme.ink.opacity(0.3))
                                     .lineLimit(1)
                                 Spacer()
                                 Button(action: { if exists { NSWorkspace.shared.activateFileViewerSelecting([url]) } }) {
                                     Image(systemName: "folder")
-                                        .font(.system(size: 11))
-                                        .foregroundColor(Color.white.opacity(0.3))
+                                        .font(.system(size: 12))
+                                        .foregroundColor(Theme.ink.opacity(0.55))
                                 }
                                 .buttonStyle(.plain)
                                 Image(systemName: isActive && isPlaying ? "pause.circle.fill" : "play.circle.fill")
                                     .font(.system(size: 18))
-                                    .foregroundColor(exists ? gold.opacity(0.8) : Color.white.opacity(0.2))
+                                    .foregroundColor(exists ? gold.opacity(0.8) : Theme.ink.opacity(0.2))
                             }
                             .padding(.horizontal, 12).padding(.vertical, 7)
                             .background(isActive ? gold.opacity(0.08) : Color.clear)
@@ -1700,28 +1701,28 @@ private struct ReelDetailSidebar: View {
                         }
                         .buttonStyle(.plain)
                         if i < reel.paths.count - 1 {
-                            Divider().background(Color.white.opacity(0.06))
+                            Divider().background(Theme.ink.opacity(0.06))
                         }
                     }
                 }
-                .background(Color.white.opacity(0.04))
-                Divider().background(Color.white.opacity(0.08))
+                .background(Theme.ink.opacity(0.04))
+                Divider().background(Theme.ink.opacity(0.08))
             }
 
             HStack(spacing: 0) {
                 ForEach(ReelDetailTab.allCases, id: \.self) { tab in
                     Button(action: { selectedTab = tab }) {
                         Text(tab.rawValue)
-                            .font(.system(size: 12, weight: selectedTab == tab ? .semibold : .regular))
-                            .foregroundColor(selectedTab == tab ? gold : Color.white.opacity(0.5))
+                            .font(.system(size: 13, weight: selectedTab == tab ? .semibold : .regular))
+                            .foregroundColor(selectedTab == tab ? gold : Theme.ink.opacity(0.5))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 9)
                     }
                     .buttonStyle(.plain)
                 }
             }
-            .background(Color.white.opacity(0.05))
-            Divider().background(Color.white.opacity(0.08))
+            .background(Theme.ink.opacity(0.05))
+            Divider().background(Theme.ink.opacity(0.08))
 
             ScrollView {
                 if selectedTab == .actions {
@@ -1733,7 +1734,7 @@ private struct ReelDetailSidebar: View {
                         }) {
                             Label("Export / Show in Finder", systemImage: "square.and.arrow.up")
                                 .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(.black)
+                                .foregroundColor(Theme.onSand)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 9)
                                 .background(gold)
@@ -1745,22 +1746,22 @@ private struct ReelDetailSidebar: View {
                             NSWorkspace.shared.activateFileViewerSelecting([primaryURL])
                         }) {
                             Label("Show in Finder", systemImage: "folder")
-                                .font(.system(size: 12))
-                                .foregroundColor(Color.white.opacity(0.7))
+                                .font(.system(size: 13))
+                                .foregroundColor(Theme.ink.opacity(0.7))
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 8)
-                                .background(Color.white.opacity(0.08))
+                                .background(Theme.ink.opacity(0.08))
                                 .cornerRadius(8)
                         }
                         .buttonStyle(.plain)
 
                         Button(action: { onDelete() }) {
-                            Text("Delete Reel")
-                                .font(.system(size: 12))
+                            Text("Delete Clip")
+                                .font(.system(size: 13))
                                 .foregroundColor(Color(red: 1, green: 0.38, blue: 0.38))
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 8)
-                                .background(Color.white.opacity(0.04))
+                                .background(Theme.ink.opacity(0.04))
                                 .cornerRadius(8)
                         }
                         .buttonStyle(.plain)
@@ -1770,14 +1771,14 @@ private struct ReelDetailSidebar: View {
                     VStack(alignment: .leading, spacing: 8) {
                         if !reel.transcript.isEmpty {
                             Text(reel.transcript)
-                                .font(.system(size: 12))
-                                .foregroundColor(Color.white.opacity(0.8))
+                                .font(.system(size: 13))
+                                .foregroundColor(Theme.ink.opacity(0.8))
                                 .lineSpacing(4)
                                 .textSelection(.enabled)
                         } else {
                             Text("Transcript not available.\nReprocess the video to generate a transcript.")
-                                .font(.system(size: 12))
-                                .foregroundColor(Color.white.opacity(0.4))
+                                .font(.system(size: 13))
+                                .foregroundColor(Theme.ink.opacity(0.55))
                                 .multilineTextAlignment(.center)
                         }
                     }
@@ -1846,13 +1847,13 @@ private struct ReelFullPreviewSheet: View {
                 HStack {
                     Text(url.deletingPathExtension().lastPathComponent)
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(Theme.ink)
                         .lineLimit(1)
                     Spacer()
                     Button(action: { dismiss() }) {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 20))
-                            .foregroundColor(Color.white.opacity(0.5))
+                            .foregroundColor(Theme.ink.opacity(0.55))
                     }
                     .buttonStyle(.plain)
                 }
@@ -1883,7 +1884,7 @@ private struct ReelFullPreviewSheet: View {
                     // Scrubber with cut markers
                     GeometryReader { geo in
                         ZStack(alignment: .leading) {
-                            Capsule().fill(Color.white.opacity(0.15)).frame(height: 4)
+                            Capsule().fill(Theme.ink.opacity(0.15)).frame(height: 4)
                             let progress = duration > 0 ? min(1, currentTime / duration) : 0
                             Capsule().fill(gold).frame(width: max(4, geo.size.width * progress), height: 4)
                             ForEach(Array(cutPoints.enumerated()), id: \.offset) { _, frac in
@@ -1905,7 +1906,7 @@ private struct ReelFullPreviewSheet: View {
                     .frame(height: 14)
 
                     HStack {
-                        Text(formatSecs(currentTime)).font(.system(size: 11, design: .monospaced)).foregroundColor(Color.white.opacity(0.5))
+                        Text(formatSecs(currentTime)).font(.system(size: 12, design: .monospaced)).foregroundColor(Theme.ink.opacity(0.55))
                         Spacer()
                         HStack(spacing: 20) {
                             Button(action: { player?.seek(to: CMTime(seconds: max(0, currentTime - 5), preferredTimescale: 600)) }) {
@@ -1923,20 +1924,20 @@ private struct ReelFullPreviewSheet: View {
                             }.buttonStyle(.plain)
                         }
                         Spacer()
-                        Text(formatSecs(duration)).font(.system(size: 11, design: .monospaced)).foregroundColor(Color.white.opacity(0.5))
+                        Text(formatSecs(duration)).font(.system(size: 12, design: .monospaced)).foregroundColor(Theme.ink.opacity(0.55))
                     }
                 }
                 .padding(.horizontal, 24).padding(.vertical, 16)
 
                 if !cutPoints.isEmpty {
                     Text("\(cutPoints.count) cut\(cutPoints.count == 1 ? "" : "s") — white marks on scrubber")
-                        .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.35))
+                        .font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.55))
                         .padding(.bottom, 14)
                 }
             }
         }
         .frame(minWidth: 480, minHeight: 600)
-        .preferredColorScheme(.dark)
+        .appLook()
         .onAppear {
             let p = AVPlayer(url: url)
             player = p
@@ -1968,19 +1969,23 @@ struct ReelThumbnailView: View {
     var faceAspect: CGFloat? = nil
     @State private var image: NSImage?
 
+    @State private var loaded = false
+
     var body: some View {
         ZStack {
             if let img = image {
                 Image(nsImage: img)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
+            } else if !loaded {
+                Rectangle().fill(Theme.ink.opacity(0.06)).shimmer()
             } else {
                 Rectangle()
                     .fill(Theme.surface)
                     .overlay(
                         Image(systemName: "film")
                             .font(.system(size: 32))
-                            .foregroundColor(Color.white.opacity(0.12))
+                            .foregroundColor(Theme.ink.opacity(0.55))
                     )
             }
         }
@@ -1991,6 +1996,7 @@ struct ReelThumbnailView: View {
     private static let cache = NSCache<NSString, NSImage>()
 
     private func loadThumbnail() async {
+        defer { loaded = true }
         let key = (path + "|\(faceAspect ?? 0)") as NSString
         if let hit = Self.cache.object(forKey: key) { image = hit; return }
         guard FileManager.default.fileExists(atPath: path) else { return }
@@ -2050,21 +2056,21 @@ private extension AutoReelsTab {
             HStack {
                 HStack(spacing: 6) {
                     Image(systemName: "checkmark.circle.fill").foregroundColor(gold).font(.system(size: 13))
-                    Text("Reel preview").font(.system(size: 13, weight: .semibold)).foregroundColor(.white)
+                    Text("Clip preview").font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.ink)
                 }
                 Spacer()
                 HStack(spacing: 8) {
                     Button(action: { NSWorkspace.shared.activateFileViewerSelecting([url]) }) {
                         Label("Finder", systemImage: "folder")
-                            .font(.system(size: 12)).foregroundColor(Color.white.opacity(0.6))
+                            .font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.6))
                             .padding(.horizontal, 10).padding(.vertical, 5)
-                            .background(Color.white.opacity(0.08)).cornerRadius(6)
+                            .background(Theme.ink.opacity(0.08)).cornerRadius(6)
                     }
                     .buttonStyle(.plain)
                     Button(action: { closePreview() }) {
-                        Image(systemName: "xmark").font(.system(size: 11))
-                            .foregroundColor(Color.white.opacity(0.5))
-                            .padding(6).background(Color.white.opacity(0.08)).cornerRadius(6)
+                        Image(systemName: "xmark").font(.system(size: 12))
+                            .foregroundColor(Theme.ink.opacity(0.55))
+                            .padding(6).background(Theme.ink.opacity(0.08)).cornerRadius(6)
                     }
                     .buttonStyle(.plain)
                 }
@@ -2072,7 +2078,7 @@ private extension AutoReelsTab {
             .padding(.horizontal, 16).padding(.vertical, 10)
             .background(Theme.surface)
 
-            Divider().background(Color.white.opacity(0.08))
+            Divider().background(Theme.ink.opacity(0.08))
 
             VStack(spacing: 0) {
                 Spacer()
@@ -2107,7 +2113,7 @@ private extension AutoReelsTab {
                         let w = geo.size.width
                         ZStack(alignment: .leading) {
                             RoundedRectangle(cornerRadius: 3)
-                                .fill(Color.white.opacity(0.12))
+                                .fill(Theme.ink.opacity(0.12))
                                 .frame(height: 4)
                             RoundedRectangle(cornerRadius: 3)
                                 .fill(gold)
@@ -2142,7 +2148,7 @@ private extension AutoReelsTab {
 
                     HStack {
                         Text(formatDur(previewProgress * previewDuration))
-                            .font(.system(size: 10, design: .monospaced)).foregroundColor(Color.white.opacity(0.5))
+                            .font(.system(size: 11.5, design: .monospaced)).foregroundColor(Theme.ink.opacity(0.55))
                         Spacer()
                         Button(action: {
                             guard let player = previewPlayer else { return }
@@ -2150,12 +2156,12 @@ private extension AutoReelsTab {
                             previewPlaying.toggle()
                         }) {
                             Image(systemName: previewPlaying ? "pause.fill" : "play.fill")
-                                .font(.system(size: 14)).foregroundColor(.white)
+                                .font(.system(size: 14)).foregroundColor(Theme.ink)
                         }
                         .buttonStyle(.plain)
                         Spacer()
                         Text(formatDur(previewDuration))
-                            .font(.system(size: 10, design: .monospaced)).foregroundColor(Color.white.opacity(0.5))
+                            .font(.system(size: 11.5, design: .monospaced)).foregroundColor(Theme.ink.opacity(0.55))
                     }
                 }
                 .padding(.horizontal, 24).padding(.bottom, 16)

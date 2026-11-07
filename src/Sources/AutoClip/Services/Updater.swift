@@ -85,7 +85,7 @@ final class Updater: ObservableObject {
 
     /// Why installing has to wait, if it does.
     var blocker: String? {
-        if AutoReelsStore.shared.activeJobs.contains(where: { !$0.isFinished }) { return "Wait for the reels being made to finish." }
+        if AutoReelsStore.shared.activeJobs.contains(where: { !$0.isFinished }) { return "Wait for the clips being made to finish." }
         if AutoImport.shared.status != nil { return "Wait for Autopilot to finish what it's doing." }
         if NSApp.windows.contains(where: { $0.attachedSheet != nil && $0.isVisible && $0.attachedSheet?.title != "Update" }) {
             return "Save and close anything you're editing first."

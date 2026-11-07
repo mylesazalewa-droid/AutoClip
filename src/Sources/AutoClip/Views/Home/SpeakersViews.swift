@@ -12,9 +12,9 @@ struct SpeakersSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Speakers").font(.system(size: 18, weight: .semibold)).foregroundColor(.white)
+            Text("Speakers").font(.system(size: 18, weight: .semibold)).foregroundColor(Theme.ink)
             Text("Give each preacher their own progress charts. Right-click a video in the list to say whose message it is.")
-                .font(.system(size: 12)).foregroundColor(Color.white.opacity(0.6)).fixedSize(horizontal: false, vertical: true)
+                .font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.6)).fixedSize(horizontal: false, vertical: true)
 
             VStack(spacing: 6) {
                 ForEach(Array(profiles.speakers.enumerated()), id: \.element.id) { i, s in
@@ -23,18 +23,18 @@ struct SpeakersSheet: View {
                         TextField("Name", text: Binding(get: { s.name }, set: { profiles.rename(s.id, to: $0) }))
                             .textFieldStyle(.roundedBorder).frame(width: 200)
                         let n = reports.filter { !$0.isPractice && profiles.speaker(for: $0.videoPath).id == s.id }.count
-                        Text("\(n) message\(n == 1 ? "" : "s")").font(.system(size: 11)).foregroundColor(Color.white.opacity(0.5))
+                        Text("\(n) message\(n == 1 ? "" : "s")").font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.55))
                         Spacer()
                         if i == 0 {
-                            Text("Default").font(.system(size: 10)).foregroundColor(Color.white.opacity(0.4))
+                            Text("Default").font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
                                 .help("Videos you haven't assigned belong to this speaker")
                         } else {
                             Button { profiles.remove(s.id) } label: { Image(systemName: "trash") }
-                                .buttonStyle(.borderless).foregroundColor(Color.white.opacity(0.6))
+                                .buttonStyle(.borderless).foregroundColor(Theme.ink.opacity(0.6))
                                 .help("Remove \(s.name). Their videos and reports stay and move to \(profiles.primary.name).")
                         }
                     }
-                    .padding(8).background(Color.white.opacity(0.04)).cornerRadius(8)
+                    .padding(8).background(Theme.ink.opacity(0.04)).cornerRadius(8)
                 }
             }
 
@@ -73,13 +73,13 @@ struct SpeakerCompareCard: View {
                         Text($0).frame(width: 84, alignment: .trailing)
                     }
                 }
-                .font(.system(size: 10, weight: .semibold)).foregroundColor(Color.white.opacity(0.4))
+                .font(.system(size: 11.5, weight: .semibold)).foregroundColor(Theme.ink.opacity(0.55))
                 ForEach(rows, id: \.speaker.id) { row in
                     Button { pick(row.speaker) } label: {
                         HStack {
                             HStack(spacing: 7) {
                                 Circle().fill(row.color).frame(width: 9, height: 9)
-                                Text(row.speaker.name).font(.system(size: 12, weight: .medium)).foregroundColor(.white).lineLimit(1)
+                                Text(row.speaker.name).font(.system(size: 13, weight: .medium)).foregroundColor(Theme.ink).lineLimit(1)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             cell("\(row.reports.count)")
@@ -119,6 +119,6 @@ struct SpeakerCompareCard: View {
 
     private func cell(_ v: Double?, _ fmt: String) -> some View { cell(v.map { String(format: fmt, $0) } ?? "–") }
     private func cell(_ s: String) -> some View {
-        Text(s).font(.system(size: 12, weight: .semibold, design: .rounded)).foregroundColor(gold).frame(width: 84, alignment: .trailing)
+        Text(s).font(.system(size: 13, weight: .semibold, design: .rounded)).foregroundColor(gold).frame(width: 84, alignment: .trailing)
     }
 }

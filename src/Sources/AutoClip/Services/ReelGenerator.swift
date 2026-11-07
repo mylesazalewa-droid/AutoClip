@@ -205,7 +205,7 @@ enum ReelGenerator {
     /// `count` more reels from parts of the talk the existing reels haven't used.
     static func moreDrafts(for record: AutoReelRecord, count: Int,
                            progress: @escaping (String) -> Void) async throws -> [ReelDraft] {
-        guard let source = sourceVideoPath(for: record) else { throw err("Can't find this reel's source video.") }
+        guard let source = sourceVideoPath(for: record) else { throw err("Can't find this clip's source video.") }
         let st = settings(for: record)
         let words = SermonFinder.trimCached(try await TranscriptCache.transcript(for: source, progress: progress), path: source)
         let sentences = ReelDraft.sentences(from: words)
@@ -213,7 +213,7 @@ enum ReelGenerator {
         let key = await LLMClipService.shared.loadAPIKey(for: st.provider) ?? ""
         var out: [ReelDraft] = []
         for n in 0..<count {
-            progress("Building reel \(n + 1) of \(count)…")
+            progress("Building clip \(n + 1) of \(count)…")
             if st.useAI && !key.isEmpty {
                 let plan = try await LLMClipService.shared.composeStory(
                     sentences: sentences.map { ($0.start, $0.end, $0.text) },
@@ -223,7 +223,7 @@ enum ReelGenerator {
                     single: st.singleClip, kind: record.kind, provider: st.provider, apiKey: key)
                 let ranges = fit(plan.ranges, to: st.targetDuration, sentences: sentences)
                 used.formUnion(ranges.flatMap { Array($0) })
-                let title = plan.title.isEmpty ? "Reel \((record.drafts?.count ?? 0) + n + 1)" : plan.title
+                let title = plan.title.isEmpty ? "Clip \((record.drafts?.count ?? 0) + n + 1)" : plan.title
                 var d = draft(title: title, clips: clips(for: ranges, in: sentences, source: source), source: source, settings: st)
                 if !plan.hook.isEmpty { d.hookText = plan.hook }
                 if !plan.keywords.isEmpty { d.keywords = plan.keywords }
@@ -233,7 +233,7 @@ enum ReelGenerator {
                 guard let r = singleWindow(sentences, segments: segs, target: st.targetDuration, avoid: used) else { break }
                 used.formUnion(r)
                 let cl = clips(for: [r], in: sentences, source: source)
-                out.append(draft(title: cl.first?.words.prefix(6).map(\.word).joined(separator: " ") ?? "Reel",
+                out.append(draft(title: cl.first?.words.prefix(6).map(\.word).joined(separator: " ") ?? "Clip",
                                  clips: cl, source: source, settings: st))
             } else {
                 // No AI: best unused moments by the built-in scorer
@@ -248,7 +248,7 @@ enum ReelGenerator {
                 guard !picked.isEmpty else { break }
                 let pickedWords = Set(picked.flatMap { $0.words.map(\.id) })
                 for (i, s) in sentences.enumerated() where s.words.contains(where: { pickedWords.contains($0.id) }) { used.insert(i) }
-                let title = picked.first?.words.prefix(6).map(\.word).joined(separator: " ") ?? "Reel"
+                let title = picked.first?.words.prefix(6).map(\.word).joined(separator: " ") ?? "Clip"
                 out.append(draft(title: title, clips: picked, source: source, settings: st))
             }
         }
@@ -258,20 +258,20 @@ enum ReelGenerator {
 
     /// One 🔥 Fire Short: a hook-rollercoaster teaser with SEO copy. Needs an AI key.
     static func fireShort(for record: AutoReelRecord, progress: @escaping (String) -> Void) async throws -> ReelDraft {
-        guard let source = sourceVideoPath(for: record) else { throw err("Can't find this reel's source video.") }
+        guard let source = sourceVideoPath(for: record) else { throw err("Can't find this clip's source video.") }
         let st = settings(for: record)
         guard let key = await LLMClipService.shared.loadAPIKey(for: st.provider), !key.isEmpty else {
-            throw err("The Fire Short is written by AI — add an API key for \(st.provider.rawValue) in AutoClip → Settings → AI.")
+            throw err("The Teaser is written by AI — add an API key for \(st.provider.rawValue) in AutoClip → Settings → AI.")
         }
         let words = SermonFinder.trimCached(try await TranscriptCache.transcript(for: source, progress: progress), path: source)
         let sentences = ReelDraft.sentences(from: words)
-        progress("AI is building the Fire Short…")
+        progress("AI is building the Teaser…")
         let target = min(60, max(30, st.targetDuration * 0.6))
         let plan = try await LLMClipService.shared.composeFireShort(
             sentences: sentences.map { ($0.start, $0.end, $0.text) },
             targetDuration: target, topic: st.topic.isEmpty ? nil : st.topic,
             provider: st.provider, apiKey: key)
-        var d = draft(title: "🔥 " + (plan.title.isEmpty ? "Fire Short" : plan.title),
+        var d = draft(title: plan.title.isEmpty ? "Teaser" : plan.title,
                       clips: clips(for: fit(plan.ranges, to: target, sentences: sentences), in: sentences, source: source),
                       source: source, settings: st)
         d.seo = .init(title: plan.title, description: plan.description, hashtags: plan.hashtags, hookText: plan.hookText)
@@ -281,7 +281,7 @@ enum ReelGenerator {
     /// `light` jobs can run on this Mac's on-device AI when there's no key.
     static func aiContext(_ record: AutoReelRecord, light: Bool = false, progress: @escaping (String) -> Void)
         async throws -> (source: String, st: Settings, key: String, sentences: [ReelDraft.Sentence]) {
-        guard let source = sourceVideoPath(for: record) else { throw err("Can't find this reel's source video.") }
+        guard let source = sourceVideoPath(for: record) else { throw err("Can't find this clip's source video.") }
         let st = settings(for: record)
         let key = await LLMClipService.shared.loadAPIKey(for: st.provider) ?? ""
         let local = light && key.isEmpty ? await LocalAI.ready() : false

@@ -63,7 +63,7 @@ struct PhoneChrome: View {
                         Text("Following").opacity(0.6)
                         Text("For You").fontWeight(.bold)
                     } else {
-                        Text(view == .reels ? "Reels" : "Shorts").fontWeight(.bold)
+                        Text(view == .reels ? "Clips" : "Shorts").fontWeight(.bold)
                     }
                     Spacer()
                     Image(systemName: "magnifyingglass")
@@ -127,7 +127,7 @@ struct PhoneViewMenu: View {
         }
         .menuStyle(.borderlessButton).fixedSize()
         .onChange(of: view) { v in if v != .off { PhoneViewTip().invalidate(reason: .actionPerformed) } }
-        .help("See the reel with an app's buttons and text on top, to check nothing important is covered (P)")
+        .help("See the clip with an app's buttons and text on top, to check nothing important is covered (P)")
     }
 }
 

@@ -23,18 +23,18 @@ struct CleanupSheet: View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 7) {
                 Image(systemName: "diamond.fill").font(.system(size: 5)).foregroundColor(Theme.sand)
-                Text("THE FULL VIDEO, TIGHTER").font(.system(size: 10, weight: .semibold)).tracking(2).foregroundColor(Theme.sand)
+                Text("THE FULL VIDEO, TIGHTER").font(.system(size: 11.5, weight: .semibold)).tracking(2).foregroundColor(Theme.sand)
             }
             VStack(alignment: .leading, spacing: 4) {
                 Text("Clean up").font(Theme.display(28)).foregroundColor(Theme.cream)
-                Text(record?.title ?? "").font(.system(size: 12)).foregroundColor(Theme.muted).lineLimit(1)
+                Text(record?.title ?? "").font(.system(size: 13)).foregroundColor(Theme.muted).lineLimit(1)
             }
 
             if let saved {
                 VStack(alignment: .leading, spacing: 10) {
                     Label("Saved the cleaned video", systemImage: "checkmark.seal.fill").foregroundColor(Theme.good)
                         .font(.system(size: 14, weight: .semibold))
-                    Text(saved.path).font(.system(size: 11)).foregroundColor(Theme.muted).textSelection(.enabled)
+                    Text(saved.path).font(.system(size: 12)).foregroundColor(Theme.muted).textSelection(.enabled)
                     HStack {
                         Spacer()
                         Button("Done") { dismiss() }.buttonStyle(SecondaryButtonStyle())
@@ -49,9 +49,9 @@ struct CleanupSheet: View {
                     toggle($options.pauses, "Long pauses", "Pauses over \(String(format: "%.1f", options.maxPause))s become \(String(format: "%.2f", options.keepPause))s")
                     if options.pauses {
                         HStack(spacing: 10) {
-                            Text("Shorten pauses over").font(.system(size: 11)).foregroundColor(Theme.muted)
+                            Text("Shorten pauses over").font(.system(size: 12)).foregroundColor(Theme.muted)
                             Slider(value: $options.maxPause, in: 0.5...2.5, step: 0.1).frame(width: 200).tint(Theme.sand)
-                            Text(String(format: "%.1fs", options.maxPause)).font(.system(size: 11, design: .monospaced)).foregroundColor(Theme.text)
+                            Text(String(format: "%.1fs", options.maxPause)).font(.system(size: 12, design: .monospaced)).foregroundColor(Theme.text)
                         }
                         .padding(.leading, 46)
                     }
@@ -59,14 +59,14 @@ struct CleanupSheet: View {
 
                 summary
 
-                if let e = error { Text(e).font(.system(size: 11)).foregroundColor(Theme.danger).fixedSize(horizontal: false, vertical: true) }
+                if let e = error { Text(e).font(.system(size: 12)).foregroundColor(Theme.danger).fixedSize(horizontal: false, vertical: true) }
                 if let p = progress {
                     ProgressView(value: p).tint(Theme.action)
-                    Text("Saving the cleaned video… \(Int(p * 100))%").font(.system(size: 11)).foregroundColor(Theme.muted)
+                    Text("Saving the cleaned video… \(Int(p * 100))%").font(.system(size: 12)).foregroundColor(Theme.muted)
                 }
                 HStack {
                     Text("Cuts fall between words, never inside them. A list of every cut is saved alongside.")
-                        .font(.system(size: 10)).foregroundColor(Theme.faint)
+                        .font(.system(size: 11.5)).foregroundColor(Theme.faint)
                     Spacer()
                     Button("Cancel") { task?.cancel(); dismiss() }.buttonStyle(SecondaryButtonStyle())
                     Button { save() } label: { Label("Save cleaned video…", systemImage: "scissors") }
@@ -78,14 +78,14 @@ struct CleanupSheet: View {
         .padding(26)
         .frame(width: 560)
         .background(Theme.surface)
-        .preferredColorScheme(.dark)
+        .appLook()
         .task { await load() }
         .onChange(of: options) { _, _ in replan() }
     }
 
     @ViewBuilder private var summary: some View {
         if words == nil {
-            HStack(spacing: 8) { ProgressView().scaleEffect(0.6); Text("Reading the transcript…").font(.system(size: 12)).foregroundColor(Theme.muted) }
+            HStack(spacing: 8) { ProgressView().scaleEffect(0.6); Text("Reading the transcript…").font(.system(size: 13)).foregroundColor(Theme.muted) }
         } else if let p = plan {
             HStack(spacing: 22) {
                 stat(fmt(p.removedSeconds), "shorter")
@@ -99,7 +99,7 @@ struct CleanupSheet: View {
             .background(RoundedRectangle(cornerRadius: 10).fill(Theme.raised))
             if options.fillers && p.fillers == 0 {
                 Text("No ums or uhs in the transcript. The speech model often leaves them out, so pauses and false starts do most of the work.")
-                    .font(.system(size: 10)).foregroundColor(Theme.faint).fixedSize(horizontal: false, vertical: true)
+                    .font(.system(size: 11.5)).foregroundColor(Theme.faint).fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -108,7 +108,7 @@ struct CleanupSheet: View {
         Toggle(isOn: on) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.cream)
-                Text(detail).font(.system(size: 11)).foregroundColor(Theme.muted)
+                Text(detail).font(.system(size: 12)).foregroundColor(Theme.muted)
             }
         }
         .toggleStyle(.switch).tint(Theme.sand)
@@ -118,7 +118,7 @@ struct CleanupSheet: View {
     private func stat(_ n: String, _ label: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(n).font(Theme.display(20)).foregroundColor(Theme.cream).monospacedDigit()
-            Text(label).font(.system(size: 10)).foregroundColor(Theme.muted)
+            Text(label).font(.system(size: 11.5)).foregroundColor(Theme.muted)
         }
     }
 

@@ -14,7 +14,7 @@ struct ActionsPanel: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(clip.title)
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(Theme.ink)
                     .lineLimit(2)
 
                 HStack(spacing: 8) {
@@ -23,25 +23,25 @@ struct ActionsPanel: View {
                         .foregroundColor(clip.scoreColor)
                     Text("/ 100")
                         .font(.system(size: 14))
-                        .foregroundColor(Color.white.opacity(0.4))
+                        .foregroundColor(Theme.ink.opacity(0.55))
                 }
 
                 if !clip.scoreReason.isEmpty {
                     Text(clip.scoreReason)
-                        .font(.system(size: 12))
-                        .foregroundColor(Color.white.opacity(0.5))
+                        .font(.system(size: 13))
+                        .foregroundColor(Theme.ink.opacity(0.55))
                 }
             }
             .padding(.horizontal, 16)
             .padding(.top, 12)
 
-            Divider().background(Color.white.opacity(0.08)).padding(.horizontal, 16)
+            Divider().background(Theme.ink.opacity(0.08)).padding(.horizontal, 16)
 
             // Actions section
             VStack(alignment: .leading, spacing: 10) {
                 Text("ACTIONS")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(Color.white.opacity(0.3))
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .foregroundColor(Theme.ink.opacity(0.55))
 
                 // Export button
                 Button(action: { showExportOptions = true }) {
@@ -51,9 +51,9 @@ struct ActionsPanel: View {
                         Text("Export")
                             .font(.system(size: 15, weight: .bold))
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 11))
+                            .font(.system(size: 12))
                     }
-                    .foregroundColor(.black)
+                    .foregroundColor(Theme.onSand)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 13)
                     .background(Theme.sand)
@@ -69,7 +69,7 @@ struct ActionsPanel: View {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundColor(Theme.good)
                         Text("Exported successfully!")
-                            .font(.system(size: 12))
+                            .font(.system(size: 13))
                             .foregroundColor(Theme.good)
                     }
                 }
@@ -82,10 +82,10 @@ struct ActionsPanel: View {
                         Text("Share Clip")
                             .font(.system(size: 13))
                     }
-                    .foregroundColor(Color.white.opacity(0.8))
+                    .foregroundColor(Theme.ink.opacity(0.8))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
-                    .background(Color.white.opacity(0.08))
+                    .background(Theme.ink.opacity(0.08))
                     .cornerRadius(8)
                 }
                 .buttonStyle(.plain)
@@ -98,10 +98,10 @@ struct ActionsPanel: View {
                         Text("Copy Transcript")
                             .font(.system(size: 13))
                     }
-                    .foregroundColor(Color.white.opacity(0.8))
+                    .foregroundColor(Theme.ink.opacity(0.8))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
-                    .background(Color.white.opacity(0.08))
+                    .background(Theme.ink.opacity(0.08))
                     .cornerRadius(8)
                 }
                 .buttonStyle(.plain)
@@ -109,8 +109,8 @@ struct ActionsPanel: View {
                 // Rating
                 VStack(alignment: .leading, spacing: 6) {
                     Text("RATING")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(Color.white.opacity(0.3))
+                        .font(.system(size: 11.5, weight: .semibold))
+                        .foregroundColor(Theme.ink.opacity(0.55))
 
                     HStack(spacing: 6) {
                         StarRatingView(rating: clip.starRating, interactive: true) { star in

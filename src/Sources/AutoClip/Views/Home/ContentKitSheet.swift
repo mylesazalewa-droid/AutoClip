@@ -17,31 +17,31 @@ struct ContentKitSheet: View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(spacing: 7) {
                 Image(systemName: "diamond.fill").font(.system(size: 5)).foregroundColor(Theme.sand)
-                Text("ONE VIDEO, A WEEK OF POSTS").font(.system(size: 10, weight: .semibold)).tracking(2).foregroundColor(Theme.sand)
+                Text("ONE VIDEO, A WEEK OF POSTS").font(.system(size: 11.5, weight: .semibold)).tracking(2).foregroundColor(Theme.sand)
             }
             VStack(alignment: .leading, spacing: 4) {
                 Text("Content kit").font(Theme.display(28)).foregroundColor(Theme.cream)
-                Text(record?.title ?? "").font(.system(size: 12)).foregroundColor(Theme.muted).lineLimit(1)
+                Text(record?.title ?? "").font(.system(size: 13)).foregroundColor(Theme.muted).lineLimit(1)
             }
 
             if let r = result {
                 done(r)
             } else {
                 VStack(alignment: .leading, spacing: 10) {
-                    item($options.reels, "film.stack", "Every reel", "\(record?.drafts?.count ?? 0) reels, rendered and numbered")
-                    item($options.posts, "text.bubble", "Captions & hashtags", "A ready-to-paste post for each reel")
+                    item($options.reels, "film.stack", "Every clip", "\(record?.drafts?.count ?? 0) clips, rendered and numbered")
+                    item($options.posts, "text.bubble", "Captions & hashtags", "A ready-to-paste post for each clip")
                     item($options.notes, "doc.text", record?.kind == .sermon ? "Sermon notes" : "Notes",
                          record?.kind == .sermon ? "Outline, Scripture, quotes, small-group questions" : "Summary, key points, quotes, questions")
                     item($options.graphics, "photo.on.rectangle.angled", "Graphics", "Quote cards, a carousel and a thumbnail")
                     item($options.transcript, "captions.bubble", "Transcript & captions file", "Text with times, plus an .srt for the full video")
                 }
-                Text("Includes a posting plan. Reels you've already exported are copied, not rendered again.")
-                    .font(.system(size: 11)).foregroundColor(Theme.faint)
-                if let e = error { Text(e).font(.system(size: 11)).foregroundColor(Theme.danger) }
+                Text("Includes a posting plan. Clips you've already exported are copied, not rendered again.")
+                    .font(.system(size: 12)).foregroundColor(Theme.faint)
+                if let e = error { Text(e).font(.system(size: 12)).foregroundColor(Theme.danger) }
                 HStack {
                     if let s = status {
                         ProgressView().scaleEffect(0.6)
-                        Text(s).font(.system(size: 12)).foregroundColor(Theme.muted).lineLimit(1)
+                        Text(s).font(.system(size: 13)).foregroundColor(Theme.muted).lineLimit(1)
                     }
                     Spacer()
                     Button("Cancel") { dismiss() }.buttonStyle(SecondaryButtonStyle()).disabled(status != nil)
@@ -53,7 +53,7 @@ struct ContentKitSheet: View {
         .padding(26)
         .frame(width: 520)
         .background(Theme.surface)
-        .preferredColorScheme(.dark)
+        .appLook()
     }
 
     private func item(_ on: Binding<Bool>, _ icon: String, _ title: String, _ detail: String) -> some View {
@@ -63,14 +63,14 @@ struct ContentKitSheet: View {
                     .background(Circle().fill(Theme.sand.opacity(0.08)))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.cream)
-                    Text(detail).font(.system(size: 11)).foregroundColor(Theme.muted)
+                    Text(detail).font(.system(size: 12)).foregroundColor(Theme.muted)
                 }
                 Spacer()
                 Image(systemName: on.wrappedValue ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 18)).foregroundColor(on.wrappedValue ? Theme.sand : Theme.faint)
             }
             .padding(10)
-            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(on.wrappedValue ? Theme.raised : Color.white.opacity(0.02)))
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(on.wrappedValue ? Theme.raised : Theme.ink.opacity(0.02)))
             .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Theme.line, lineWidth: 1))
             .contentShape(Rectangle())
         }
@@ -84,9 +84,9 @@ struct ContentKitSheet: View {
                 Image(systemName: "checkmark.seal.fill").foregroundColor(Theme.good)
                 Text("Your kit is ready").font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.cream)
             }
-            Text(r.folder.path).font(.system(size: 11)).foregroundColor(Theme.muted).textSelection(.enabled)
+            Text(r.folder.path).font(.system(size: 12)).foregroundColor(Theme.muted).textSelection(.enabled)
             ForEach(r.skipped, id: \.self) { s in
-                Label(s, systemImage: "exclamationmark.triangle").font(.system(size: 11)).foregroundColor(Theme.warn)
+                Label(s, systemImage: "exclamationmark.triangle").font(.system(size: 12)).foregroundColor(Theme.warn)
                     .fixedSize(horizontal: false, vertical: true)
             }
             HStack {

@@ -19,9 +19,9 @@ struct AutopilotCard: View {
                             Text(item.record.title).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.text).lineLimit(1)
                             HStack(spacing: 8) {
                                 Text("\(item.record.drafts?.count ?? 0) clips · \(Date(timeIntervalSince1970: item.event.date).formatted(date: .abbreviated, time: .shortened))")
-                                    .font(.system(size: 11)).foregroundColor(Theme.muted)
+                                    .font(.system(size: 12)).foregroundColor(Theme.muted)
                                 if let n = item.event.flagged, n > 0 {
-                                    Label("\(n) to double-check", systemImage: "exclamationmark.shield").font(.system(size: 11)).foregroundColor(Theme.warn)
+                                    Label("\(n) to double-check", systemImage: "exclamationmark.shield").font(.system(size: 12)).foregroundColor(Theme.warn)
                                 }
                             }
                         }
@@ -33,7 +33,7 @@ struct AutopilotCard: View {
                         }
                         .buttonStyle(PrimaryButtonStyle(compact: true))
                         Button { auto.dismissWaiting(item.record.id) } label: { Image(systemName: "xmark") }
-                            .buttonStyle(.plain).font(.system(size: 11)).foregroundColor(Theme.faint).help("Hide this")
+                            .buttonStyle(.plain).font(.system(size: 12)).foregroundColor(Theme.faint).help("Hide this")
                     }
                     .padding(12)
                     .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Theme.surface))
@@ -59,10 +59,10 @@ struct GuardBadge: View {
                     .foregroundColor(Theme.warn)
                     .help("Context Guard: this clip might say something the speaker didn't mean. Open it to see why.")
             } else if minor > 0 {
-                Image(systemName: "shield").foregroundColor(Color.white.opacity(0.35)).help("Context Guard has \(minor) small note\(minor == 1 ? "" : "s"). Open the reel to see.")
+                Image(systemName: "shield").foregroundColor(Theme.ink.opacity(0.55)).help("Context Guard has \(minor) small note\(minor == 1 ? "" : "s"). Open the clip to see.")
             }
         }
-        .font(.system(size: 10, weight: .medium))
+        .font(.system(size: 11.5, weight: .medium))
         .task(id: ContextGuard.signature(draft)) {
             let d = draft
             let found = await Task.detached(priority: .utility) { ContextGuard.quick(d) }.value
@@ -91,12 +91,12 @@ struct ContextGuardCard: View {
             HStack(spacing: 8) {
                 Image(systemName: issues.contains(where: \.serious) ? "exclamationmark.shield.fill" : "checkmark.shield")
                     .foregroundColor(issues.contains(where: \.serious) ? Theme.warn : Theme.good)
-                Text("CONTEXT GUARD").font(.system(size: 10, weight: .semibold)).tracking(1).foregroundColor(Color.white.opacity(0.5))
-                Text(headline).font(.system(size: 11)).foregroundColor(Color.white.opacity(0.7)).lineLimit(1)
+                Text("CONTEXT GUARD").font(.system(size: 11.5, weight: .semibold)).tracking(1).foregroundColor(Theme.ink.opacity(0.55))
+                Text(headline).font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.7)).lineLimit(1)
                 Spacer(minLength: 4)
                 if !issues.isEmpty || review != nil {
                     Button { open.toggle() } label: { Image(systemName: open ? "chevron.up" : "chevron.down") }
-                        .buttonStyle(.plain).font(.system(size: 10)).foregroundColor(Color.white.opacity(0.5))
+                        .buttonStyle(.plain).font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
                 }
             }
             if open {
@@ -116,12 +116,12 @@ struct ContextGuardCard: View {
                 if busy { ProgressView().scaleEffect(0.5).frame(width: 14, height: 14) }
                 Spacer(minLength: 0)
             }
-            if let error { Text(error).font(.system(size: 10)).foregroundColor(Theme.danger).fixedSize(horizontal: false, vertical: true) }
+            if let error { Text(error).font(.system(size: 11.5)).foregroundColor(Theme.danger).fixedSize(horizontal: false, vertical: true) }
             Text("A second pair of eyes, not a final word. You know what was meant.")
-                .font(.system(size: 9)).foregroundColor(Color.white.opacity(0.35))
+                .font(.system(size: 11)).foregroundColor(Theme.ink.opacity(0.55))
         }
         .padding(12)
-        .background(Color.white.opacity(0.04)).cornerRadius(10)
+        .background(Theme.ink.opacity(0.04)).cornerRadius(10)
         .task(id: ContextGuard.signature(draft)) {
             let d = draft
             issues = await Task.detached(priority: .userInitiated) { ContextGuard.quick(d) }.value
@@ -137,10 +137,10 @@ struct ContextGuardCard: View {
 
     private func row(_ issue: ContextGuard.Issue) -> some View {
         HStack(alignment: .top, spacing: 8) {
-            Circle().fill(issue.serious ? Theme.warn : Color.white.opacity(0.3)).frame(width: 6, height: 6).padding(.top, 5)
+            Circle().fill(issue.serious ? Theme.warn : Theme.ink.opacity(0.3)).frame(width: 6, height: 6).padding(.top, 5)
             VStack(alignment: .leading, spacing: 2) {
-                Text(issue.title).font(.system(size: 12, weight: .medium)).foregroundColor(.white).fixedSize(horizontal: false, vertical: true)
-                Text(issue.detail).font(.system(size: 11)).foregroundColor(Color.white.opacity(0.55)).fixedSize(horizontal: false, vertical: true)
+                Text(issue.title).font(.system(size: 13, weight: .medium)).foregroundColor(Theme.ink).fixedSize(horizontal: false, vertical: true)
+                Text(issue.detail).font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.55)).fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 4)
             if let fix = issue.fix, let label = issue.fixLabel {
@@ -151,18 +151,18 @@ struct ContextGuardCard: View {
 
     @ViewBuilder private func aiResult(_ r: ReelDraft.GuardReview) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1)
+            Rectangle().fill(Theme.ink.opacity(0.08)).frame(height: 1)
             HStack(spacing: 6) {
                 Image(systemName: r.verdict == "clear" ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
-                    .font(.system(size: 11)).foregroundColor(r.verdict == "clear" ? Theme.good : Theme.warn)
+                    .font(.system(size: 12)).foregroundColor(r.verdict == "clear" ? Theme.good : Theme.warn)
                 Text(r.summary ?? (r.verdict == "clear" ? "AI found this fair to the message." : "AI found something to look at."))
-                    .font(.system(size: 12)).foregroundColor(.white).fixedSize(horizontal: false, vertical: true)
+                    .font(.system(size: 13)).foregroundColor(Theme.ink).fixedSize(horizontal: false, vertical: true)
             }
             ForEach(Array((r.issues ?? []).enumerated()), id: \.offset) { _, item in
                 HStack(alignment: .top, spacing: 8) {
                     VStack(alignment: .leading, spacing: 2) {
-                        if let q = item.quote { Text("“\(q)”").font(.system(size: 11, weight: .medium)).foregroundColor(.white).fixedSize(horizontal: false, vertical: true) }
-                        if let w = item.why { Text(w).font(.system(size: 11)).foregroundColor(Color.white.opacity(0.55)).fixedSize(horizontal: false, vertical: true) }
+                        if let q = item.quote { Text("“\(q)”").font(.system(size: 12, weight: .medium)).foregroundColor(Theme.ink).fixedSize(horizontal: false, vertical: true) }
+                        if let w = item.why { Text(w).font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.55)).fixedSize(horizontal: false, vertical: true) }
                     }
                     Spacer(minLength: 4)
                     if let i = clipIndex(item), item.fix == "add_after" || item.fix == "add_before" {
@@ -174,14 +174,14 @@ struct ContextGuardCard: View {
             }
             ForEach(Array((r.verses ?? []).enumerated()), id: \.offset) { _, v in
                 HStack(alignment: .top, spacing: 6) {
-                    Image(systemName: verseIcon(v.status)).font(.system(size: 10)).foregroundColor(v.status == "different" ? Theme.warn : Color.white.opacity(0.5))
+                    Image(systemName: verseIcon(v.status)).font(.system(size: 11.5)).foregroundColor(v.status == "different" ? Theme.warn : Theme.ink.opacity(0.5))
                     Text("\(v.reference ?? "A verse"): \(verseText(v.status))\(v.note.map { ". \($0)" } ?? "")")
-                        .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.65)).fixedSize(horizontal: false, vertical: true)
+                        .font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.65)).fixedSize(horizontal: false, vertical: true)
                 }
             }
             if !(r.verses ?? []).isEmpty {
                 Text("AI can misremember Bible wording. Check the verse itself before relying on this.")
-                    .font(.system(size: 9)).foregroundColor(Color.white.opacity(0.35))
+                    .font(.system(size: 11)).foregroundColor(Theme.ink.opacity(0.55))
             }
         }
     }
@@ -215,12 +215,12 @@ struct EditorKeysHelp: View {
     ]
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Keyboard shortcuts").font(.system(size: 13, weight: .semibold)).foregroundColor(.white).padding(.bottom, 4)
+            Text("Keyboard shortcuts").font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.ink).padding(.bottom, 4)
             ForEach(keys, id: \.0) { k, v in
                 HStack(spacing: 10) {
-                    Text(k).font(.system(size: 10, weight: .semibold, design: .monospaced)).foregroundColor(Theme.sand)
+                    Text(k).font(.system(size: 11.5, weight: .semibold, design: .monospaced)).foregroundColor(Theme.sand)
                         .frame(width: 84, alignment: .leading)
-                    Text(v).font(.system(size: 11)).foregroundColor(Color.white.opacity(0.75))
+                    Text(v).font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.75))
                 }
             }
         }

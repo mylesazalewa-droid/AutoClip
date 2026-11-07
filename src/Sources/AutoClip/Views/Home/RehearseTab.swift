@@ -145,7 +145,7 @@ struct RehearseTab: View {
     private var input: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
-                Text(source ?? "Your notes").font(.system(size: 12, weight: .semibold)).foregroundColor(Theme.cream).lineLimit(1)
+                Text(source ?? "Your notes").font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.cream).lineLimit(1)
                 Spacer()
                 Button("Open a text file…") { openFile() }.controlSize(.small)
                 if !recordings.isEmpty {
@@ -160,7 +160,7 @@ struct RehearseTab: View {
             ZStack(alignment: .topLeading) {
                 TextEditor(text: $text)
                     .font(.system(size: 13)).scrollContentBackground(.hidden).padding(8)
-                    .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.05)))
+                    .background(RoundedRectangle(cornerRadius: 10).fill(Theme.ink.opacity(0.05)))
                     .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.line))
                 if empty {
                     Text("Paste your sermon notes or manuscript here.").font(.system(size: 13)).foregroundColor(Theme.faint)
@@ -168,12 +168,12 @@ struct RehearseTab: View {
                 }
             }
             if let status {
-                HStack(spacing: 6) { ProgressView().scaleEffect(0.5); Text(status).font(.system(size: 11)).foregroundColor(Theme.muted) }
+                HStack(spacing: 6) { ProgressView().scaleEffect(0.5); Text(status).font(.system(size: 12)).foregroundColor(Theme.muted) }
             } else if let error {
-                Text(error).font(.system(size: 11)).foregroundColor(Theme.danger).fixedSize(horizontal: false, vertical: true)
+                Text(error).font(.system(size: 12)).foregroundColor(Theme.danger).fixedSize(horizontal: false, vertical: true)
             }
             HStack {
-                Text("Stays on this Mac unless you ask AI to read it.").font(.system(size: 10)).foregroundColor(Theme.faint)
+                Text("Stays on this Mac unless you ask AI to read it.").font(.system(size: 11.5)).foregroundColor(Theme.faint)
                 Spacer()
                 Button { runReview() } label: { Label(review == nil || reviewedText != text ? "Ask AI what to strengthen" : "Ask AI again", systemImage: "sparkles") }
                     .buttonStyle(PrimaryButtonStyle(compact: true))
@@ -195,10 +195,10 @@ struct RehearseTab: View {
                     stat("\(s.verses.count)", s.verses.count == 1 ? "verse named" : "verses named")
                 }
                 if !s.verses.isEmpty {
-                    Text(s.verses.joined(separator: " · ")).font(.system(size: 11)).foregroundColor(Theme.muted).lineLimit(2)
+                    Text(s.verses.joined(separator: " · ")).font(.system(size: 12)).foregroundColor(Theme.muted).lineLimit(2)
                 }
                 if let review, reviewedText == text { aiCards(review) }
-                else if review != nil { Text("You've changed the text since the AI read it.").font(.system(size: 11)).foregroundColor(Theme.warn) }
+                else if review != nil { Text("You've changed the text since the AI read it.").font(.system(size: 12)).foregroundColor(Theme.warn) }
                 lines("Could open a clip", "These stand on their own and grab attention, judged by their wording only.", s.openers, icon: "star.fill", color: Theme.good)
                 lines("Hard to clip on their own", "These lean on what came before, so viewers would be lost if a clip started here.", s.leaning, icon: "link", color: Theme.warn)
                 lines("Long sentences", "Over 35 words is a lot to follow by ear. Consider splitting them.", s.longLines, icon: "text.alignleft", color: Theme.muted)
@@ -217,7 +217,7 @@ struct RehearseTab: View {
             ForEach(Array((r.strengthen ?? []).enumerated()), id: \.offset) { _, item in
                 card(icon: "arrow.up.right", color: Theme.sand, line: item.line, why: item.why, suggestion: item.suggestion)
             }
-            Text("Suggestions are only ideas. The message is yours.").font(.system(size: 10)).foregroundColor(Theme.faint)
+            Text("Suggestions are only ideas. The message is yours.").font(.system(size: 11.5)).foregroundColor(Theme.faint)
         }
         .padding(14)
         .background(RoundedRectangle(cornerRadius: 12).fill(Theme.sand.opacity(0.07)))
@@ -226,22 +226,22 @@ struct RehearseTab: View {
 
     private func labelled(_ title: String, _ text: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(title.uppercased()).font(.system(size: 9, weight: .semibold)).tracking(1).foregroundColor(Theme.faint)
-            Text(text).font(.system(size: 12)).foregroundColor(Theme.text).fixedSize(horizontal: false, vertical: true)
+            Text(title.uppercased()).font(.system(size: 11, weight: .semibold)).tracking(1).foregroundColor(Theme.faint)
+            Text(text).font(.system(size: 13)).foregroundColor(Theme.text).fixedSize(horizontal: false, vertical: true)
         }
     }
 
     private func card(icon: String, color: Color, line: String?, why: String?, suggestion: String?) -> some View {
         HStack(alignment: .top, spacing: 8) {
-            Image(systemName: icon).font(.system(size: 10)).foregroundColor(color).padding(.top, 3)
+            Image(systemName: icon).font(.system(size: 11.5)).foregroundColor(color).padding(.top, 3)
             VStack(alignment: .leading, spacing: 4) {
-                if let line { Text("“\(line)”").font(.system(size: 12, weight: .medium)).foregroundColor(Theme.cream).fixedSize(horizontal: false, vertical: true) }
-                if let why { Text(why).font(.system(size: 11)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true) }
+                if let line { Text("“\(line)”").font(.system(size: 13, weight: .medium)).foregroundColor(Theme.cream).fixedSize(horizontal: false, vertical: true) }
+                if let why { Text(why).font(.system(size: 12)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true) }
                 if let suggestion {
                     HStack(alignment: .top, spacing: 6) {
-                        Text("Maybe: \(suggestion)").font(.system(size: 12)).foregroundColor(Theme.sand).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+                        Text("Maybe: \(suggestion)").font(.system(size: 13)).foregroundColor(Theme.sand).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
                         Button { copy(suggestion) } label: { Image(systemName: "doc.on.doc") }
-                            .buttonStyle(.plain).font(.system(size: 10)).foregroundColor(Theme.muted).help("Copy")
+                            .buttonStyle(.plain).font(.system(size: 11.5)).foregroundColor(Theme.muted).help("Copy")
                     }
                 }
             }
@@ -252,11 +252,11 @@ struct RehearseTab: View {
         if !list.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
                 Text(title).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.cream)
-                Text(note).font(.system(size: 11)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                Text(note).font(.system(size: 12)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
                 ForEach(list) { l in
                     HStack(alignment: .top, spacing: 8) {
-                        Image(systemName: icon).font(.system(size: 9)).foregroundColor(color).padding(.top, 3)
-                        Text(l.text).font(.system(size: 12)).foregroundColor(Theme.text).fixedSize(horizontal: false, vertical: true)
+                        Image(systemName: icon).font(.system(size: 11)).foregroundColor(color).padding(.top, 3)
+                        Text(l.text).font(.system(size: 13)).foregroundColor(Theme.text).fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
@@ -266,7 +266,7 @@ struct RehearseTab: View {
     private func stat(_ value: String, _ label: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(value).font(Theme.display(22, weight: .medium)).foregroundColor(Theme.cream).lineLimit(1)
-            Text(label).font(.system(size: 10)).foregroundColor(Theme.muted).lineLimit(1)
+            Text(label).font(.system(size: 11.5)).foregroundColor(Theme.muted).lineLimit(1)
         }
         .padding(12).frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 10).fill(Theme.surface))

@@ -101,7 +101,7 @@ struct ReframeWorkspace<Advanced: View>: View {
                 beforeImage.frame(maxWidth: 460)
                 if let p = piece, let first = p.sentences.first, let last = p.sentences.last, last.end - first.start > 1 {
                     HStack(spacing: 8) {
-                        Image(systemName: "clock").font(.system(size: 10)).foregroundColor(Theme.muted)
+                        Image(systemName: "clock").font(.system(size: 11.5)).foregroundColor(Theme.muted)
                         Slider(value: $moment, in: first.start...last.end) { editing in
                             if !editing { Task { await show(moment) } }
                         }
@@ -122,9 +122,9 @@ struct ReframeWorkspace<Advanced: View>: View {
     }
 
     private func label(_ s: String) -> some View {
-        Text(s).font(.system(size: 12, weight: .medium)).foregroundColor(Theme.cream)
+        Text(s).font(.system(size: 13, weight: .medium)).foregroundColor(Theme.cream)
             .padding(.horizontal, 14).padding(.vertical, 6)
-            .background(Capsule().fill(Color.white.opacity(0.1)))
+            .background(Capsule().fill(Theme.ink.opacity(0.1)))
     }
 
     @ViewBuilder private var beforeImage: some View {
@@ -135,7 +135,7 @@ struct ReframeWorkspace<Advanced: View>: View {
                     if canReframe {
                         GeometryReader { geo in
                             ForEach(Array(targets.enumerated()), id: \.offset) { _, box in
-                                RoundedRectangle(cornerRadius: 4).stroke(Color.white.opacity(0.55), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                                RoundedRectangle(cornerRadius: 4).stroke(Theme.ink.opacity(0.55), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
                                     .frame(width: box.width * geo.size.width, height: box.height * geo.size.height)
                                     .position(x: box.midX * geo.size.width, y: (1 - box.midY) * geo.size.height)
                                     .allowsHitTesting(false)
@@ -157,7 +157,7 @@ struct ReframeWorkspace<Advanced: View>: View {
                                     .frame(width: w, height: geo.size.height)
                                     .position(x: cx, y: geo.size.height / 2)
                                     .allowsHitTesting(false)
-                                Label("AI", systemImage: "sparkles").font(.system(size: 9, weight: .bold)).foregroundColor(Theme.bg)
+                                Label("AI", systemImage: "sparkles").font(.system(size: 11, weight: .bold)).foregroundColor(Theme.onSand)
                                     .padding(.horizontal, 7).padding(.vertical, 3)
                                     .background(Capsule().fill(Theme.sand))
                                     .position(x: cx, y: geo.size.height - 16)
@@ -168,7 +168,7 @@ struct ReframeWorkspace<Advanced: View>: View {
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         } else {
-            RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.05)).aspectRatio(16 / 9, contentMode: .fit)
+            RoundedRectangle(cornerRadius: 10).fill(Theme.ink.opacity(0.05)).aspectRatio(16 / 9, contentMode: .fit)
                 .overlay(ProgressView().controlSize(.small))
         }
     }
@@ -214,14 +214,14 @@ struct ReframeWorkspace<Advanced: View>: View {
 
     @ViewBuilder private var question: some View {
         if !canReframe, frame != nil {
-            Text("This reel keeps the video's shape, so there's nothing to reframe. Pick 9:16, 4:5 or 1:1 on the Edit tab to choose a framing.")
-                .font(.system(size: 12)).foregroundColor(Theme.muted).multilineTextAlignment(.center)
+            Text("This clip keeps the video's shape, so there's nothing to reframe. Pick 9:16, 4:5 or 1:1 on the Edit tab to choose a framing.")
+                .font(.system(size: 13)).foregroundColor(Theme.muted).multilineTextAlignment(.center)
         } else if let crew {
             VStack(spacing: 12) {
                 Text(crew.count >= 2 ? "\(crew.count) people found. Who should this follow?" : framing?.mode == "person" ? "Following who you picked." : crew.count == 1 ? "One person found. The frame follows them." : "No one found clearly.")
                     .font(Theme.display(17)).foregroundColor(Theme.cream)
                 Text("Wrong person or missed someone? Click them in the picture. Use the slider to find a clearer moment.")
-                    .font(.system(size: 11)).foregroundColor(Theme.muted)
+                    .font(.system(size: 12)).foregroundColor(Theme.muted)
                 if crew.count < 2, framing != nil {
                     Button("Back to whoever's talking") { apply(nil) }.controlSize(.small)
                 }
@@ -243,14 +243,14 @@ struct ReframeWorkspace<Advanced: View>: View {
                     }
                     if draft.pieces.count > 1 {
                         Toggle("Use for every clip", isOn: $everyClip).toggleStyle(.checkbox)
-                            .font(.system(size: 11)).foregroundColor(Theme.muted)
+                            .font(.system(size: 12)).foregroundColor(Theme.muted)
                     }
                 }
             }
         } else {
             HStack(spacing: 8) {
                 ProgressView().controlSize(.small)
-                Text("Looking for people…").font(.system(size: 12)).foregroundColor(Theme.muted)
+                Text("Looking for people…").font(.system(size: 13)).foregroundColor(Theme.muted)
             }
         }
     }
@@ -273,12 +273,12 @@ struct ReframeTile<Content: View>: View {
     var body: some View {
         Button(action: action) {
             VStack(spacing: 6) {
-                ZStack { Color.white.opacity(0.06); content }
+                ZStack { Theme.ink.opacity(0.06); content }
                     .frame(width: 64, height: 64)
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(selected ? Theme.cream : Color.white.opacity(0.12), lineWidth: selected ? 2 : 1))
-                Text(title).font(.system(size: 10, weight: selected ? .semibold : .regular))
+                        .stroke(selected ? Theme.cream : Theme.ink.opacity(0.12), lineWidth: selected ? 2 : 1))
+                Text(title).font(.system(size: 11.5, weight: selected ? .semibold : .regular))
                     .foregroundColor(selected ? Theme.cream : Theme.muted).lineLimit(1).fixedSize()
             }
         }
@@ -311,7 +311,7 @@ struct ReelStrip: View {
             }
             .frame(height: 48)
             .padding(6)
-            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.06)))
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Theme.ink.opacity(0.06)))
             .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Theme.line, lineWidth: 1))
 
             GeometryReader { geo in
@@ -323,7 +323,7 @@ struct ReelStrip: View {
                         let x = CGFloat(i) * step
                         let rect = CGRect(x: x, y: (size.height - h) / 2, width: max(1.5, step * 0.55), height: h)
                         let played = x / size.width <= progress
-                        ctx.fill(Path(roundedRect: rect, cornerRadius: 1), with: .color(Color.white.opacity(played ? 0.95 : 0.3)))
+                        ctx.fill(Path(roundedRect: rect, cornerRadius: 1), with: .color(Theme.ink.opacity(played ? 0.95 : 0.3)))
                     }
                 }
                 .overlay(alignment: .leading) {
@@ -336,7 +336,7 @@ struct ReelStrip: View {
             }
             .frame(height: 52)
             .padding(.horizontal, 10)
-            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.06)))
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Theme.ink.opacity(0.06)))
         }
         .task(id: token) {
             guard let asset, duration > 0 else { return }
@@ -367,7 +367,7 @@ struct CaptionPanel: View {
             HStack(spacing: 18) {
                 ForEach([Tab.presets, .font, .effects], id: \.self) { t in
                     Button(t.rawValue) { tab = t }.buttonStyle(.plain)
-                        .font(.system(size: 12, weight: tab == t ? .semibold : .regular))
+                        .font(.system(size: 13, weight: tab == t ? .semibold : .regular))
                         .foregroundColor(tab == t ? Theme.cream : Theme.muted)
                 }
                 Spacer()
@@ -412,14 +412,14 @@ struct CaptionPanel: View {
     private func tile<C: View>(selected: Bool, @ViewBuilder content: () -> C) -> some View {
         content()
             .frame(maxWidth: .infinity).frame(height: 44)
-            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.white.opacity(0.07)))
+            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Theme.ink.opacity(0.07)))
             .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .stroke(selected ? Theme.cream : Color.clear, lineWidth: 2))
             .contentShape(Rectangle())
     }
 
     private func name(_ s: String) -> some View {
-        Text(s).font(.system(size: 10)).foregroundColor(Theme.muted).padding(.top, -6)
+        Text(s).font(.system(size: 11.5)).foregroundColor(Theme.muted).padding(.top, -6)
     }
 }
 

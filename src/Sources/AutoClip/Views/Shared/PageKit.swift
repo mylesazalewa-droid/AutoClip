@@ -16,11 +16,11 @@ struct PageHeader<Trailing: View>: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 7) {
                     Image(systemName: "diamond.fill").font(.system(size: 5)).foregroundColor(Theme.sand)
-                    Text(eyebrow.uppercased()).font(.system(size: 10, weight: .semibold)).tracking(2).foregroundColor(Theme.sand)
+                    Text(eyebrow.uppercased()).font(.system(size: 11.5, weight: .semibold)).tracking(2).foregroundColor(Theme.sand)
                 }
-                Text(title).font(Theme.display(36, weight: .medium)).foregroundColor(.white).lineLimit(2)
+                Text(title).font(Theme.display(36, weight: .medium)).foregroundColor(Theme.ink).lineLimit(2)
                 if let subtitle {
-                    Text(subtitle).font(.system(size: 12)).foregroundColor(Theme.muted).lineLimit(2)
+                    Text(subtitle).font(.system(size: 13)).foregroundColor(Theme.muted).lineLimit(2)
                 }
             }
             Spacer(minLength: 12)
@@ -51,7 +51,7 @@ struct PillTabs<T: Hashable>: View {
             }
         }
         .padding(4)
-        .background(Capsule().fill(Color.white.opacity(0.04)))
+        .background(Capsule().fill(Theme.ink.opacity(0.04)))
         .overlay(Capsule().stroke(Theme.line, lineWidth: 1))
         .fixedSize()
     }
@@ -70,7 +70,7 @@ private struct PillTab: View {
                 .font(.system(size: compact ? 11 : 12, weight: active ? .semibold : .medium))
                 .foregroundColor(active ? Theme.bg : hover ? Theme.text : Theme.muted)
                 .padding(.horizontal, compact ? 10 : 14).padding(.vertical, compact ? 4 : 6)
-                .background(Capsule().fill(active ? Theme.sand : hover ? Color.white.opacity(0.06) : Color.clear))
+                .background(Capsule().fill(active ? Theme.sand : hover ? Theme.ink.opacity(0.06) : Color.clear))
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -86,16 +86,16 @@ struct SearchPill: View {
 
     var body: some View {
         HStack(spacing: 7) {
-            Image(systemName: "magnifyingglass").font(.system(size: 11)).foregroundColor(Theme.faint)
-            TextField(placeholder, text: $text).textFieldStyle(.plain).font(.system(size: 12)).foregroundColor(Theme.text)
+            Image(systemName: "magnifyingglass").font(.system(size: 12)).foregroundColor(Theme.faint)
+            TextField(placeholder, text: $text).textFieldStyle(.plain).font(.system(size: 13)).foregroundColor(Theme.text)
             if !text.isEmpty {
-                Button { text = "" } label: { Image(systemName: "xmark.circle.fill").font(.system(size: 11)).foregroundColor(Theme.faint) }
+                Button { text = "" } label: { Image(systemName: "xmark.circle.fill").font(.system(size: 12)).foregroundColor(Theme.faint) }
                     .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, 12).padding(.vertical, 7)
         .frame(width: width)
-        .background(Capsule().fill(Color.white.opacity(0.05)))
+        .background(Capsule().fill(Theme.ink.opacity(0.05)))
         .overlay(Capsule().stroke(Theme.line, lineWidth: 1))
     }
 }
@@ -141,18 +141,18 @@ struct SidebarRow: View {
                     ReelThumbnailView(path: thumb).frame(width: 56, height: 34).clipped()
                 } else {
                     LinearGradient(colors: [Theme.navy, Theme.charcoal], startPoint: .topLeading, endPoint: .bottomTrailing)
-                    Image(systemName: icon).font(.system(size: 12)).foregroundColor(Theme.sand.opacity(0.8))
+                    Image(systemName: icon).font(.system(size: 13)).foregroundColor(Theme.sand.opacity(0.8))
                 }
             }
             .frame(width: 56, height: 34)
             .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).stroke(Color.white.opacity(0.08), lineWidth: 1))
+            .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).stroke(Theme.ink.opacity(0.08), lineWidth: 1))
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.system(size: 12, weight: selected ? .semibold : .medium))
+                Text(title).font(.system(size: 13, weight: selected ? .semibold : .medium))
                     .foregroundColor(selected ? Theme.cream : Theme.text.opacity(0.85))
                     .lineLimit(2).multilineTextAlignment(.leading)
                 if let detail {
-                    Text(detail).font(.system(size: 10)).foregroundColor(selected ? Theme.sand : Theme.faint).lineLimit(1)
+                    Text(detail).font(.system(size: 11.5)).foregroundColor(selected ? Theme.sand : Theme.faint).lineLimit(1)
                 }
             }
             Spacer(minLength: 0)
@@ -160,7 +160,7 @@ struct SidebarRow: View {
         .padding(.horizontal, 8).padding(.vertical, 7)
         .background(
             RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .fill(selected ? Theme.raised : hover ? Color.white.opacity(0.035) : Color.clear)
+                .fill(selected ? Theme.raised : hover ? Theme.ink.opacity(0.035) : Color.clear)
         )
         .overlay(alignment: .leading) {
             Capsule().fill(selected ? Theme.sand : Color.clear).frame(width: 3, height: 22).offset(x: -1)
@@ -179,10 +179,10 @@ struct IconPillButton: View {
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: icon).font(.system(size: 11, weight: .semibold))
+            Image(systemName: icon).font(.system(size: 12, weight: .semibold))
                 .foregroundColor(hover ? Theme.cream : Theme.sand)
                 .frame(width: 26, height: 26)
-                .background(Circle().fill(Color.white.opacity(hover ? 0.1 : 0.05)))
+                .background(Circle().fill(Theme.ink.opacity(hover ? 0.1 : 0.05)))
                 .overlay(Circle().stroke(Theme.line, lineWidth: 1))
         }
         .buttonStyle(.plain)

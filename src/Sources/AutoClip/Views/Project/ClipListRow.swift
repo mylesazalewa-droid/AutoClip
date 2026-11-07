@@ -18,7 +18,7 @@ struct ClipListRow: View {
                     Theme.raised
                     Image(systemName: "film")
                         .font(.system(size: 14))
-                        .foregroundColor(Color.white.opacity(0.2))
+                        .foregroundColor(Theme.ink.opacity(0.55))
                 }
             }
             .frame(width: 56, height: 64)
@@ -29,20 +29,20 @@ struct ClipListRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(clip.title)
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.white)
+                    .foregroundColor(Theme.ink)
                     .lineLimit(1)
 
                 HStack(spacing: 6) {
                     Text(clip.formattedDuration)
-                        .font(.system(size: 11))
-                        .foregroundColor(Color.white.opacity(0.5))
+                        .font(.system(size: 12))
+                        .foregroundColor(Theme.ink.opacity(0.55))
                     Text(clip.formattedStartTime)
-                        .font(.system(size: 11))
-                        .foregroundColor(Color.white.opacity(0.5))
+                        .font(.system(size: 12))
+                        .foregroundColor(Theme.ink.opacity(0.55))
 
                     if !clip.tags.isEmpty, let tag = clip.tags.first {
                         Text(tag)
-                            .font(.system(size: 10, weight: .medium))
+                            .font(.system(size: 11.5, weight: .medium))
                             .foregroundColor(Theme.warn)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
@@ -58,8 +58,8 @@ struct ClipListRow: View {
 
             // Excerpt
             Text(clip.transcriptText)
-                .font(.system(size: 11))
-                .foregroundColor(Color.white.opacity(0.4))
+                .font(.system(size: 12))
+                .foregroundColor(Theme.ink.opacity(0.55))
                 .lineLimit(2)
                 .frame(maxWidth: 220, alignment: .leading)
 
@@ -67,8 +67,8 @@ struct ClipListRow: View {
             ScoreBadge(score: clip.score, size: 32)
 
             Image(systemName: clip.isLiked ? "heart.fill" : "heart")
-                .font(.system(size: 12))
-                .foregroundColor(clip.isLiked ? Theme.danger : Color.white.opacity(0.3))
+                .font(.system(size: 13))
+                .foregroundColor(clip.isLiked ? Theme.danger : Theme.ink.opacity(0.3))
                 .frame(width: 28, height: 28)
                 .contentShape(Rectangle())
                 .onTapGesture {

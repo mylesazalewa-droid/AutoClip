@@ -30,7 +30,7 @@ struct ResultsTab: View {
                                 .buttonStyle(SecondaryButtonStyle(compact: true))
                         }
                     }
-                    if let note = store.refreshNote { Text(note).font(.system(size: 11)).foregroundColor(Theme.muted) }
+                    if let note = store.refreshNote { Text(note).font(.system(size: 12)).foregroundColor(Theme.muted) }
                     ForEach(store.shorts) { row($0) }
                 }
             }
@@ -58,8 +58,8 @@ struct ResultsTab: View {
 
     private func stat(_ value: String, _ label: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(value).font(Theme.display(30, weight: .medium)).foregroundColor(.white).monospacedDigit()
-            Text(label).font(.system(size: 11)).foregroundColor(Theme.muted)
+            Text(value).font(Theme.display(30, weight: .medium)).foregroundColor(Theme.ink).monospacedDigit()
+            Text(label).font(.system(size: 12)).foregroundColor(Theme.muted)
         }
     }
 
@@ -68,10 +68,10 @@ struct ResultsTab: View {
         AssessCard(title: "What's working", subtitle: "Early patterns from your own shorts. They show what went together, not proof of why.") {
             if needed > 0 {
                 Text("Add average watch time and length for \(needed) more \(needed == 1 ? "short" : "shorts") and patterns can start to show. With fewer than that, any difference is mostly chance.")
-                    .font(.system(size: 12)).foregroundColor(Theme.text).fixedSize(horizontal: false, vertical: true)
+                    .font(.system(size: 13)).foregroundColor(Theme.text).fixedSize(horizontal: false, vertical: true)
             } else if insights.isEmpty {
                 Text("No clear pattern yet. Your shorts are performing about the same, or each group needs at least \(ShortResults.enough) shorts to compare.")
-                    .font(.system(size: 12)).foregroundColor(Theme.text).fixedSize(horizontal: false, vertical: true)
+                    .font(.system(size: 13)).foregroundColor(Theme.text).fixedSize(horizontal: false, vertical: true)
             } else {
                 ForEach(insights) { i in
                     HStack(alignment: .firstTextBaseline, spacing: 12) {
@@ -79,7 +79,7 @@ struct ResultsTab: View {
                             .foregroundColor(i.difference > 0 ? Theme.good : Theme.warn).monospacedDigit().frame(width: 72, alignment: .leading)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(i.title).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.cream)
-                            Text("\(i.detail) \(i.count) shorts compared with \(i.others).").font(.system(size: 11)).foregroundColor(Theme.muted)
+                            Text("\(i.detail) \(i.count) shorts compared with \(i.others).").font(.system(size: 12)).foregroundColor(Theme.muted)
                         }
                     }
                 }
@@ -102,9 +102,9 @@ struct ResultsTab: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(s.title.isEmpty ? "Untitled short" : s.title).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.cream).lineLimit(1)
                         Text("\(s.platform) · \(s.postedAt.formatted(date: .abbreviated, time: .omitted))\(s.version.map { " · \($0) version" } ?? "")")
-                            .font(.system(size: 11)).foregroundColor(Theme.muted)
+                            .font(.system(size: 12)).foregroundColor(Theme.muted)
                         if !s.opening.isEmpty {
-                            Text("“\(s.opening)”").font(.system(size: 11)).foregroundColor(Theme.faint).lineLimit(1)
+                            Text("“\(s.opening)”").font(.system(size: 12)).foregroundColor(Theme.faint).lineLimit(1)
                         }
                     }
                     Spacer()
@@ -118,7 +118,7 @@ struct ResultsTab: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            Button { confirmDelete = s } label: { Image(systemName: "trash").font(.system(size: 12)) }
+            Button { confirmDelete = s } label: { Image(systemName: "trash").font(.system(size: 13)) }
                 .buttonStyle(.plain).foregroundColor(Theme.muted).padding(8).help("Delete these results")
         }
     }
@@ -126,7 +126,7 @@ struct ResultsTab: View {
     private func number(_ value: String?, _ label: String) -> some View {
         VStack(alignment: .trailing, spacing: 1) {
             Text(value ?? "–").font(.system(size: 14, weight: .semibold)).foregroundColor(value == nil ? Theme.faint : .white).monospacedDigit()
-            Text(label).font(.system(size: 9)).foregroundColor(Theme.faint)
+            Text(label).font(.system(size: 11)).foregroundColor(Theme.faint)
         }
         .frame(width: 58, alignment: .trailing)
     }
@@ -154,7 +154,7 @@ struct PostedShortSheet: View {
         VStack(alignment: .leading, spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    Text("Posted short").font(Theme.display(24, weight: .medium)).foregroundColor(.white)
+                    Text("Posted short").font(Theme.display(24, weight: .medium)).foregroundColor(Theme.ink)
                     field("Title") { TextField("Name of the short", text: $draft.title) }
                     HStack(spacing: 12) {
                         field("Platform") {
@@ -172,15 +172,15 @@ struct PostedShortSheet: View {
                         Button { screenshot() } label: { Label("Read an analytics screenshot", systemImage: "text.viewfinder") }.disabled(busy)
                         if busy { ProgressView().controlSize(.small) }
                     }
-                    if let note { Text(note).font(.system(size: 11)).foregroundColor(Theme.good).fixedSize(horizontal: false, vertical: true) }
-                    if let problem { Text(problem).font(.system(size: 11)).foregroundColor(Theme.warn).fixedSize(horizontal: false, vertical: true) }
+                    if let note { Text(note).font(.system(size: 12)).foregroundColor(Theme.good).fixedSize(horizontal: false, vertical: true) }
+                    if let problem { Text(problem).font(.system(size: 12)).foregroundColor(Theme.warn).fixedSize(horizontal: false, vertical: true) }
                     field("Opening line, as posted") { TextField("The first thing you say", text: $draft.opening) }
                     grid([("Length", "0:45", $length), ("Average watched", "0:27", $watched), ("Views", "12.4K", $views)])
                     grid([("Likes", "", $likes), ("Comments", "", $comments), ("Shares", "", $shares), ("Saves", "", $saves)])
-                    Text("STILL WATCHING, FROM YOUR ANALYTICS").font(.system(size: 9, weight: .semibold)).tracking(1.2).foregroundColor(Theme.faint)
+                    Text("STILL WATCHING, FROM YOUR ANALYTICS").font(.system(size: 11, weight: .semibold)).tracking(1.2).foregroundColor(Theme.faint)
                     grid([("At 3 seconds", "%", $at3), ("At halfway", "%", $half), ("At the end", "%", $end)])
                     Text("Average watched and length are what power the patterns. Platforms keep those private, so they come from your analytics.")
-                        .font(.system(size: 11)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                        .font(.system(size: 12)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(22)
                 .textFieldStyle(.roundedBorder)
@@ -200,7 +200,7 @@ struct PostedShortSheet: View {
 
     private func field<C: View>(_ title: String, @ViewBuilder _ content: () -> C) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(title).font(.system(size: 11, weight: .medium)).foregroundColor(Theme.muted)
+            Text(title).font(.system(size: 12, weight: .medium)).foregroundColor(Theme.muted)
             content()
         }
         .frame(maxWidth: .infinity, alignment: .leading)

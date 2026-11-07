@@ -33,7 +33,7 @@ struct ClipDetailPanel: View {
             // Trim controls
             trimPanel
 
-            Divider().background(Color.white.opacity(0.08))
+            Divider().background(Theme.ink.opacity(0.08))
 
             // Tab bar
             tabBar
@@ -118,7 +118,7 @@ struct ClipDetailPanel: View {
                 Button(action: { playerVM.seek(by: -5) }) {
                     Image(systemName: "gobackward.5")
                         .font(.system(size: 14))
-                        .foregroundColor(Color.white.opacity(0.7))
+                        .foregroundColor(Theme.ink.opacity(0.7))
                 }
                 .buttonStyle(.plain)
 
@@ -132,20 +132,20 @@ struct ClipDetailPanel: View {
                 Button(action: { playerVM.seek(by: 5) }) {
                     Image(systemName: "goforward.5")
                         .font(.system(size: 14))
-                        .foregroundColor(Color.white.opacity(0.7))
+                        .foregroundColor(Theme.ink.opacity(0.7))
                 }
                 .buttonStyle(.plain)
 
                 Text(formatTime(playerVM.currentTime.seconds) + " / " + formatTime(clip.duration))
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(Color.white.opacity(0.6))
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundColor(Theme.ink.opacity(0.6))
 
                 Spacer()
 
                 Button(action: { playerVM.seekToStart() }) {
                     Image(systemName: "arrow.counterclockwise")
-                        .font(.system(size: 12))
-                        .foregroundColor(Color.white.opacity(0.5))
+                        .font(.system(size: 13))
+                        .foregroundColor(Theme.ink.opacity(0.55))
                 }
                 .buttonStyle(.plain)
             }
@@ -155,26 +155,26 @@ struct ClipDetailPanel: View {
             // TRIM section
             VStack(alignment: .leading, spacing: 4) {
                 Text("TRIM")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(Color.white.opacity(0.3))
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .foregroundColor(Theme.ink.opacity(0.55))
                     .padding(.horizontal, 14)
 
                 HStack(spacing: 8) {
                     Text("Start")
-                        .font(.system(size: 12))
-                        .foregroundColor(Color.white.opacity(0.6))
+                        .font(.system(size: 13))
+                        .foregroundColor(Theme.ink.opacity(0.6))
                         .frame(width: 36, alignment: .leading)
 
                     adjustButton(label: "-5s") { adjustTrim(start: true, by: -5) }
                     adjustButton(label: "-1s") { adjustTrim(start: true, by: -1) }
 
                     Text(clip.formattedStartTime)
-                        .font(.system(size: 12, design: .monospaced))
-                        .foregroundColor(.white)
+                        .font(.system(size: 13, design: .monospaced))
+                        .foregroundColor(Theme.ink)
                         .frame(width: 50)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 4)
-                        .background(Color.white.opacity(0.1))
+                        .background(Theme.ink.opacity(0.1))
                         .cornerRadius(4)
 
                     adjustButton(label: "+1s") { adjustTrim(start: true, by: 1) }
@@ -184,8 +184,8 @@ struct ClipDetailPanel: View {
 
                 HStack(spacing: 8) {
                     Text("End")
-                        .font(.system(size: 12))
-                        .foregroundColor(Color.white.opacity(0.6))
+                        .font(.system(size: 13))
+                        .foregroundColor(Theme.ink.opacity(0.6))
                         .frame(width: 36, alignment: .leading)
 
                     adjustButton(label: "-5s") { adjustTrim(start: false, by: -5) }
@@ -193,12 +193,12 @@ struct ClipDetailPanel: View {
 
                     let endSeconds = clip.startTime + clip.duration
                     Text(formatSeconds(endSeconds))
-                        .font(.system(size: 12, design: .monospaced))
-                        .foregroundColor(.white)
+                        .font(.system(size: 13, design: .monospaced))
+                        .foregroundColor(Theme.ink)
                         .frame(width: 50)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 4)
-                        .background(Color.white.opacity(0.1))
+                        .background(Theme.ink.opacity(0.1))
                         .cornerRadius(4)
 
                     adjustButton(label: "+1s") { adjustTrim(start: false, by: 1) }
@@ -209,8 +209,8 @@ struct ClipDetailPanel: View {
                 HStack {
                     Spacer()
                     Text("Duration: \(clip.formattedDuration)")
-                        .font(.system(size: 11))
-                        .foregroundColor(Color.white.opacity(0.4))
+                        .font(.system(size: 12))
+                        .foregroundColor(Theme.ink.opacity(0.55))
                         .padding(.trailing, 14)
                 }
             }
@@ -222,11 +222,11 @@ struct ClipDetailPanel: View {
     func adjustButton(label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(label)
-                .font(.system(size: 11))
-                .foregroundColor(Color.white.opacity(0.6))
+                .font(.system(size: 12))
+                .foregroundColor(Theme.ink.opacity(0.6))
                 .padding(.horizontal, 7)
                 .padding(.vertical, 4)
-                .background(Color.white.opacity(0.08))
+                .background(Theme.ink.opacity(0.08))
                 .cornerRadius(4)
         }
         .buttonStyle(.plain)
@@ -240,7 +240,7 @@ struct ClipDetailPanel: View {
                     let h = pattern[i % pattern.count]
                     let isActive = Double(i) / 48.0 < (playerVM.currentTime.seconds / max(clip.duration, 1))
                     RoundedRectangle(cornerRadius: 1)
-                        .fill(isActive ? Theme.sand.opacity(0.8) : Color.white.opacity(0.2))
+                        .fill(isActive ? Theme.sand.opacity(0.8) : Theme.ink.opacity(0.2))
                         .frame(width: 2, height: h)
                 }
             }
@@ -259,17 +259,17 @@ struct ClipDetailPanel: View {
                 Button(action: { selectedTab = tab }) {
                     HStack(spacing: 4) {
                         Image(systemName: tab.icon)
-                            .font(.system(size: 11))
+                            .font(.system(size: 12))
                         Text(tab.rawValue)
-                            .font(.system(size: 12, weight: selectedTab == tab ? .semibold : .regular))
+                            .font(.system(size: 13, weight: selectedTab == tab ? .semibold : .regular))
                             .lineLimit(1)
                             .fixedSize()
                     }
-                    .foregroundColor(selectedTab == tab ? .white : Color.white.opacity(0.4))
+                    .foregroundColor(selectedTab == tab ? .white : Theme.ink.opacity(0.4))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 8)
                     .frame(maxWidth: .infinity)
-                    .background(selectedTab == tab ? Color.white.opacity(0.1) : Color.clear)
+                    .background(selectedTab == tab ? Theme.ink.opacity(0.1) : Color.clear)
                     .cornerRadius(6)
                 }
                 .buttonStyle(.plain)

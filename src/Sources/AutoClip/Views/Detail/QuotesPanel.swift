@@ -9,11 +9,20 @@ struct Quote: Identifiable {
     let type: QuoteType
 
     enum QuoteType: String {
-        case insight = "💡 Insight"
-        case challenge = "🔥 Challenge"
-        case story = "📖 Story"
-        case question = "❓ Question"
-        case truth = "⚡ Truth"
+        case insight = "Insight"
+        case challenge = "Challenge"
+        case story = "Story"
+        case question = "Question"
+        case truth = "Truth"
+        var icon: String {
+            switch self {
+            case .insight: return "lightbulb"
+            case .challenge: return "flame"
+            case .story: return "book"
+            case .question: return "questionmark.circle"
+            case .truth: return "bolt"
+            }
+        }
     }
 }
 
@@ -32,13 +41,13 @@ struct QuotesPanel: View {
                 VStack(spacing: 10) {
                     Image(systemName: "text.quote")
                         .font(.system(size: 32))
-                        .foregroundColor(Color.white.opacity(0.15))
+                        .foregroundColor(Theme.ink.opacity(0.55))
                     Text("No quotes found")
                         .font(.system(size: 13))
-                        .foregroundColor(Color.white.opacity(0.35))
+                        .foregroundColor(Theme.ink.opacity(0.55))
                     Text("Add a transcript to generate quotes")
-                        .font(.system(size: 11))
-                        .foregroundColor(Color.white.opacity(0.2))
+                        .font(.system(size: 12))
+                        .foregroundColor(Theme.ink.opacity(0.55))
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.top, 40)
@@ -46,12 +55,12 @@ struct QuotesPanel: View {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {
                         Text("\(quotes.count) high-impact quotes")
-                            .font(.system(size: 11))
-                            .foregroundColor(Color.white.opacity(0.4))
+                            .font(.system(size: 12))
+                            .foregroundColor(Theme.ink.opacity(0.55))
                         Spacer()
                         Text("Tap to seek")
-                            .font(.system(size: 10))
-                            .foregroundColor(Color.white.opacity(0.25))
+                            .font(.system(size: 11.5))
+                            .foregroundColor(Theme.ink.opacity(0.55))
                     }
                     .padding(.horizontal, 14)
                     .padding(.top, 10)
@@ -202,8 +211,8 @@ struct QuoteCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text(quote.type.rawValue)
-                    .font(.system(size: 10, weight: .semibold))
+                Label(quote.type.rawValue, systemImage: quote.type.icon)
+                    .font(.system(size: 11.5, weight: .semibold))
                     .foregroundColor(gold.opacity(0.8))
 
                 Spacer()
@@ -213,14 +222,14 @@ struct QuoteCard: View {
                     Button(action: { seek(quote.startTime) }) {
                         HStack(spacing: 3) {
                             Image(systemName: "arrow.forward.circle")
-                                .font(.system(size: 11))
+                                .font(.system(size: 12))
                             Text(formatTime(quote.startTime))
-                                .font(.system(size: 10, weight: .medium))
+                                .font(.system(size: 11.5, weight: .medium))
                         }
-                        .foregroundColor(Color.white.opacity(0.4))
+                        .foregroundColor(Theme.ink.opacity(0.55))
                         .padding(.horizontal, 7)
                         .padding(.vertical, 3)
-                        .background(Color.white.opacity(0.06))
+                        .background(Theme.ink.opacity(0.06))
                         .cornerRadius(5)
                     }
                     .buttonStyle(.plain)
@@ -229,7 +238,7 @@ struct QuoteCard: View {
 
             Text(quote.text)
                 .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.white)
+                .foregroundColor(Theme.ink)
                 .lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -238,14 +247,14 @@ struct QuoteCard: View {
                 Button(action: copyQuote) {
                     HStack(spacing: 4) {
                         Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                            .font(.system(size: 10))
+                            .font(.system(size: 11.5))
                         Text(copied ? "Copied!" : "Copy")
-                            .font(.system(size: 11))
+                            .font(.system(size: 12))
                     }
-                    .foregroundColor(copied ? Theme.good : Color.white.opacity(0.45))
+                    .foregroundColor(copied ? Theme.good : Theme.ink.opacity(0.45))
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(Color.white.opacity(0.06))
+                    .background(Theme.ink.opacity(0.06))
                     .cornerRadius(5)
                 }
                 .buttonStyle(.plain)
@@ -254,11 +263,11 @@ struct QuoteCard: View {
             }
         }
         .padding(12)
-        .background(Color.white.opacity(isHovered ? 0.07 : 0.04))
+        .background(Theme.ink.opacity(isHovered ? 0.07 : 0.04))
         .cornerRadius(8)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.white.opacity(0.07), lineWidth: 1)
+                .stroke(Theme.ink.opacity(0.07), lineWidth: 1)
         )
         .onHover { isHovered = $0 }
     }

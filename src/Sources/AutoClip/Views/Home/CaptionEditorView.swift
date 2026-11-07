@@ -65,7 +65,7 @@ struct CaptionEditorView: View {
                 .resizable()
                 .frame(width: 135, height: 240)
                 .cornerRadius(8)
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.1), lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.ink.opacity(0.1), lineWidth: 1))
         }
     }
 
@@ -159,7 +159,7 @@ struct CaptionEditorView: View {
             label("Highlight")
             ColorPicker("", selection: $look.highlightColor.color, supportsOpacity: false).labelsHidden()
             Spacer(minLength: 6)
-            Toggle("AA", isOn: $look.uppercase).toggleStyle(.button).font(.system(size: 11, weight: .bold))
+            Toggle("AA", isOn: $look.uppercase).toggleStyle(.button).font(.system(size: 12, weight: .bold))
                 .help("ALL CAPS")
         }
     }
@@ -173,7 +173,7 @@ struct CaptionEditorView: View {
             }
             Spacer(minLength: 0)
         }
-        .help("The reel's key words (and Bible references) stand out in this colour")
+        .help("The clip's key words (and Bible references) stand out in this colour")
     }
 
     private var outlineRow: some View {
@@ -182,7 +182,7 @@ struct CaptionEditorView: View {
             ColorPicker("", selection: $look.strokeColor.color, supportsOpacity: false).labelsHidden()
             Slider(value: $look.strokeWidth, in: 0...10).tint(Theme.action)
             Text(look.strokeWidth < 0.5 ? "Off" : "\(Int(look.strokeWidth))")
-                .font(.system(size: 11, design: .monospaced)).foregroundColor(gold).frame(width: 28)
+                .font(.system(size: 12, design: .monospaced)).foregroundColor(gold).frame(width: 28)
         }
     }
 
@@ -202,12 +202,12 @@ struct CaptionEditorView: View {
         HStack(spacing: 10) {
             label(title)
             Slider(value: value, in: range).tint(Theme.action)
-            Text(text).font(.system(size: 11, design: .monospaced)).foregroundColor(gold).frame(width: 48, alignment: .trailing)
+            Text(text).font(.system(size: 12, design: .monospaced)).foregroundColor(gold).frame(width: 48, alignment: .trailing)
         }
     }
 
     private func label(_ s: String) -> some View {
-        Text(s).font(.system(size: 12)).foregroundColor(Color.white.opacity(0.6))
+        Text(s).font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.6))
             .lineLimit(1).fixedSize()
     }
 }

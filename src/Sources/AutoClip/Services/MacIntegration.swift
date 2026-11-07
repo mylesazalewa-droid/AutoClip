@@ -218,7 +218,7 @@ struct CelebrationBurst: View {
 
 struct CommandBarTip: Tip {
     var title: Text { Text("Do anything with ⌘K") }
-    var message: Text? { Text("Jump to a page, open a reel or search your sermons. In the editor, say what to change.") }
+    var message: Text? { Text("Jump to a page, open a clip or search your sermons. In the editor, say what to change.") }
     var image: Image? { Image(systemName: "command") }
 }
 

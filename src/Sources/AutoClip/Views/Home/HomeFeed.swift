@@ -50,8 +50,8 @@ struct HomeFeed: View {
     private var heroItems: [HeroItem] {
         var items: [HeroItem] = []
         for r in reelsStore.reels {
-            items.append(.init(id: "r" + r.id.uuidString, kind: "Auto Reels", title: r.title,
-                               detail: "\(r.drafts?.count ?? r.paths.count) reel\((r.drafts?.count ?? r.paths.count) == 1 ? "" : "s") · \(r.format) · \(time(r.duration))",
+            items.append(.init(id: "r" + r.id.uuidString, kind: "Clips", title: r.title,
+                               detail: "\(r.drafts?.count ?? r.paths.count) clip\((r.drafts?.count ?? r.paths.count) == 1 ? "" : "s") · \(r.format) · \(time(r.duration))",
                                date: Date(timeIntervalSince1970: r.dateCreated), thumb: r.sourceVideoPath ?? r.path,
                                tall: r.format.contains("9:16") || r.format.lowercased().contains("vertical"), open: { onOpenReel(r) }))
         }
@@ -73,17 +73,15 @@ struct HomeFeed: View {
     private var feed: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 36) {
-                let hero = heroItems
-                if hero.isEmpty { welcome } else { banner(hero) }
+                if heroItems.isEmpty { welcome } else { ThisWeekCard() }
 
                 AutopilotCard()
-                GuidedPathCard()
                 startRow
 
                 if !reelsStore.reels.isEmpty {
-                    row("Auto Reels", count: reelsStore.reels.count, action: ("See all", { HomeNav.shared.open(.autoReels) })) {
+                    row("Clips", count: reelsStore.reels.count, action: ("See all", { HomeNav.shared.open(.autoReels) })) {
                         ForEach(reelsStore.reels) { r in
-                            PosterCard(draft: r.drafts?.first, path: r.path, title: r.title, meta: "\(r.drafts?.count ?? r.paths.count) reel\((r.drafts?.count ?? r.paths.count) == 1 ? "" : "s") · \(time(r.duration))",
+                            PosterCard(draft: r.drafts?.first, path: r.path, title: r.title, meta: "\(r.drafts?.count ?? r.paths.count) clip\((r.drafts?.count ?? r.paths.count) == 1 ? "" : "s") · \(time(r.duration))",
                                        badge: r.format) { onOpenReel(r) }
                         }
                     }
@@ -167,7 +165,7 @@ struct HomeFeed: View {
                 .frame(maxHeight: .infinity)
                 HStack(spacing: 6) {
                     ForEach(items.indices, id: \.self) { k in
-                        Capsule().fill(k == i ? Theme.sand : Color.white.opacity(0.3)).frame(width: k == i ? 20 : 6, height: 6)
+                        Capsule().fill(k == i ? Theme.sand : Theme.ink.opacity(0.3)).frame(width: k == i ? 20 : 6, height: 6)
                             .onTapGesture { withAnimation { heroIndex = k } }
                     }
                 }
@@ -183,7 +181,7 @@ struct HomeFeed: View {
         Button { withAnimation(.easeInOut(duration: 0.4)) { go() } } label: {
             Image(systemName: icon).font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.cream)
                 .frame(width: 34, height: 34).background(Circle().fill(Color.black.opacity(0.45)))
-                .overlay(Circle().stroke(Color.white.opacity(0.12), lineWidth: 1))
+                .overlay(Circle().stroke(Theme.ink.opacity(0.12), lineWidth: 1))
         }
         .buttonStyle(.plain)
     }
@@ -193,10 +191,10 @@ struct HomeFeed: View {
             LinearGradient(colors: [Theme.navy, Theme.charcoal], startPoint: .topLeading, endPoint: .bottomTrailing)
             VStack(alignment: .leading, spacing: 12) {
                 DisplayTitle(text: "Welcome to AutoClip", size: 30)
-                Text("Turn a sermon into reels, make a podcast, or get feedback on your delivery.")
+                Text("Turn a sermon into clips, make a podcast, or get feedback on your delivery.")
                     .font(.system(size: 14)).foregroundColor(Theme.text.opacity(0.8))
                 HStack(spacing: 10) {
-                    Button { HomeNav.shared.open(.autoReels) } label: { Label("Make reels", systemImage: "play.rectangle.on.rectangle.fill") }
+                    Button { HomeNav.shared.open(.autoReels) } label: { Label("Make clips", systemImage: "play.rectangle.on.rectangle.fill") }
                         .buttonStyle(PrimaryButtonStyle())
                     Button { HomeNav.shared.open(.podcast) } label: { Label("Start a podcast", systemImage: "mic.fill") }
                         .buttonStyle(SecondaryButtonStyle())
@@ -220,7 +218,7 @@ struct HomeFeed: View {
         VStack(alignment: .leading, spacing: 12) {
             rowTitle("Start something", count: nil, action: nil)
             HStack(spacing: 12) {
-                StartTile(title: "Reels", subtitle: "Shorts from a sermon", icon: "play.rectangle.on.rectangle.fill", color: Theme.terracotta) { HomeNav.shared.open(.autoReels) }
+                StartTile(title: "Clips", subtitle: "Short clips from a sermon", icon: "play.rectangle.on.rectangle.fill", color: Theme.terracotta) { HomeNav.shared.open(.autoReels) }
                 StartTile(title: "Podcast", subtitle: "Edit an episode", icon: "mic.and.signal.meter.fill", color: Theme.navy) { HomeNav.shared.open(.podcast) }
                 StartTile(title: "Assess", subtitle: "Feedback on delivery", icon: "waveform.badge.magnifyingglass", color: Theme.olive) { HomeNav.shared.open(.assess) }
                 StartTile(title: "Search", subtitle: "Find any moment", icon: "magnifyingglass", color: Theme.charcoal) { HomeNav.shared.open(.search) }
@@ -232,12 +230,12 @@ struct HomeFeed: View {
     private func rowTitle(_ title: String, count: Int?, action: (String, () -> Void)?) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(title).font(Theme.display(22, weight: .medium)).foregroundColor(Theme.cream)
-            if let count { Text("\(count)").font(.system(size: 12, weight: .medium)).foregroundColor(Theme.faint) }
+            if let count { Text("\(count)").font(.system(size: 13, weight: .medium)).foregroundColor(Theme.faint) }
             Spacer()
             if let action {
                 Button(action: action.1) {
-                    HStack(spacing: 4) { Text(action.0); Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)) }
-                        .font(.system(size: 12, weight: .medium)).foregroundColor(Theme.sand)
+                    HStack(spacing: 4) { Text(action.0); Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)) }
+                        .font(.system(size: 13, weight: .medium)).foregroundColor(Theme.sand)
                 }
                 .buttonStyle(.plain)
             }
@@ -276,12 +274,12 @@ struct PosterCard: View {
                 ScrubThumb(draft: draft, path: path, faceAspect: 200 / 340).frame(width: 200, height: 340).clipped()
                 LinearGradient(colors: [.clear, .clear, .black.opacity(0.9)], startPoint: .top, endPoint: .bottom)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(title).font(.system(size: 13, weight: .semibold)).foregroundColor(.white).lineLimit(2)
-                    Text(meta).font(.system(size: 11)).foregroundColor(Color.white.opacity(0.7)).lineLimit(1)
+                    Text(title).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.ink).lineLimit(2)
+                    Text(meta).font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.7)).lineLimit(1)
                 }
                 .padding(12)
                 if let badge {
-                    Text(badge).font(.system(size: 9, weight: .semibold)).foregroundColor(Theme.cream)
+                    Text(badge).font(.system(size: 11, weight: .semibold)).foregroundColor(Theme.cream)
                         .padding(.horizontal, 7).padding(.vertical, 3).background(Capsule().fill(Color.black.opacity(0.6)))
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).padding(10)
                 }
@@ -289,18 +287,19 @@ struct PosterCard: View {
             }
             .frame(width: 200, height: 340)
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(hover ? Color.white.opacity(0.75) : Color.white.opacity(0.08), lineWidth: hover ? 2 : 1))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(hover ? Theme.ink.opacity(0.75) : Theme.ink.opacity(0.08), lineWidth: hover ? 2 : 1))
             .shadow(color: .black.opacity(hover ? 0.55 : 0.3), radius: hover ? 18 : 8, y: 6)
             .scaleEffect(hover ? 1.03 : 1)
             .animation(.easeOut(duration: 0.15), value: hover)
         }
         .buttonStyle(.plain)
         .onHover { hover = $0 }
+        .environment(\.colorScheme, .dark)
     }
 
     private var playBadge: some View {
-        Image(systemName: "play.fill").font(.system(size: 18)).foregroundColor(Theme.bg)
-            .frame(width: 48, height: 48).background(Circle().fill(Color.white.opacity(0.92)))
+        Image(systemName: "play.fill").font(.system(size: 18)).foregroundColor(Theme.onSand)
+            .frame(width: 48, height: 48).background(Circle().fill(Theme.ink.opacity(0.92)))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
@@ -326,34 +325,35 @@ struct WideCard: View {
                 }
                 LinearGradient(colors: [.clear, .clear, .black.opacity(0.88)], startPoint: .top, endPoint: .bottom)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(title).font(.system(size: 13, weight: .semibold)).foregroundColor(.white).lineLimit(1)
-                    Text(meta).font(.system(size: 11)).foregroundColor(Color.white.opacity(0.7)).lineLimit(1)
+                    Text(title).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.ink).lineLimit(1)
+                    Text(meta).font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.7)).lineLimit(1)
                 }
                 .padding(.horizontal, 12).padding(.bottom, progress == nil ? 11 : 15)
                 if let progress {
                     GeometryReader { g in
                         ZStack(alignment: .leading) {
-                            Rectangle().fill(Color.white.opacity(0.18))
+                            Rectangle().fill(Theme.ink.opacity(0.18))
                             Rectangle().fill(Theme.terracottaLight).frame(width: g.size.width * min(1, max(0, progress)))
                         }
                     }
                     .frame(height: 3)
                 }
                 if hover {
-                    Image(systemName: "play.fill").font(.system(size: 16)).foregroundColor(Theme.bg)
-                        .frame(width: 44, height: 44).background(Circle().fill(Color.white.opacity(0.92)))
+                    Image(systemName: "play.fill").font(.system(size: 16)).foregroundColor(Theme.onSand)
+                        .frame(width: 44, height: 44).background(Circle().fill(Theme.ink.opacity(0.92)))
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
             .frame(width: 340, height: 192)
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(hover ? Color.white.opacity(0.75) : Color.white.opacity(0.08), lineWidth: hover ? 2 : 1))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(hover ? Theme.ink.opacity(0.75) : Theme.ink.opacity(0.08), lineWidth: hover ? 2 : 1))
             .shadow(color: .black.opacity(hover ? 0.55 : 0.3), radius: hover ? 18 : 8, y: 6)
             .scaleEffect(hover ? 1.02 : 1)
             .animation(.easeOut(duration: 0.15), value: hover)
         }
         .buttonStyle(.plain)
         .onHover { hover = $0 }
+        .environment(\.colorScheme, .dark)
     }
 }
 
@@ -369,20 +369,20 @@ struct StartTile: View {
     var body: some View {
         Button(action: open) {
             HStack(spacing: 14) {
-                Image(systemName: icon).font(.system(size: 18)).foregroundColor(Theme.cream)
+                Image(systemName: icon).font(.system(size: 18)).foregroundColor(Theme.onColor)
                     .frame(width: 46, height: 46)
                     .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(color))
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(title).font(Theme.display(17, weight: .medium)).foregroundColor(.white)
-                    Text(subtitle).font(.system(size: 12)).foregroundColor(Theme.muted)
+                    Text(title).font(Theme.display(17, weight: .medium)).foregroundColor(Theme.cream)
+                    Text(subtitle).font(.system(size: 13)).foregroundColor(Theme.muted)
                 }
                 Spacer()
-                Image(systemName: "arrow.right").font(.system(size: 12, weight: .medium)).foregroundColor(hover ? Theme.sand : Theme.faint)
+                Image(systemName: "arrow.right").font(.system(size: 13, weight: .medium)).foregroundColor(hover ? Theme.sand : Theme.faint)
             }
             .padding(.horizontal, 16)
             .frame(height: 84).frame(maxWidth: .infinity)
-            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white.opacity(hover ? 0.1 : 0.06)))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.white.opacity(hover ? 0.22 : 0.09), lineWidth: 1))
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.ink.opacity(hover ? 0.1 : 0.06)))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Theme.ink.opacity(hover ? 0.22 : 0.09), lineWidth: 1))
             .contentShape(Rectangle())
             .scaleEffect(hover ? 1.02 : 1)
             .animation(.easeOut(duration: 0.15), value: hover)

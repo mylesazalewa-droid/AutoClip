@@ -42,7 +42,7 @@ struct ProcessingOverlayView: View {
             // analyzing
             ["Finding your best moments...", "Scoring viral potential...",
              "Detecting emotional peaks...", "Reading engagement signals...",
-             "Building your highlight reel..."],
+             "Building your highlight clip..."],
             // clips
             ["Assembling your clips...", "Adding timestamps...",
              "Almost there...", "Packaging your content..."]
@@ -91,7 +91,7 @@ struct ProcessingOverlayView: View {
                     HStack(spacing: 3.5) {
                         ForEach(0..<10, id: \.self) { i in
                             RoundedRectangle(cornerRadius: 2)
-                                .fill(Color.white.opacity(0.9))
+                                .fill(Theme.ink.opacity(0.9))
                                 .frame(width: 3, height: max(6, barHeights[i] * 30))
                         }
                     }
@@ -102,13 +102,13 @@ struct ProcessingOverlayView: View {
                 // Title
                 Text(phaseTitle)
                     .font(.system(size: 26, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(Theme.ink)
                     .animation(.easeInOut(duration: 0.3), value: phase.rawValue)
 
                 // Rotating subtitle
                 Text(currentSubtitle)
                     .font(.system(size: 15))
-                    .foregroundColor(Color.white.opacity(0.5))
+                    .foregroundColor(Theme.ink.opacity(0.55))
                     .padding(.top, 6)
                     .id(subtitleIndex)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
@@ -118,7 +118,7 @@ struct ProcessingOverlayView: View {
                 VStack(spacing: 6) {
                     ZStack(alignment: .leading) {
                         RoundedRectangle(cornerRadius: 4)
-                            .fill(Color.white.opacity(0.1))
+                            .fill(Theme.ink.opacity(0.1))
                             .frame(height: 6)
                         RoundedRectangle(cornerRadius: 4)
                             .fill(
@@ -134,8 +134,8 @@ struct ProcessingOverlayView: View {
                     .frame(width: 340)
 
                     Text("\(Int(appState.analyzeProgress * 100))%")
-                        .font(.system(size: 12, design: .monospaced))
-                        .foregroundColor(Color.white.opacity(0.4))
+                        .font(.system(size: 13, design: .monospaced))
+                        .foregroundColor(Theme.ink.opacity(0.55))
                 }
                 .padding(.top, 24)
 
@@ -157,14 +157,14 @@ struct ProcessingOverlayView: View {
                     }) {
                         HStack(spacing: 6) {
                             Image(systemName: "xmark")
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(.system(size: 13, weight: .semibold))
                             Text("Cancel")
                                 .font(.system(size: 14, weight: .semibold))
                         }
-                        .foregroundColor(.white)
+                        .foregroundColor(Theme.ink)
                         .padding(.horizontal, 28)
                         .padding(.vertical, 11)
-                        .background(Color.white.opacity(0.1))
+                        .background(Theme.ink.opacity(0.1))
                         .cornerRadius(10)
                     }
                     .buttonStyle(.plain)
@@ -174,7 +174,7 @@ struct ProcessingOverlayView: View {
                     }) {
                         HStack(spacing: 6) {
                             Image(systemName: "arrow.down.circle")
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(.system(size: 13, weight: .semibold))
                             Text("Background")
                                 .font(.system(size: 14, weight: .semibold))
                         }
@@ -218,21 +218,21 @@ struct ProcessingOverlayView: View {
         return VStack(spacing: 5) {
             ZStack {
                 Circle()
-                    .fill(isDone ? gold : (isActive ? gold.opacity(0.2) : Color.white.opacity(0.07)))
+                    .fill(isDone ? gold : (isActive ? gold.opacity(0.2) : Theme.ink.opacity(0.07)))
                     .frame(width: 34, height: 34)
                 Image(systemName: isDone ? "checkmark" : icon)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(isDone ? .black : (isActive ? gold : Color.white.opacity(0.3)))
+                    .foregroundColor(isDone ? .black : (isActive ? gold : Theme.ink.opacity(0.3)))
             }
             Text(label)
-                .font(.system(size: 11, weight: isActive ? .semibold : .regular))
-                .foregroundColor(isActive ? .white : Color.white.opacity(0.35))
+                .font(.system(size: 12, weight: isActive ? .semibold : .regular))
+                .foregroundColor(isActive ? .white : Theme.ink.opacity(0.35))
         }
     }
 
     func stepConnector(active: Bool) -> some View {
         Rectangle()
-            .fill(active ? gold.opacity(0.6) : Color.white.opacity(0.1))
+            .fill(active ? gold.opacity(0.6) : Theme.ink.opacity(0.1))
             .frame(width: 40, height: 2)
             .padding(.bottom, 18)
     }

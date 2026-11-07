@@ -142,12 +142,12 @@ struct HomeView: View {
 
             if activeTab == .autoClips {
                 HStack(spacing: 7) {
-                    Image(systemName: "magnifyingglass").foregroundColor(Theme.faint).font(.system(size: 12))
+                    Image(systemName: "magnifyingglass").foregroundColor(Theme.faint).font(.system(size: 13))
                     TextField("Search projects & clips", text: $searchText)
-                        .textFieldStyle(.plain).font(.system(size: 12)).foregroundColor(Theme.text)
+                        .textFieldStyle(.plain).font(.system(size: 13)).foregroundColor(Theme.text)
                 }
                 .padding(.horizontal, 12).padding(.vertical, 7)
-                .background(Capsule().fill(Color.white.opacity(0.06)))
+                .background(Capsule().fill(Theme.ink.opacity(0.06)))
                 .overlay(Capsule().stroke(Theme.line, lineWidth: 1))
                 .frame(width: 230)
 
@@ -157,8 +157,8 @@ struct HomeView: View {
                     }
                 } label: {
                     HStack(spacing: 4) {
-                        Image(systemName: "arrow.up.arrow.down").font(.system(size: 10))
-                        Text(sortOrder.rawValue).font(.system(size: 12))
+                        Image(systemName: "arrow.up.arrow.down").font(.system(size: 11.5))
+                        Text(sortOrder.rawValue).font(.system(size: 13))
                     }
                     .foregroundColor(Theme.muted)
                 }
@@ -196,28 +196,28 @@ struct HomeView: View {
                 ZStack {
                     RoundedRectangle(cornerRadius: 16)
                         .stroke(
-                            isDropTargeted ? gold : Color.white.opacity(0.15),
+                            isDropTargeted ? gold : Theme.ink.opacity(0.15),
                             style: StrokeStyle(lineWidth: 2, dash: [8, 6])
                         )
                         .background(
                             RoundedRectangle(cornerRadius: 16)
                                 .fill(isDropTargeted
                                       ? gold.opacity(0.06)
-                                      : Color.white.opacity(0.03))
+                                      : Theme.ink.opacity(0.03))
                         )
 
                     VStack(spacing: 16) {
                         Image(systemName: "film.stack")
                             .font(.system(size: 44))
-                            .foregroundColor(Color.white.opacity(isDropTargeted ? 0.7 : 0.3))
+                            .foregroundColor(Theme.ink.opacity(isDropTargeted ? 0.7 : 0.3))
 
                         VStack(spacing: 6) {
                             Text("Drop your video or audio here")
                                 .font(.system(size: 20, weight: .semibold))
-                                .foregroundColor(.white)
+                                .foregroundColor(Theme.ink)
                             Text("MP4, MOV, MKV — any format works")
                                 .font(.system(size: 14))
-                                .foregroundColor(Color.white.opacity(0.4))
+                                .foregroundColor(Theme.ink.opacity(0.55))
                         }
 
                         HStack(spacing: 12) {
@@ -228,10 +228,10 @@ struct HomeView: View {
                                     Text("Browse Files")
                                         .font(.system(size: 14, weight: .semibold))
                                 }
-                                .foregroundColor(.white)
+                                .foregroundColor(Theme.ink)
                                 .padding(.horizontal, 20)
                                 .padding(.vertical, 10)
-                                .background(Color.white.opacity(0.12))
+                                .background(Theme.ink.opacity(0.12))
                                 .cornerRadius(9)
                             }
                             .buttonStyle(.plain)
@@ -243,7 +243,7 @@ struct HomeView: View {
                                     Text("YouTube URL")
                                         .font(.system(size: 14, weight: .semibold))
                                 }
-                                .foregroundColor(.white)
+                                .foregroundColor(Theme.onColor)
                                 .padding(.horizontal, 20)
                                 .padding(.vertical, 10)
                                 .background(Theme.terracotta)
@@ -267,7 +267,7 @@ struct HomeView: View {
                     featureCard(icon: "lock.shield", emoji: nil,
                                 title: "100% Private",
                                 subtitle: "Never leaves your Mac")
-                    featureCard(icon: nil, emoji: "😊",
+                    featureCard(icon: "face.smiling", emoji: nil,
                                 title: "Face Tracking",
                                 subtitle: "Smart vertical reframe")
                     featureCard(icon: "text.bubble", emoji: nil,
@@ -290,22 +290,22 @@ struct HomeView: View {
             } else if let icon = icon {
                 Image(systemName: icon)
                     .font(.system(size: 26))
-                    .foregroundColor(Color.white.opacity(0.5))
+                    .foregroundColor(Theme.ink.opacity(0.55))
             }
             VStack(spacing: 3) {
                 Text(title)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.white)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(Theme.ink)
                 Text(subtitle)
-                    .font(.system(size: 11))
-                    .foregroundColor(Color.white.opacity(0.4))
+                    .font(.system(size: 12))
+                    .foregroundColor(Theme.ink.opacity(0.55))
                     .multilineTextAlignment(.center)
             }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 20)
         .padding(.horizontal, 8)
-        .background(Color.white.opacity(0.05))
+        .background(Theme.ink.opacity(0.05))
         .cornerRadius(12)
     }
 
@@ -322,17 +322,17 @@ struct HomeView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
 
-            Divider().background(Color.white.opacity(0.08))
+            Divider().background(Theme.ink.opacity(0.08))
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
                         Text("My Videos")
                             .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(.white)
+                            .foregroundColor(Theme.ink)
                         Text("(\(filteredProjects.count))")
                             .font(.system(size: 15))
-                            .foregroundColor(Color.white.opacity(0.4))
+                            .foregroundColor(Theme.ink.opacity(0.55))
                         Spacer()
                     }
                     .padding(.horizontal, 20)
@@ -358,11 +358,11 @@ struct HomeView: View {
         let isSelected = filterCategory == label || (label.hasPrefix("All") && filterCategory == "All")
         return Button(action: { filterCategory = label }) {
             Text(label)
-                .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
-                .foregroundColor(isSelected ? .black : Color.white.opacity(0.6))
+                .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+                .foregroundColor(isSelected ? .black : Theme.ink.opacity(0.6))
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
-                .background(isSelected ? gold : Color.white.opacity(0.07))
+                .background(isSelected ? gold : Theme.ink.opacity(0.07))
                 .cornerRadius(6)
         }
         .buttonStyle(.plain)
@@ -380,12 +380,12 @@ struct CombinedProjectsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Divider().background(Color.white.opacity(0.08))
+            Divider().background(Theme.ink.opacity(0.08))
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     // Auto Reels section
                     if !reelsStore.reels.isEmpty || !reelsStore.activeJobs.isEmpty {
-                        sectionHeader(title: "Auto Reels", count: reelsStore.reels.count,
+                        sectionHeader(title: "Clips", count: reelsStore.reels.count,
                                       icon: "play.rectangle.on.rectangle.fill")
                         LazyVGrid(
                             columns: [GridItem(.adaptive(minimum: 220, maximum: 320), spacing: 12)],
@@ -405,8 +405,8 @@ struct CombinedProjectsView: View {
                     // Clip projects made before Auto Clips was folded into Auto Reels (still openable)
                     if library.projects.isEmpty {
                         if reelsStore.reels.isEmpty && reelsStore.activeJobs.isEmpty {
-                            Text("Nothing here yet. Make reels or single clips in the Auto Reels tab.")
-                                .font(.system(size: 13)).foregroundColor(Color.white.opacity(0.35))
+                            Text("Nothing here yet. Make clips from a sermon in the Clips tab.")
+                                .font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.55))
                                 .padding(.horizontal, 20).padding(.bottom, 24)
                         }
                     } else {
@@ -437,9 +437,9 @@ struct CombinedProjectsView: View {
 
     func sectionHeader(title: String, count: Int, icon: String) -> some View {
         HStack(spacing: 6) {
-            Image(systemName: icon).font(.system(size: 11)).foregroundColor(gold)
-            Text(title).font(.system(size: 13, weight: .semibold)).foregroundColor(.white)
-            Text("(\(count))").font(.system(size: 12)).foregroundColor(Color.white.opacity(0.35))
+            Image(systemName: icon).font(.system(size: 12)).foregroundColor(gold)
+            Text(title).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.ink)
+            Text("(\(count))").font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.55))
         }
         .padding(.horizontal, 20).padding(.bottom, 10)
     }
@@ -450,7 +450,7 @@ struct CombinedProjectsView: View {
                 ReelThumbnailView(path: reel.path)
                     .frame(height: 140).clipped()
                 Text(formatDuration(reel.duration))
-                    .font(.system(size: 10, design: .monospaced)).foregroundColor(.white)
+                    .font(.system(size: 11.5, design: .monospaced)).foregroundColor(Theme.ink)
                     .padding(.horizontal, 6).padding(.vertical, 3)
                     .background(Color.black.opacity(0.6)).cornerRadius(4)
                     .padding(6)
@@ -458,15 +458,15 @@ struct CombinedProjectsView: View {
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(reel.title).font(.system(size: 12, weight: .semibold)).foregroundColor(.white).lineLimit(1)
-                Text("\(reel.paths.count) reel\(reel.paths.count == 1 ? "" : "s") · \(reel.format)")
-                    .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.4))
+                Text(reel.title).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.ink).lineLimit(1)
+                Text("\(reel.paths.count) clip\(reel.paths.count == 1 ? "" : "s") · \(reel.format)")
+                    .font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
             }
             .padding(.horizontal, 8).padding(.top, 6).padding(.bottom, 8)
         }
         .background(Theme.raised)
         .cornerRadius(10)
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white.opacity(0.07), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.ink.opacity(0.07), lineWidth: 1))
     }
 
     func formatDuration(_ s: Double) -> String {
@@ -491,23 +491,23 @@ struct YouTubeURLSheet: View {
             HStack {
                 Text("Import YouTube Video")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(Theme.ink)
                 Spacer()
                 Button("Cancel") { dismiss() }
                     .buttonStyle(.plain)
-                    .foregroundColor(Color.white.opacity(0.5))
+                    .foregroundColor(Theme.ink.opacity(0.55))
             }
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("YouTube URL")
-                    .font(.system(size: 12))
-                    .foregroundColor(Color.white.opacity(0.5))
+                    .font(.system(size: 13))
+                    .foregroundColor(Theme.ink.opacity(0.55))
                 TextField("https://youtube.com/watch?v=...", text: $url)
                     .textFieldStyle(.plain)
                     .font(.system(size: 14))
-                    .foregroundColor(.white)
+                    .foregroundColor(Theme.ink)
                     .padding(10)
-                    .background(Color.white.opacity(0.08))
+                    .background(Theme.ink.opacity(0.08))
                     .cornerRadius(8)
                     .disabled(isDownloading)
             }
@@ -517,14 +517,14 @@ struct YouTubeURLSheet: View {
                     ProgressView(value: downloadProgress > 0 ? downloadProgress : nil)
                         .accentColor(Theme.action)
                     Text(statusText)
-                        .font(.system(size: 11))
-                        .foregroundColor(Color.white.opacity(0.5))
+                        .font(.system(size: 12))
+                        .foregroundColor(Theme.ink.opacity(0.55))
                         .lineLimit(2)
                 }
             } else if let err = error {
                 ScrollView {
                     Text(err)
-                        .font(.system(size: 12))
+                        .font(.system(size: 13))
                         .foregroundColor(Theme.danger)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -537,7 +537,7 @@ struct YouTubeURLSheet: View {
                     Text(isDownloading ? "Downloading…" : "Import")
                 }
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(.black)
+                .foregroundColor(Theme.onSand)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 10)
                 .background(url.isEmpty || isDownloading ? gold.opacity(0.4) : gold)
@@ -729,12 +729,12 @@ struct AutoClipsSettingsSheet: View {
                     // Whisper model
                     VStack(alignment: .leading, spacing: 10) {
                         HStack(spacing: 6) {
-                            Image(systemName: "waveform").foregroundColor(gold).font(.system(size: 11))
+                            Image(systemName: "waveform").foregroundColor(gold).font(.system(size: 12))
                             Text("Transcription Model")
-                                .font(.system(size: 13, weight: .semibold)).foregroundColor(.white)
+                                .font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.ink)
                         }
                         Text("A larger model is more accurate but slower to download and transcribe.")
-                            .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.45))
+                            .font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.55))
                             .fixedSize(horizontal: false, vertical: true)
                         VStack(spacing: 4) {
                             ForEach(WhisperService.modelSizes, id: \.key) { size in
@@ -744,44 +744,44 @@ struct AutoClipsSettingsSheet: View {
                                 }) {
                                     HStack {
                                         Text(size.label)
-                                            .font(.system(size: 12, weight: whisperModelSize == size.key ? .semibold : .regular))
+                                            .font(.system(size: 13, weight: whisperModelSize == size.key ? .semibold : .regular))
                                             .foregroundColor(whisperModelSize == size.key ? .black : .white)
                                         Spacer()
                                         if whisperModelSize == size.key {
-                                            Image(systemName: "checkmark").font(.system(size: 10, weight: .bold)).foregroundColor(.black)
+                                            Image(systemName: "checkmark").font(.system(size: 11.5, weight: .bold)).foregroundColor(Theme.onSand)
                                         }
                                     }
                                     .padding(.horizontal, 12).padding(.vertical, 8)
-                                    .background(whisperModelSize == size.key ? gold : Color.white.opacity(0.06))
+                                    .background(whisperModelSize == size.key ? gold : Theme.ink.opacity(0.06))
                                     .cornerRadius(8)
                                 }
                                 .buttonStyle(.plain)
                             }
                         }
                     }
-                    .padding(14).background(Color.white.opacity(0.04)).cornerRadius(10)
+                    .padding(14).background(Theme.ink.opacity(0.04)).cornerRadius(10)
 
                     // AI clip ranking
                     VStack(alignment: .leading, spacing: 10) {
                         HStack(spacing: 6) {
-                            Image(systemName: "sparkles").foregroundColor(gold).font(.system(size: 11))
+                            Image(systemName: "sparkles").foregroundColor(gold).font(.system(size: 12))
                             Text("AI Clip Ranking")
-                                .font(.system(size: 13, weight: .semibold)).foregroundColor(.white)
+                                .font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.ink)
                             Spacer()
                             Toggle("", isOn: $useAI).toggleStyle(.switch).tint(Theme.action)
                         }
                         if useAI {
                             Text("After local analysis, an LLM re-ranks clips for viral potential.")
-                                .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.45))
+                                .font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.55))
                                 .fixedSize(horizontal: false, vertical: true)
                             HStack(spacing: 6) {
                                 ForEach(LLMClipService.AIProvider.allCases) { p in
                                     Button(action: { aiProvider = p }) {
                                         Text(shortLabel(p))
-                                            .font(.system(size: 11, weight: aiProvider == p ? .semibold : .regular))
-                                            .foregroundColor(aiProvider == p ? .black : Color.white.opacity(0.6))
+                                            .font(.system(size: 12, weight: aiProvider == p ? .semibold : .regular))
+                                            .foregroundColor(aiProvider == p ? .black : Theme.ink.opacity(0.6))
                                             .padding(.horizontal, 8).padding(.vertical, 5)
-                                            .background(aiProvider == p ? gold : Color.white.opacity(0.07))
+                                            .background(aiProvider == p ? gold : Theme.ink.opacity(0.07))
                                             .cornerRadius(6)
                                     }
                                     .buttonStyle(.plain)
@@ -799,21 +799,21 @@ struct AutoClipsSettingsSheet: View {
                                     if showKey { TextField(aiProvider.keyPlaceholder, text: binding) }
                                     else { SecureField(aiProvider.keyPlaceholder, text: binding) }
                                 }
-                                .font(.system(size: 11, design: .monospaced))
+                                .font(.system(size: 12, design: .monospaced))
                                 .textFieldStyle(.plain)
                                 .padding(.horizontal, 8).padding(.vertical, 6)
-                                .background(Color.white.opacity(0.06)).cornerRadius(6)
+                                .background(Theme.ink.opacity(0.06)).cornerRadius(6)
                                 Button(action: { showKey.toggle() }) {
                                     Image(systemName: showKey ? "eye.slash" : "eye")
-                                        .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.4))
+                                        .font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.55))
                                 }
                                 .buttonStyle(.plain)
                             }
                             Text("Stored in macOS Keychain.")
-                                .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.3))
+                                .font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
                         }
                     }
-                    .padding(14).background(Color.white.opacity(0.04)).cornerRadius(10)
+                    .padding(14).background(Theme.ink.opacity(0.04)).cornerRadius(10)
                 }
                 .padding(20)
             }
@@ -827,7 +827,7 @@ struct AutoClipsSettingsSheet: View {
             }
         }
         .frame(minWidth: 380, minHeight: 460)
-        .preferredColorScheme(.dark)
+        .appLook()
         .task {
             var loaded: [LLMClipService.AIProvider: String] = [:]
             for p in LLMClipService.AIProvider.allCases {

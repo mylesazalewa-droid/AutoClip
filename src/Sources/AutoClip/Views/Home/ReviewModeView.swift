@@ -30,11 +30,11 @@ struct ReviewModeView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Quick review").font(Theme.display(20)).foregroundColor(Theme.cream)
-                    Text(index < queue.count ? "Reel \(index + 1) of \(queue.count)" : "All reviewed")
-                        .font(.system(size: 11)).foregroundColor(Theme.muted)
+                    Text(index < queue.count ? "Clip \(index + 1) of \(queue.count)" : "All reviewed")
+                        .font(.system(size: 12)).foregroundColor(Theme.muted)
                 }
                 Spacer()
-                Text("\(kept.count) kept · \(tossed.count) tossed").font(.system(size: 12)).foregroundColor(gold).monospacedDigit()
+                Text("\(kept.count) kept · \(tossed.count) tossed").font(.system(size: 13)).foregroundColor(gold).monospacedDigit()
                 Button("Done") { dismiss() }.keyboardShortcut(.cancelAction).padding(.leading, 10)
             }
             .padding(16)
@@ -58,7 +58,7 @@ struct ReviewModeView: View {
         }
         .frame(minWidth: 620, minHeight: 760)
         .background(Theme.bg)
-        .preferredColorScheme(.dark)
+        .appLook()
         .onAppear {
             // Reels not exported yet first: those are the new ones
             let ds = record?.drafts ?? []
@@ -74,14 +74,14 @@ struct ReviewModeView: View {
                 CelebrationBurst(size: 40)
             }
             Text("You kept \(kept.count) of \(queue.count)").font(Theme.display(24)).foregroundColor(Theme.cream)
-            Text("Kept reels are selected in the list. AutoClip will pick more like them next time.")
-                .font(.system(size: 12)).foregroundColor(Theme.muted)
+            Text("Kept clips are selected in the list. AutoClip will pick more like them next time.")
+                .font(.system(size: 13)).foregroundColor(Theme.muted)
             HStack(spacing: 10) {
                 if !history.isEmpty {
                     Button("Undo last") { undo() }.buttonStyle(SecondaryButtonStyle(compact: false)).keyboardShortcut("z", modifiers: [])
                 }
                 if !kept.isEmpty {
-                    Button("Export \(kept.count) kept reel\(kept.count == 1 ? "" : "s")") {
+                    Button("Export \(kept.count) kept clip\(kept.count == 1 ? "" : "s")") {
                         let ids = kept; dismiss(); onExport(ids)
                     }
                     .buttonStyle(PrimaryButtonStyle()).keyboardShortcut(.defaultAction)
@@ -100,7 +100,7 @@ struct ReviewModeView: View {
             }
             .foregroundColor(color)
             .padding(.horizontal, 14).padding(.vertical, 9)
-            .background(RoundedRectangle(cornerRadius: 9).fill(Color.white.opacity(0.05)))
+            .background(RoundedRectangle(cornerRadius: 9).fill(Theme.ink.opacity(0.05)))
         }
         .buttonStyle(.plain)
         .keyboardShortcut(shortcut, modifiers: [])

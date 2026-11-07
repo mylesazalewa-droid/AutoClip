@@ -120,7 +120,7 @@ struct CutTrimmer: View {
             let h = max(1, CGFloat(level) * waveHeight)
             let plays = isStart ? bx >= cutX : bx <= cutX
             let bar = CGRect(x: bx, y: (waveHeight - h) / 2, width: max(1, size.width / CGFloat(max(levels.count, 1)) - 1), height: h)
-            context.fill(Path(bar), with: .color(plays ? gold.opacity(0.85) : Color.white.opacity(0.16)))
+            context.fill(Path(bar), with: .color(plays ? gold.opacity(0.85) : Theme.ink.opacity(0.16)))
         }
 
         // What's said here
@@ -130,8 +130,8 @@ struct CutTrimmer: View {
             let wordX = x(w.startTime)
             let isCut = cutStarts.contains((w.startTime * 100).rounded())
             let plays = isStart ? w.startTime >= cutTime - 0.02 : w.endTime <= cutTime + 0.02
-            let label = context.resolve(Text(w.word).font(.system(size: 9, weight: .medium))
-                .foregroundColor(isCut ? Theme.danger : plays ? Color.white.opacity(0.85) : Color.white.opacity(0.35))
+            let label = context.resolve(Text(w.word).font(.system(size: 11, weight: .medium))
+                .foregroundColor(isCut ? Theme.danger : plays ? Theme.ink.opacity(0.85) : Theme.ink.opacity(0.35))
                 .strikethrough(isCut))
             let width = label.measure(in: size).width
             guard wordX > lastEnd + 3 else { continue }

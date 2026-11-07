@@ -92,7 +92,7 @@ final class TasteStore: ObservableObject {
         if kept.count >= 3 {
             let ds = kept.map(\.duration).sorted()
             let mid = ds[ds.count / 2]
-            out.append("Reels they keep usually run about \(Int(mid.rounded()))s (\(Int(ds.first!.rounded()))–\(Int(ds.last!.rounded()))s).")
+            out.append("Clips they keep usually run about \(Int(mid.rounded()))s (\(Int(ds.first!.rounded()))–\(Int(ds.last!.rounded()))s).")
         }
         let edits = taste.addedAfter + taste.addedBefore + taste.removed
         if edits >= 3 {
@@ -103,7 +103,7 @@ final class TasteStore: ObservableObject {
                 out.append("They often add the sentence before a clip — include a little more setup so it makes sense on its own.")
             }
             if taste.removed > taste.addedAfter + taste.addedBefore {
-                out.append("They often cut sentences out — keep reels tight and skip side comments.")
+                out.append("They often cut sentences out — keep clips tight and skip side comments.")
             }
         }
         return out
@@ -115,13 +115,13 @@ final class TasteStore: ObservableObject {
         let rejected = taste.rejected.filter { $0.kind == kind.rawValue }.suffix(6)
         let lessons = lessons(for: kind)
         guard !kept.isEmpty || !rejected.isEmpty || !lessons.isEmpty else { return "" }
-        var s = "\nWHAT THIS CREATOR LIKES (learned from reels they exported or threw out — follow it):\n"
+        var s = "\nWHAT THIS CREATOR LIKES (learned from clips they exported or threw out — follow it):\n"
         for l in lessons { s += "- \(l)\n" }
         if !kept.isEmpty {
-            s += "Reels they kept:\n" + kept.map { "- \"\($0.title)\" (\(Int($0.duration))s) — opens: \"\($0.opening)…\"" }.joined(separator: "\n") + "\n"
+            s += "Clips they kept:\n" + kept.map { "- \"\($0.title)\" (\(Int($0.duration))s) — opens: \"\($0.opening)…\"" }.joined(separator: "\n") + "\n"
         }
         if !rejected.isEmpty {
-            s += "Reels they threw out (avoid this kind of pick):\n" + rejected.map { "- \"\($0.title)\" — opens: \"\($0.opening)…\"" }.joined(separator: "\n") + "\n"
+            s += "Clips they threw out (avoid this kind of pick):\n" + rejected.map { "- \"\($0.title)\" — opens: \"\($0.opening)…\"" }.joined(separator: "\n") + "\n"
         }
         return s
     }

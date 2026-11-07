@@ -13,32 +13,30 @@ struct SetupView: View {
 
             // Logo
             VStack(spacing: 12) {
-                Image(systemName: "scissors")
-                    .font(.system(size: 56, weight: .bold))
-                    .foregroundColor(Theme.sand)
+                LogoMark(size: 72)
 
                 Text("AutoClip")
                     .font(.system(size: 32, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(Theme.ink)
 
-                Text("AI-powered video clip generator")
+                Text("Sermon clips, ready by Monday")
                     .font(.system(size: 16))
-                    .foregroundColor(Color.white.opacity(0.5))
+                    .foregroundColor(Theme.ink.opacity(0.55))
             }
 
             Divider()
-                .background(Color.white.opacity(0.1))
+                .background(Theme.ink.opacity(0.1))
                 .padding(.horizontal, 60)
 
             // AI Model setup
             VStack(spacing: 16) {
                 Text("Download AI Transcription Model")
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(Theme.ink)
 
                 Text("AutoClip uses on-device AI to transcribe and analyze your videos.\nNo internet connection or API keys required after setup.")
                     .font(.system(size: 14))
-                    .foregroundColor(Color.white.opacity(0.5))
+                    .foregroundColor(Theme.ink.opacity(0.55))
                     .multilineTextAlignment(.center)
                     .lineSpacing(4)
 
@@ -51,8 +49,8 @@ struct SetupView: View {
 
                 // Model size info
                 Text("Model: Whisper Small (English) · ~230 MB")
-                    .font(.system(size: 12))
-                    .foregroundColor(Color.white.opacity(0.35))
+                    .font(.system(size: 13))
+                    .foregroundColor(Theme.ink.opacity(0.55))
 
                 if isDownloading {
                     VStack(spacing: 8) {
@@ -62,12 +60,12 @@ struct SetupView: View {
 
                         Text(statusText)
                             .font(.system(size: 13))
-                            .foregroundColor(Color.white.opacity(0.5))
+                            .foregroundColor(Theme.ink.opacity(0.55))
                     }
                 } else {
                     if let error = downloadError {
                         Text(error)
-                            .font(.system(size: 12))
+                            .font(.system(size: 13))
                             .foregroundColor(Theme.danger)
                             .padding(.horizontal, 40)
                             .multilineTextAlignment(.center)
@@ -80,7 +78,7 @@ struct SetupView: View {
                             Text("Download AI Model")
                                 .font(.system(size: 16, weight: .semibold))
                         }
-                        .foregroundColor(.black)
+                        .foregroundColor(Theme.onSand)
                         .padding(.horizontal, 32)
                         .padding(.vertical, 13)
                         .background(Theme.sand)
@@ -111,8 +109,8 @@ struct SetupView: View {
                 .font(.system(size: 20))
                 .foregroundColor(Theme.sand)
             Text(text)
-                .font(.system(size: 12))
-                .foregroundColor(Color.white.opacity(0.6))
+                .font(.system(size: 13))
+                .foregroundColor(Theme.ink.opacity(0.6))
         }
     }
 

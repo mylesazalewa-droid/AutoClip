@@ -24,9 +24,9 @@ struct AssessCard<Content: View>: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 7) {
                     Image(systemName: "diamond.fill").font(.system(size: 5)).foregroundColor(Theme.sand.opacity(0.8))
-                    Text(title.uppercased()).font(.system(size: 10, weight: .semibold)).foregroundColor(Theme.sand.opacity(0.85)).tracking(1.6)
+                    Text(title.uppercased()).font(.system(size: 11.5, weight: .semibold)).foregroundColor(Theme.sand.opacity(0.85)).tracking(1.6)
                 }
-                if let subtitle { Text(subtitle).font(.system(size: 11)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true) }
+                if let subtitle { Text(subtitle).font(.system(size: 12)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true) }
             }
             content
         }
@@ -43,7 +43,7 @@ struct TimeLink: View {
     let play: (Double) -> Void
     var body: some View {
         Button(assessTime(time)) { play(time) }
-            .buttonStyle(.plain).font(.system(size: 11, design: .monospaced)).foregroundColor(gold)
+            .buttonStyle(.plain).font(.system(size: 12, design: .monospaced)).foregroundColor(gold)
             .help("Play this moment")
     }
 }
@@ -54,8 +54,8 @@ func pointerList(_ pointers: [Pointer]) -> some View {
     VStack(alignment: .leading, spacing: 6) {
         ForEach(pointers) { p in
             HStack(alignment: .top, spacing: 8) {
-                Image(systemName: p.icon).font(.system(size: 11)).foregroundColor(p.good ? good : warn).frame(width: 14)
-                Text(p.text).font(.system(size: 12)).foregroundColor(Color.white.opacity(0.85))
+                Image(systemName: p.icon).font(.system(size: 12)).foregroundColor(p.good ? good : warn).frame(width: 14)
+                Text(p.text).font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.85))
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -135,7 +135,7 @@ struct DeliverySection: View {
             AssessCard(title: "Pauses",
                        subtitle: String(format: "%d natural pauses (%.1f a minute) · %d long pauses over 2s", d.naturalPauses, Double(d.naturalPauses) / minutes, d.longPauses)) {
                 if d.breathlessRuns.isEmpty {
-                    Text("No long stretches without a breath.").font(.system(size: 12)).foregroundColor(good)
+                    Text("No long stretches without a breath.").font(.system(size: 13)).foregroundColor(good)
                 } else {
                     spanList("30+ seconds without pausing", d.breathlessRuns)
                 }
@@ -173,7 +173,7 @@ struct DeliverySection: View {
             AssessCard(title: "Crutch phrases", subtitle: String(format: "%d in total · %.1f a minute", d.crutches.count, Double(d.crutches.count) / minutes)) {
                 let groups = Dictionary(grouping: d.crutches, by: \.kind).sorted { $0.value.count > $1.value.count }
                 if groups.isEmpty {
-                    Text("None found.").font(.system(size: 12)).foregroundColor(good)
+                    Text("None found.").font(.system(size: 13)).foregroundColor(good)
                 } else {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 8)], alignment: .leading, spacing: 8) {
                         ForEach(groups, id: \.key) { k, v in
@@ -181,17 +181,17 @@ struct DeliverySection: View {
                                 ForEach(v) { m in Button("\(assessTime(m.time))  \(m.context)") { play(m.time) } }
                             } label: {
                                 HStack {
-                                    Text("\"\(k.replacingOccurrences(of: "?", with: ""))\"").font(.system(size: 12)).foregroundColor(.white)
+                                    Text("\"\(k.replacingOccurrences(of: "?", with: ""))\"").font(.system(size: 13)).foregroundColor(Theme.ink)
                                     Spacer()
                                     Text("\(v.count)").font(.system(size: 13, weight: .bold, design: .rounded)).foregroundColor(gold)
                                 }
                             }
                             .menuStyle(.borderlessButton)
                             .padding(.horizontal, 10).padding(.vertical, 6)
-                            .background(Color.white.opacity(0.07)).cornerRadius(7)
+                            .background(Theme.ink.opacity(0.07)).cornerRadius(7)
                         }
                     }
-                    Text("Click a phrase to jump to each time it was said.").font(.system(size: 10)).foregroundColor(Color.white.opacity(0.35))
+                    Text("Click a phrase to jump to each time it was said.").font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
                 }
             }
 
@@ -202,8 +202,8 @@ struct DeliverySection: View {
                     stat("\"we\"", d.weCount, Double(d.weCount) / total)
                     stat("\"I\"", d.iCount, Double(d.iCount) / total)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("\(d.questions)").font(.system(size: 22, weight: .bold, design: .rounded)).foregroundColor(.white)
-                        Text("questions asked").font(.system(size: 10)).foregroundColor(Color.white.opacity(0.5))
+                        Text("\(d.questions)").font(.system(size: 22, weight: .bold, design: .rounded)).foregroundColor(Theme.ink)
+                        Text("questions asked").font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
                     }
                 }
             }
@@ -213,18 +213,18 @@ struct DeliverySection: View {
     private func stat(_ label: String, _ n: Int, _ share: Double) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text("\(n)").font(.system(size: 22, weight: .bold, design: .rounded)).foregroundColor(gold)
-            Text("\(label) · \(Int(share * 100))%").font(.system(size: 10)).foregroundColor(Color.white.opacity(0.5))
+            Text("\(label) · \(Int(share * 100))%").font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
         }
     }
 
     @ViewBuilder private func spanList(_ title: String, _ spans: [SpeakerReport.Span]) -> some View {
         if !spans.isEmpty {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(title + ":").font(.system(size: 11)).foregroundColor(Color.white.opacity(0.5))
+                Text(title + ":").font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.55))
                 HStack(spacing: 8) {
                     ForEach(spans.prefix(10), id: \.start) { s in TimeLink(time: s.start, play: play) }
                     if spans.count > 10 {
-                        Text("+\(spans.count - 10) more").font(.system(size: 11)).foregroundColor(Color.white.opacity(0.4))
+                        Text("+\(spans.count - 10) more").font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.55))
                     }
                 }
             }
@@ -253,9 +253,9 @@ struct CoachSection: View {
                     HStack(alignment: .top, spacing: 16) {
                         VStack(spacing: 0) {
                             Text("\(c.score)").font(.system(size: 42, weight: .bold, design: .rounded)).foregroundColor(gold)
-                            Text("out of 10").font(.system(size: 10)).foregroundColor(Color.white.opacity(0.5))
+                            Text("out of 10").font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
                         }
-                        Text(c.summary).font(.system(size: 13)).foregroundColor(.white).fixedSize(horizontal: false, vertical: true)
+                        Text(c.summary).font(.system(size: 13)).foregroundColor(Theme.ink).fixedSize(horizontal: false, vertical: true)
                         Spacer()
                         Button("Run again") { run() }.controlSize(.small).disabled(status != nil)
                     }
@@ -265,15 +265,15 @@ struct CoachSection: View {
                     AssessCard(title: "Work on") { notes(c.improvements, icon: "arrow.up.right.circle.fill", color: warn) }
                 }
                 AssessCard(title: "Big idea", subtitle: "Clarity \(c.bigIdeaClarity)/10 · stated \(c.bigIdeaMentions.count) time\(c.bigIdeaMentions.count == 1 ? "" : "s")") {
-                    Text("“\(c.bigIdea)”").font(.system(size: 14, weight: .medium)).foregroundColor(.white)
+                    Text("“\(c.bigIdea)”").font(.system(size: 14, weight: .medium)).foregroundColor(Theme.ink)
                         .fixedSize(horizontal: false, vertical: true)
                     HStack(spacing: 8) {
-                        Text("Where you said it:").font(.system(size: 11)).foregroundColor(Color.white.opacity(0.5))
+                        Text("Where you said it:").font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.55))
                         ForEach(c.bigIdeaMentions, id: \.self) { t in TimeLink(time: t, play: play) }
                     }
                     if c.bigIdeaMentions.count < 3 {
                         Text("Tip: state your big idea in one memorable sentence and repeat it 3+ times — at the start, middle and end.")
-                            .font(.system(size: 11)).foregroundColor(warn).fixedSize(horizontal: false, vertical: true)
+                            .font(.system(size: 12)).foregroundColor(warn).fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 AssessCard(title: "Sermon map", subtitle: "Click a block to play it") { sermonMap(c) }
@@ -285,8 +285,8 @@ struct CoachSection: View {
                     AssessCard(title: "Insider words", subtitle: "A newcomer might not know these — explain them or use plainer words") {
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 6)], alignment: .leading, spacing: 6) {
                             ForEach(c.jargon, id: \.self) { j in
-                                Text(j).font(.system(size: 11)).foregroundColor(.white).lineLimit(1)
-                                    .padding(.horizontal, 9).padding(.vertical, 4).background(Color.white.opacity(0.08)).cornerRadius(10)
+                                Text(j).font(.system(size: 12)).foregroundColor(Theme.ink).lineLimit(1)
+                                    .padding(.horizontal, 9).padding(.vertical, 4).background(Theme.ink.opacity(0.08)).cornerRadius(10)
                             }
                         }
                     }
@@ -295,14 +295,14 @@ struct CoachSection: View {
         } else {
             AssessCard(title: "AI coach") {
                 Text("The AI reads the whole message with your delivery measurements and gives a score, 3 strengths, 3 things to work on (with practice drills), your big idea, a map of the sermon, and your strongest and weakest moments.")
-                    .font(.system(size: 12)).foregroundColor(Color.white.opacity(0.75)).fixedSize(horizontal: false, vertical: true)
+                    .font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.75)).fixedSize(horizontal: false, vertical: true)
                 HStack {
                     Button(status == nil ? "Run AI coach" : "Working…") { run() }
                         .buttonStyle(PrimaryButtonStyle()).disabled(status != nil)
-                    if let status { ProgressView().controlSize(.small); Text(status).font(.system(size: 11)).foregroundColor(Color.white.opacity(0.6)) }
+                    if let status { ProgressView().controlSize(.small); Text(status).font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.6)) }
                 }
-                Text("Uses your AI key — about 1–3¢ per sermon.").font(.system(size: 10)).foregroundColor(Color.white.opacity(0.35))
-                if let error { Text(error).font(.system(size: 11)).foregroundColor(Theme.danger) }
+                Text("Uses your AI key — about 1–3¢ per sermon.").font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
+                if let error { Text(error).font(.system(size: 12)).foregroundColor(Theme.danger) }
             }
         }
     }
@@ -312,13 +312,13 @@ struct CoachSection: View {
             ForEach(list) { n in
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
-                        Image(systemName: icon).font(.system(size: 11)).foregroundColor(color)
-                        Text(n.title).font(.system(size: 13, weight: .semibold)).foregroundColor(.white)
+                        Image(systemName: icon).font(.system(size: 12)).foregroundColor(color)
+                        Text(n.title).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.ink)
                         if let t = n.time { TimeLink(time: t, play: play) }
                     }
-                    Text(n.detail).font(.system(size: 12)).foregroundColor(Color.white.opacity(0.8)).fixedSize(horizontal: false, vertical: true)
+                    Text(n.detail).font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.8)).fixedSize(horizontal: false, vertical: true)
                     if let drill = n.drill, !drill.isEmpty {
-                        Text("Practice: " + drill).font(.system(size: 11)).foregroundColor(gold).fixedSize(horizontal: false, vertical: true)
+                        Text("Practice: " + drill).font(.system(size: 12)).foregroundColor(gold).fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
@@ -329,8 +329,8 @@ struct CoachSection: View {
         VStack(alignment: .leading, spacing: 10) {
             ForEach(list) { m in
                 VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) { TimeLink(time: m.time, play: play); Text("“\(m.quote)”").font(.system(size: 12, weight: .medium)).foregroundColor(.white).lineLimit(2) }
-                    Text(m.why).font(.system(size: 11)).foregroundColor(Color.white.opacity(0.65)).fixedSize(horizontal: false, vertical: true)
+                    HStack(spacing: 6) { TimeLink(time: m.time, play: play); Text("“\(m.quote)”").font(.system(size: 13, weight: .medium)).foregroundColor(Theme.ink).lineLimit(2) }
+                    Text(m.why).font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.65)).fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
@@ -358,7 +358,7 @@ struct CoachSection: View {
                 ForEach(byKind.sorted { $0.value > $1.value }, id: \.key) { k, secs in
                     HStack(spacing: 4) {
                         Circle().fill(Self.kindColors[k] ?? .gray).frame(width: 8, height: 8)
-                        Text("\(k.capitalized) \(Int(secs / 60))m").font(.system(size: 11)).foregroundColor(Color.white.opacity(0.75))
+                        Text("\(k.capitalized) \(Int(secs / 60))m").font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.75))
                     }
                 }
             }
@@ -367,8 +367,8 @@ struct CoachSection: View {
                     HStack(spacing: 8) {
                         TimeLink(time: s.start, play: play)
                         Circle().fill(Self.kindColors[s.kind] ?? .gray).frame(width: 7, height: 7)
-                        Text(s.title).font(.system(size: 12)).foregroundColor(.white)
-                        Text("\(max(1, Int((s.end - s.start) / 60))) min").font(.system(size: 10)).foregroundColor(Color.white.opacity(0.4))
+                        Text(s.title).font(.system(size: 13)).foregroundColor(Theme.ink)
+                        Text("\(max(1, Int((s.end - s.start) / 60))) min").font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
                     }
                 }
             }
@@ -395,7 +395,7 @@ struct StageSection: View {
                     }
                     .cornerRadius(4)
                     Text("If the camera operator follows you, this shows the framing more than where you walk.")
-                        .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.35))
+                        .font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
                 }
                 HStack(spacing: 14) {
                     metric(String(format: "%.0f%%", s.onScreenPercent), "of the video your face is visible")
@@ -424,7 +424,7 @@ struct StageSection: View {
                 HStack(spacing: 8) {
                     if status != nil { ProgressView().controlSize(.small) }
                     Text(status ?? "Not available — no face found in this video (or it was recorded as sound only).")
-                        .font(.system(size: 12)).foregroundColor(Color.white.opacity(0.7))
+                        .font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.7))
                 }
             }
         }
@@ -450,9 +450,9 @@ struct StageSection: View {
     private func metric(_ big: String, _ label: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(big).font(.system(size: 24, weight: .bold, design: .rounded)).foregroundColor(gold)
-            Text(label).font(.system(size: 10)).foregroundColor(Color.white.opacity(0.5))
+            Text(label).font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
         }
-        .padding(12).frame(maxWidth: .infinity, alignment: .leading).background(Color.white.opacity(0.04)).cornerRadius(10)
+        .padding(12).frame(maxWidth: .infinity, alignment: .leading).background(Theme.ink.opacity(0.04)).cornerRadius(10)
     }
 }
 
@@ -466,7 +466,7 @@ struct SpeakerProgressSection: View {
         if reports.count < 2 {
             AssessCard(title: "Progress") {
                 Text("Assess at least two messages to see your trends over time. Each assessed video is saved automatically.")
-                    .font(.system(size: 12)).foregroundColor(Color.white.opacity(0.7))
+                    .font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.7))
                 ForEach(reports, id: \.videoPath) { r in row(r) }
             }
         } else {
@@ -493,13 +493,13 @@ struct SpeakerProgressSection: View {
     private func row(_ r: SpeakerReport) -> some View {
         Button { open(r.videoPath) } label: {
             HStack {
-                Text(r.videoDate.formatted(date: .abbreviated, time: .omitted)).font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(Color.white.opacity(0.5)).frame(width: 96, alignment: .leading)
-                Text(r.title).font(.system(size: 12)).foregroundColor(.white).lineLimit(1)
+                Text(r.videoDate.formatted(date: .abbreviated, time: .omitted)).font(.system(size: 12, design: .monospaced))
+                    .foregroundColor(Theme.ink.opacity(0.55)).frame(width: 96, alignment: .leading)
+                Text(r.title).font(.system(size: 13)).foregroundColor(Theme.ink).lineLimit(1)
                 Spacer()
-                Text(String(format: "%.1f fillers/min", r.fillersPerMin)).font(.system(size: 11)).foregroundColor(Color.white.opacity(0.6))
-                if let d = r.delivery { Text(String(format: "%.0f wpm", d.averageWPM)).font(.system(size: 11)).foregroundColor(Color.white.opacity(0.6)) }
-                if let c = r.coach { Text("\(c.score)/10").font(.system(size: 11, weight: .semibold)).foregroundColor(gold) }
+                Text(String(format: "%.1f fillers/min", r.fillersPerMin)).font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.6))
+                if let d = r.delivery { Text(String(format: "%.0f wpm", d.averageWPM)).font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.6)) }
+                if let c = r.coach { Text("\(c.score)/10").font(.system(size: 12, weight: .semibold)).foregroundColor(gold) }
             }
             .contentShape(Rectangle())
         }
@@ -518,7 +518,7 @@ struct SpeakerProgressSection: View {
         }
         return AssessCard(title: title, subtitle: verdict) {
             if pts.count < 2 {
-                Text("Not enough data yet").font(.system(size: 11)).foregroundColor(Color.white.opacity(0.4)).frame(height: 110)
+                Text("Not enough data yet").font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.55)).frame(height: 110)
             } else {
                 Chart {
                     ForEach(Array(pts.enumerated()), id: \.offset) { _, p in
@@ -551,21 +551,21 @@ struct NotesSection: View {
                     Spacer()
                     if let status {
                         ProgressView().controlSize(.small)
-                        Text(status).font(.system(size: 11)).foregroundColor(Color.white.opacity(0.6))
+                        Text(status).font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.6))
                     } else {
                         Button("Write again") { run() }.help("Ask the AI for a fresh set of notes")
                     }
                 }
                 .controlSize(.small)
-                if let error { Text(error).font(.system(size: 11)).foregroundColor(warn) }
+                if let error { Text(error).font(.system(size: 12)).foregroundColor(warn) }
 
                 AssessCard(title: n.title) {
                     Text(n.bigIdea).font(.system(size: 14, weight: .semibold)).foregroundColor(gold)
                         .fixedSize(horizontal: false, vertical: true)
-                    Text(n.summary).font(.system(size: 12)).foregroundColor(Color.white.opacity(0.85))
+                    Text(n.summary).font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.85))
                         .fixedSize(horizontal: false, vertical: true)
                     if !n.verses.isEmpty {
-                        Text("Scripture: " + n.verses.joined(separator: "; ")).font(.system(size: 11)).foregroundColor(Color.white.opacity(0.55))
+                        Text("Scripture: " + n.verses.joined(separator: "; ")).font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.55))
                     }
                 }
                 AssessCard(title: "Outline") {
@@ -573,14 +573,14 @@ struct NotesSection: View {
                         VStack(alignment: .leading, spacing: 3) {
                             HStack(alignment: .firstTextBaseline, spacing: 8) {
                                 Text("\(i + 1).").font(.system(size: 13, weight: .bold)).foregroundColor(gold)
-                                Text(p.title).font(.system(size: 13, weight: .semibold)).foregroundColor(.white)
+                                Text(p.title).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.ink)
                                 Spacer()
                                 if let t = p.time { TimeLink(time: t, play: play) }
                             }
-                            Text(p.summary).font(.system(size: 12)).foregroundColor(Color.white.opacity(0.8))
+                            Text(p.summary).font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.8))
                                 .fixedSize(horizontal: false, vertical: true).padding(.leading, 22)
                             if !p.verses.isEmpty {
-                                Text(p.verses.joined(separator: "; ")).font(.system(size: 11)).foregroundColor(Color.white.opacity(0.5)).padding(.leading, 22)
+                                Text(p.verses.joined(separator: "; ")).font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.55)).padding(.leading, 22)
                             }
                         }
                         .padding(.bottom, 4)
@@ -591,7 +591,7 @@ struct NotesSection: View {
                 if !n.application.isEmpty { list("This week", n.application, numbered: false) }
                 if !n.prayer.isEmpty {
                     AssessCard(title: "Prayer") {
-                        Text(n.prayer).font(.system(size: 12)).italic().foregroundColor(Color.white.opacity(0.85))
+                        Text(n.prayer).font(.system(size: 13)).italic().foregroundColor(Theme.ink.opacity(0.85))
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -599,17 +599,17 @@ struct NotesSection: View {
         } else {
             AssessCard(title: "Sermon notes", subtitle: "For small groups, the church website or anyone who missed it") {
                 Text("The AI reads the message and writes a title, the big idea, a summary, the outline with Scripture, key quotes, five discussion questions, things to try this week and a closing prayer. Copy it or save it as a Word document. Costs about a cent with Claude.")
-                    .font(.system(size: 12)).foregroundColor(Color.white.opacity(0.7)).fixedSize(horizontal: false, vertical: true)
+                    .font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.7)).fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 8) {
                     if let status {
                         ProgressView().controlSize(.small)
-                        Text(status).font(.system(size: 12)).foregroundColor(Color.white.opacity(0.7))
+                        Text(status).font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.7))
                     } else {
                         Button { run() } label: { Label("Write sermon notes", systemImage: "sparkles") }
                             .buttonStyle(PrimaryButtonStyle())
                     }
                 }
-                if let error { Text(error).font(.system(size: 11)).foregroundColor(warn).fixedSize(horizontal: false, vertical: true) }
+                if let error { Text(error).font(.system(size: 12)).foregroundColor(warn).fixedSize(horizontal: false, vertical: true) }
             }
         }
     }
@@ -618,8 +618,8 @@ struct NotesSection: View {
         AssessCard(title: title) {
             ForEach(Array(items.enumerated()), id: \.offset) { i, s in
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(numbered ? "\(i + 1)." : "•").font(.system(size: 12, weight: .semibold)).foregroundColor(gold).frame(width: 16, alignment: .leading)
-                    Text(s).font(.system(size: 12)).foregroundColor(Color.white.opacity(0.85)).fixedSize(horizontal: false, vertical: true)
+                    Text(numbered ? "\(i + 1)." : "•").font(.system(size: 13, weight: .semibold)).foregroundColor(gold).frame(width: 16, alignment: .leading)
+                    Text(s).font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.85)).fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
@@ -695,7 +695,7 @@ struct PracticeCompareCard: View {
                                                                      : "Compared with your average across \(sermons.count) sermon\(sermons.count == 1 ? "" : "s")") {
             if sermons.isEmpty {
                 Text("This is a practice recording, so it isn't included in your progress charts.")
-                    .font(.system(size: 12)).foregroundColor(Color.white.opacity(0.7))
+                    .font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.7))
             } else {
                 HStack(spacing: 10) {
                     cell("Filler words / min", report.fillersPerMin, avg { $0.fillersPerMin }, "%.1f", lowerIsBetter: true)
@@ -716,15 +716,15 @@ struct PracticeCompareCard: View {
     private func cell(_ title: String, _ value: Double?, _ average: Double?, _ fmt: String, lowerIsBetter: Bool?) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(value.map { String(format: fmt, $0) } ?? "–").font(.system(size: 20, weight: .bold, design: .rounded)).foregroundColor(gold)
-            Text(title).font(.system(size: 10)).foregroundColor(Color.white.opacity(0.5))
+            Text(title).font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
             if let value, let average {
                 let better = lowerIsBetter.map { $0 ? value < average * 0.95 : value > average * 1.05 }
                 let worse = lowerIsBetter.map { $0 ? value > average * 1.05 : value < average * 0.95 }
                 Text("Sermons: " + String(format: fmt, average))
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(better == true ? good : worse == true ? warn : Color.white.opacity(0.5))
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundColor(better == true ? good : worse == true ? warn : Theme.ink.opacity(0.5))
             }
         }
-        .padding(10).frame(maxWidth: .infinity, alignment: .leading).background(Color.white.opacity(0.04)).cornerRadius(8)
+        .padding(10).frame(maxWidth: .infinity, alignment: .leading).background(Theme.ink.opacity(0.04)).cornerRadius(8)
     }
 }

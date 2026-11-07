@@ -188,7 +188,14 @@ enum ReelOverlays {
     /// Verse card: 📖 + reference on a dark pill.
     static func verseImage(_ ref: String, look: CaptionLook, width: CGFloat) -> NSImage {
         let fs = max(18, width * 0.05)
-        let str = NSMutableAttributedString(string: "📖  ", attributes: [.font: NSFont.systemFont(ofSize: fs * 0.9)])
+        let str = NSMutableAttributedString()
+        if let book = NSImage(systemSymbolName: "book.fill", accessibilityDescription: nil)?
+            .withSymbolConfiguration(.init(pointSize: fs * 0.82, weight: .semibold).applying(.init(paletteColors: [look.highlightColor.nsColor]))) {
+            let a = NSTextAttachment(); a.image = book
+            a.bounds = CGRect(x: 0, y: -fs * 0.08, width: book.size.width, height: book.size.height)
+            str.append(NSAttributedString(attachment: a))
+            str.append(NSAttributedString(string: "  ", attributes: [.font: NSFont.systemFont(ofSize: fs * 0.9)]))
+        }
         str.append(NSAttributedString(string: ref.uppercased(), attributes: [
             .font: look.font(size: fs), .foregroundColor: look.highlightColor.nsColor]))
         let r = str.boundingRect(with: CGSize(width: width, height: 400), options: [.usesLineFragmentOrigin, .usesFontLeading])

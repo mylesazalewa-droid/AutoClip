@@ -16,7 +16,7 @@ struct ScoreBadge: View {
     var body: some View {
         ZStack {
             Circle()
-                .stroke(Color.white.opacity(0.12), lineWidth: 2)
+                .stroke(Theme.ink.opacity(0.12), lineWidth: 2)
                 .frame(width: size, height: size)
 
             Circle()
@@ -38,10 +38,10 @@ struct TagBadge: View {
 
     var body: some View {
         HStack(spacing: 3) {
-            Text("🔥")
-                .font(.system(size: 10))
+            Image(systemName: "flame.fill")
+                .font(.system(size: 11)).foregroundColor(color)
             Text(text)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(color)
         }
         .padding(.horizontal, 7)
@@ -60,8 +60,8 @@ struct StarRatingView: View {
         HStack(spacing: 2) {
             ForEach(1...5, id: \.self) { star in
                 Image(systemName: star <= rating ? "star.fill" : "star")
-                    .font(.system(size: 10))
-                    .foregroundColor(star <= rating ? Theme.sand : Color.white.opacity(0.3))
+                    .font(.system(size: 11.5))
+                    .foregroundColor(star <= rating ? Theme.sand : Theme.ink.opacity(0.3))
                     .onTapGesture {
                         if interactive { onRate?(star) }
                     }

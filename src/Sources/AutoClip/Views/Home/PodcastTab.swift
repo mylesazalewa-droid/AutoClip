@@ -23,8 +23,8 @@ struct PodcastTab: View {
                     HStack {
                         Button { selected = "" } label: {
                             HStack(spacing: 6) {
-                                Image(systemName: "chevron.left").font(.system(size: 11, weight: .semibold))
-                                Text("All episodes").font(.system(size: 12, weight: .medium))
+                                Image(systemName: "chevron.left").font(.system(size: 12, weight: .semibold))
+                                Text("All episodes").font(.system(size: 13, weight: .medium))
                             }
                             .foregroundColor(Theme.sand)
                         }
@@ -101,11 +101,11 @@ private struct EpisodeCard: View {
                 LinearGradient(colors: [.black.opacity(0.45), .clear, .clear, .black.opacity(0.65)], startPoint: .top, endPoint: .bottom)
                 HStack(spacing: 6) {
                     Text(e.isAudioOnly ? "AUDIO" : e.separateTracks ? "REMOTE" : e.angles.count > 1 ? "\(e.angles.count) CAMERAS" : "VIDEO")
-                        .font(.system(size: 9, weight: .bold)).tracking(1).foregroundColor(Theme.bg)
+                        .font(.system(size: 11, weight: .bold)).tracking(1).foregroundColor(Theme.onSand)
                         .padding(.horizontal, 7).padding(.vertical, 3).background(Capsule().fill(Theme.sand))
                     Spacer()
                     if e.duration > 0 {
-                        Text(podcastTime(e.editedDuration)).font(.system(size: 9, weight: .semibold)).foregroundColor(Theme.cream)
+                        Text(podcastTime(e.editedDuration)).font(.system(size: 11, weight: .semibold)).foregroundColor(Theme.cream)
                             .padding(.horizontal, 7).padding(.vertical, 3).background(Capsule().fill(Color.black.opacity(0.55)))
                     }
                 }
@@ -115,16 +115,16 @@ private struct EpisodeCard: View {
                     if let status {
                         HStack(spacing: 6) {
                             ProgressView().controlSize(.mini)
-                            Text(status).font(.system(size: 10)).foregroundColor(Theme.cream).lineLimit(1)
+                            Text(status).font(.system(size: 11.5)).foregroundColor(Theme.cream).lineLimit(1)
                         }
                         .padding(8).frame(maxWidth: .infinity, alignment: .leading).background(Color.black.opacity(0.6))
                     } else if e.people.count > 1 {
-                        Text(e.people.map(\.name).joined(separator: " · ")).font(.system(size: 10, weight: .semibold))
+                        Text(e.people.map(\.name).joined(separator: " · ")).font(.system(size: 11.5, weight: .semibold))
                             .foregroundColor(Theme.cream).lineLimit(1).padding(10).frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
                 if hover && status == nil {
-                    Image(systemName: "play.fill").font(.system(size: 18)).foregroundColor(Theme.cream)
+                    Image(systemName: "play.fill").font(.system(size: 18)).foregroundColor(Theme.onColor)
                         .frame(width: 48, height: 48).background(Circle().fill(Theme.terracotta.opacity(0.95)))
                         .shadow(color: .black.opacity(0.4), radius: 8, y: 3)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -134,9 +134,9 @@ private struct EpisodeCard: View {
             .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(hover ? Theme.sand.opacity(0.6) : Theme.line, lineWidth: hover ? 1.5 : 1))
             .shadow(color: .black.opacity(hover ? 0.45 : 0.25), radius: hover ? 16 : 8, y: hover ? 8 : 4)
             VStack(alignment: .leading, spacing: 3) {
-                Text(e.title).font(.system(size: 12, weight: .semibold)).foregroundColor(Theme.text)
+                Text(e.title).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.text)
                     .lineLimit(2).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
-                Text(e.created.formatted(.relative(presentation: .named))).font(.system(size: 10)).foregroundColor(Theme.muted)
+                Text(e.created.formatted(.relative(presentation: .named))).font(.system(size: 11.5)).foregroundColor(Theme.muted)
             }
             .padding(.horizontal, 2)
         }
@@ -162,25 +162,25 @@ struct NewEpisodeSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("New episode").font(.system(size: 18, weight: .semibold)).foregroundColor(.white)
+            Text("New episode").font(.system(size: 18, weight: .semibold)).foregroundColor(Theme.ink)
             TextField("Episode title", text: $title).textFieldStyle(.roundedBorder)
-            Text("RECORDINGS").font(.system(size: 10, weight: .semibold)).foregroundColor(Color.white.opacity(0.4)).tracking(1)
+            Text("RECORDINGS").font(.system(size: 11.5, weight: .semibold)).foregroundColor(Theme.ink.opacity(0.55)).tracking(1)
             Text(perPerson
                  ? "Add each person's own recording (video or audio). AutoClip mixes them, evens out the voices, follows whoever is talking on their own mic, and shows everyone side by side for the back-and-forth."
                  : "Add the video or audio. Filmed with more than one camera? Add each camera's file — AutoClip lines them up by their sound and cuts between them. The sound comes from the first file.")
-                .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.55)).fixedSize(horizontal: false, vertical: true)
+                .font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.55)).fixedSize(horizontal: false, vertical: true)
             Toggle("Each file is one person (Zoom, Riverside, SquadCast, or a mic each)", isOn: $perPerson)
-                .font(.system(size: 12)).foregroundColor(.white)
+                .font(.system(size: 13)).foregroundColor(Theme.ink)
             VStack(spacing: 4) {
                 ForEach(Array(files.enumerated()), id: \.offset) { i, f in
                     HStack {
-                        Text(perPerson ? "Person \(i + 1)" : i == 0 ? "Main" : "Camera \(i + 1)").font(.system(size: 10, weight: .semibold)).foregroundColor(gold).frame(width: 60, alignment: .leading)
-                        Text(URL(fileURLWithPath: f).lastPathComponent).font(.system(size: 12)).foregroundColor(.white).lineLimit(1)
+                        Text(perPerson ? "Person \(i + 1)" : i == 0 ? "Main" : "Camera \(i + 1)").font(.system(size: 11.5, weight: .semibold)).foregroundColor(gold).frame(width: 60, alignment: .leading)
+                        Text(URL(fileURLWithPath: f).lastPathComponent).font(.system(size: 13)).foregroundColor(Theme.ink).lineLimit(1)
                         Spacer()
                         if i > 0 { Button { files.swapAt(i, i - 1) } label: { Image(systemName: "chevron.up") }.buttonStyle(.borderless) }
                         Button { files.remove(at: i) } label: { Image(systemName: "minus.circle") }.buttonStyle(.borderless)
                     }
-                    .padding(6).background(Color.white.opacity(0.05)).cornerRadius(6)
+                    .padding(6).background(Theme.ink.opacity(0.05)).cornerRadius(6)
                 }
             }
             HStack {
@@ -192,10 +192,10 @@ struct NewEpisodeSheet: View {
                 TextField("Or paste a YouTube link", text: $link).textFieldStyle(.roundedBorder).onSubmit(download)
                 Button("Import", action: download).disabled(link.isEmpty || downloading != nil)
             }
-            if let downloading { HStack { ProgressView().controlSize(.small); Text(downloading).font(.system(size: 11)).foregroundColor(Color.white.opacity(0.6)) } }
-            if let error { Text(error).font(.system(size: 11)).foregroundColor(warn) }
+            if let downloading { HStack { ProgressView().controlSize(.small); Text(downloading).font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.6)) } }
+            if let error { Text(error).font(.system(size: 12)).foregroundColor(warn) }
             if perPerson && files.count == 1 {
-                Text("Add a recording for each person.").font(.system(size: 11)).foregroundColor(warn)
+                Text("Add a recording for each person.").font(.system(size: 12)).foregroundColor(warn)
             }
             HStack {
                 Spacer()
@@ -315,8 +315,8 @@ struct PodcastEpisodeView: View {
             HStack(spacing: 7) {
                 Image(systemName: "diamond.fill").font(.system(size: 5)).foregroundColor(Theme.sand)
                 Text(e.isAudioOnly ? "PODCAST · AUDIO" : e.separateTracks ? "PODCAST · REMOTE" : "PODCAST EPISODE")
-                    .font(.system(size: 10, weight: .semibold)).tracking(2).foregroundColor(Theme.sand)
-                Text("· \(e.created.formatted(date: .abbreviated, time: .omitted))").font(.system(size: 10)).foregroundColor(Theme.faint)
+                    .font(.system(size: 11.5, weight: .semibold)).tracking(2).foregroundColor(Theme.sand)
+                Text("· \(e.created.formatted(date: .abbreviated, time: .omitted))").font(.system(size: 11.5)).foregroundColor(Theme.faint)
             }
         HStack(spacing: 10) {
             // The title is text until you choose to rename it, so it isn't selected on arrival
@@ -328,7 +328,7 @@ struct PodcastEpisodeView: View {
             } else {
                 Text(e.title).font(Theme.display(28)).foregroundColor(Theme.cream).lineLimit(1)
                     .onTapGesture(count: 2) { title = e.title; editingTitle = true }
-                Button { title = e.title; editingTitle = true } label: { Image(systemName: "pencil").font(.system(size: 12)) }
+                Button { title = e.title; editingTitle = true } label: { Image(systemName: "pencil").font(.system(size: 13)) }
                     .buttonStyle(.plain).foregroundColor(Theme.faint).help("Rename")
             }
             Spacer()
@@ -340,7 +340,7 @@ struct PodcastEpisodeView: View {
             } label: { Image(systemName: "ellipsis") }
             .menuStyle(.borderlessButton).fixedSize()
             .padding(.horizontal, 8).padding(.vertical, 5)
-            .background(Capsule().fill(Color.white.opacity(0.05))).overlay(Capsule().stroke(Theme.line, lineWidth: 1))
+            .background(Capsule().fill(Theme.ink.opacity(0.05))).overlay(Capsule().stroke(Theme.line, lineWidth: 1))
         }
         }
         .confirmationDialog("Delete “\(e.title)”?", isPresented: $confirmDelete, titleVisibility: .visible) {
@@ -354,20 +354,20 @@ struct PodcastEpisodeView: View {
         if let st = store.status[id] {
             HStack(spacing: 8) {
                 if let p = store.progress[id] { ProgressView(value: p).frame(width: 140) } else { ProgressView().controlSize(.small) }
-                Text(st).font(.system(size: 12)).foregroundColor(Color.white.opacity(0.7)).lineLimit(1)
+                Text(st).font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.7)).lineLimit(1)
                 Spacer()
                 Button("Stop") { store.cancel(id) }.controlSize(.small)
             }
         }
         if let err = store.errors[id] {
-            Text(err).font(.system(size: 11)).foregroundColor(warn).fixedSize(horizontal: false, vertical: true)
+            Text(err).font(.system(size: 12)).foregroundColor(warn).fixedSize(horizontal: false, vertical: true)
         }
     }
 
     private func progressCard(_ e: PodcastEpisode) -> some View {
         AssessCard(title: "Getting the episode ready") {
             Text("Transcribing, finding the pauses and filler words\(e.isAudioOnly ? "" : ", finding faces and working out who is talking"). An hour-long episode takes a few minutes.")
-                .font(.system(size: 12)).foregroundColor(Color.white.opacity(0.7)).fixedSize(horizontal: false, vertical: true)
+                .font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.7)).fixedSize(horizontal: false, vertical: true)
             statusLine()
             if store.status[id] == nil {
                 Button("Start") { store.analyze(id) }.buttonStyle(PrimaryButtonStyle())
@@ -391,7 +391,7 @@ struct PodcastEpisodeView: View {
                 PillTabs(selection: $format, items: PodcastVideo.formats.map { ($0, $0) }, compact: true)
             }
             Text("Preview with the original sound. Names, title card and cleaned-up sound are added on export.")
-                .font(.system(size: 9)).foregroundColor(Color.white.opacity(0.35))
+                .font(.system(size: 11)).foregroundColor(Theme.ink.opacity(0.55))
         }
     }
 
@@ -400,13 +400,13 @@ struct PodcastEpisodeView: View {
             statusLine()
             VStack(alignment: .leading, spacing: 2) {
                 Text(podcastTime(e.editedDuration)).font(Theme.display(38)).foregroundColor(Theme.sand)
-                Text("after the edit · was \(podcastTime(e.duration))").font(.system(size: 11)).foregroundColor(Color.white.opacity(0.55))
+                Text("after the edit · was \(podcastTime(e.duration))").font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.55))
             }
             let pauses = e.enabledCuts.filter { $0.kind == .pause }, fillers = e.enabledCuts.filter { $0.kind == .filler }
-            Text("\(pauses.count) pause\(pauses.count == 1 ? "" : "s") shortened · \(fillers.count) filler word\(fillers.count == 1 ? "" : "s") cut").font(.system(size: 12)).foregroundColor(.white)
+            Text("\(pauses.count) pause\(pauses.count == 1 ? "" : "s") shortened · \(fillers.count) filler word\(fillers.count == 1 ? "" : "s") cut").font(.system(size: 13)).foregroundColor(Theme.ink)
             if !e.isAudioOnly {
                 Text("\(e.people.count) \(e.people.count == 1 ? "person" : "people") · \(e.angles.count) \(e.separateTracks ? "recordings" : e.angles.count == 1 ? "camera" : "cameras") · \(e.shots.count) shots")
-                    .font(.system(size: 12)).foregroundColor(Color.white.opacity(0.7))
+                    .font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.7))
             }
             HStack(spacing: 8) {
                 Button { section = .export } label: { Label("Export", systemImage: "square.and.arrow.up") }
@@ -414,7 +414,7 @@ struct PodcastEpisodeView: View {
                 if !e.isAudioOnly {
                     Button { makeClips(e) } label: { Label("Make clips", systemImage: "scissors") }
                         .buttonStyle(SecondaryButtonStyle())
-                        .help("Open Auto Reels with this episode (the exported 16:9 video if there is one) to cut short clips")
+                        .help("Open Clips with this episode (the exported 16:9 video if there is one) to cut short clips")
                 }
             }
             .padding(.top, 4)
@@ -425,11 +425,11 @@ struct PodcastEpisodeView: View {
         let src = e.sourceTime(now)
         let shot = e.shots.first { src >= $0.start && src < $0.end }
         return HStack(spacing: 10) {
-            Text(podcastTime(now)).font(.system(size: 11, design: .monospaced)).foregroundColor(Color.white.opacity(0.5))
+            Text(podcastTime(now)).font(.system(size: 12, design: .monospaced)).foregroundColor(Theme.ink.opacity(0.55))
             if let shot {
                 Circle().fill(shot.person.map { PodcastStore.palette[$0 % PodcastStore.palette.count] } ?? Color.gray).frame(width: 9, height: 9)
-                Text(describe(shot, e)).font(.system(size: 12, weight: .medium)).foregroundColor(.white)
-                if shot.manual { Text("chosen by you").font(.system(size: 10)).foregroundColor(gold) }
+                Text(describe(shot, e)).font(.system(size: 13, weight: .medium)).foregroundColor(Theme.ink)
+                if shot.manual { Text("chosen by you").font(.system(size: 11.5)).foregroundColor(gold) }
                 Menu("Change this shot") {
                     ForEach(options(e), id: \.label) { o in
                         Button(o.label) { store.setShot(id, shotID: shot.id, angle: o.angle, person: o.person, zoom: o.zoom) }
@@ -439,7 +439,7 @@ struct PodcastEpisodeView: View {
             }
             Spacer()
         }
-        .padding(10).background(Color.white.opacity(0.04)).cornerRadius(8)
+        .padding(10).background(Theme.ink.opacity(0.04)).cornerRadius(8)
     }
 
     private func describe(_ s: PodcastEpisode.Shot, _ e: PodcastEpisode) -> String {
@@ -517,7 +517,7 @@ struct PodcastTimeline: View {
                     for s in e.shots {
                         let x0 = e.editedTime(s.start) / total * w, x1 = e.editedTime(s.end) / total * w
                         guard x1 > x0 else { continue }
-                        let color = s.person.map { PodcastStore.palette[$0 % PodcastStore.palette.count] } ?? Color.white.opacity(0.3)
+                        let color = s.person.map { PodcastStore.palette[$0 % PodcastStore.palette.count] } ?? Theme.ink.opacity(0.3)
                         let h = s.zoom > 1 ? size.height - 4 : size.height - 10
                         ctx.fill(Path(roundedRect: CGRect(x: x0, y: size.height - h, width: max(1, x1 - x0 - 1), height: h), cornerRadius: 2),
                                  with: .color(color.opacity(s.manual ? 1 : 0.8)))
@@ -537,13 +537,13 @@ struct PodcastTimeline: View {
                 ForEach(e.people) { p in
                     HStack(spacing: 4) {
                         Circle().fill(PodcastStore.palette[p.id % PodcastStore.palette.count]).frame(width: 7, height: 7)
-                        Text(p.name).font(.system(size: 10)).foregroundColor(Color.white.opacity(0.6))
+                        Text(p.name).font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.6))
                     }
                 }
-                HStack(spacing: 4) { Circle().fill(Color.white.opacity(0.3)).frame(width: 7, height: 7); Text("Wide").font(.system(size: 10)).foregroundColor(Color.white.opacity(0.6)) }
-                HStack(spacing: 4) { Rectangle().fill(Color.red).frame(width: 2, height: 8); Text("Cut").font(.system(size: 10)).foregroundColor(Color.white.opacity(0.6)) }
+                HStack(spacing: 4) { Circle().fill(Theme.ink.opacity(0.3)).frame(width: 7, height: 7); Text("Wide").font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.6)) }
+                HStack(spacing: 4) { Rectangle().fill(Color.red).frame(width: 2, height: 8); Text("Cut").font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.6)) }
                 Spacer()
-                Text(podcastTime(total)).font(.system(size: 10, design: .monospaced)).foregroundColor(Color.white.opacity(0.4))
+                Text(podcastTime(total)).font(.system(size: 11.5, design: .monospaced)).foregroundColor(Theme.ink.opacity(0.55))
             }
         }
     }
@@ -576,15 +576,15 @@ struct PodcastEditSection: View {
                     Text(heard > 0
                          ? "Includes \(heard) “um”\(heard == 1 ? "" : "s") heard in the pauses that the transcript left out. Ones run straight into the next word can still slip through."
                          : "AutoClip also listens in the pauses for “um”s the transcript leaves out; ones run straight into the next word can still slip through.")
-                        .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.4)).fixedSize(horizontal: false, vertical: true)
+                        .font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55)).fixedSize(horizontal: false, vertical: true)
                     let pauses = e.cuts.filter { $0.kind == .pause && $0.enabled }, fillers = e.cuts.filter { $0.kind == .filler && $0.enabled }
                     let texts = e.cuts.filter { $0.kind == .manual && $0.enabled }
                     if !texts.isEmpty {
                         Text("Plus \(texts.count) cut\(texts.count == 1 ? "" : "s") made in the transcript (\(podcastTime(texts.reduce(0) { $0 + $1.length }))).")
-                            .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.7))
+                            .font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.7))
                     }
                     Text("Cuts \(pauses.count) pause\(pauses.count == 1 ? "" : "s") (\(podcastTime(pauses.reduce(0) { $0 + $1.length }))) and \(fillers.count) filler word\(fillers.count == 1 ? "" : "s") — the episode goes from \(podcastTime(e.duration)) to \(podcastTime(e.editedDuration)).")
-                        .font(.system(size: 12, weight: .medium)).foregroundColor(.white).fixedSize(horizontal: false, vertical: true)
+                        .font(.system(size: 13, weight: .medium)).foregroundColor(Theme.ink).fixedSize(horizontal: false, vertical: true)
                 }
                 PodcastTranscriptEditor(id: id, seek: seek, clock: clock)
                 AssessCard(title: "Every cut", subtitle: "Untick any you want to keep. ▶ plays across the cut.") {
@@ -600,12 +600,12 @@ struct PodcastEditSection: View {
                                 Toggle("", isOn: Binding(get: { c.enabled }, set: { on in
                                     store.update(id) { e in if let i = e.cuts.firstIndex(where: { $0.id == c.id }) { e.cuts[i].enabled = on } }
                                 })).labelsHidden().toggleStyle(.checkbox)
-                                Text(podcastTime(c.start)).font(.system(size: 11, design: .monospaced)).foregroundColor(Color.white.opacity(0.5)).frame(width: 56, alignment: .leading)
-                                Image(systemName: c.kind == .filler ? "text.bubble" : c.kind == .manual ? "scissors" : "pause.circle").font(.system(size: 11))
-                                    .foregroundColor(c.kind == .pause ? Color.white.opacity(0.6) : gold)
-                                Text(c.label).font(.system(size: 12)).foregroundColor(c.enabled ? .white : Color.white.opacity(0.4))
+                                Text(podcastTime(c.start)).font(.system(size: 12, design: .monospaced)).foregroundColor(Theme.ink.opacity(0.55)).frame(width: 56, alignment: .leading)
+                                Image(systemName: c.kind == .filler ? "text.bubble" : c.kind == .manual ? "scissors" : "pause.circle").font(.system(size: 12))
+                                    .foregroundColor(c.kind == .pause ? Theme.ink.opacity(0.6) : gold)
+                                Text(c.label).font(.system(size: 13)).foregroundColor(c.enabled ? .white : Theme.ink.opacity(0.4))
                                 Spacer()
-                                Text(String(format: "−%.1fs", c.length)).font(.system(size: 11, design: .monospaced)).foregroundColor(Color.white.opacity(0.45))
+                                Text(String(format: "−%.1fs", c.length)).font(.system(size: 12, design: .monospaced)).foregroundColor(Theme.ink.opacity(0.55))
                                 Button { seek(max(0, e.editedTime(c.start) - 3)) } label: { Image(systemName: "play.fill") }
                                     .buttonStyle(.borderless).foregroundColor(gold)
                             }
@@ -615,7 +615,7 @@ struct PodcastEditSection: View {
                     if e.cuts.count > 150 && !showAll {
                         Button("Show all \(e.cuts.count)") { showAll = true }.controlSize(.small)
                     }
-                    if e.cuts.isEmpty { Text("Nothing to cut with these settings.").font(.system(size: 12)).foregroundColor(Color.white.opacity(0.5)) }
+                    if e.cuts.isEmpty { Text("Nothing to cut with these settings.").font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.55)) }
                 }
             }
         }
@@ -639,7 +639,7 @@ struct PodcastCameraSection: View {
                 AssessCard(title: "People", subtitle: "Name them to show their name on screen the first time they talk") {
                     if e.people.isEmpty {
                         Text("No faces were found, so the camera stays wide (with zoomed-in shots for variety).")
-                            .font(.system(size: 12)).foregroundColor(Color.white.opacity(0.6))
+                            .font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.6))
                     }
                     ForEach(e.people) { p in
                         HStack(spacing: 12) {
@@ -653,10 +653,10 @@ struct PodcastCameraSection: View {
                                 store.update(id) { e in if let i = e.people.firstIndex(where: { $0.id == p.id }) { e.people[i].name = n } }
                             })).textFieldStyle(.roundedBorder).frame(width: 200)
                             let talk = e.turns.filter { $0.person == p.id }.reduce(0) { $0 + $1.end - $1.start }
-                            Text("talks \(Int(talk / max(1, e.duration) * 100))% of the time").font(.system(size: 11)).foregroundColor(Color.white.opacity(0.5))
+                            Text("talks \(Int(talk / max(1, e.duration) * 100))% of the time").font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.55))
                             if !p.otherAngles.isEmpty {
                                 Text("on camera \(([p.angle] + p.otherAngles.keys.sorted()).map { "\($0 + 1)" }.joined(separator: " & "))")
-                                    .font(.system(size: 10)).foregroundColor(gold)
+                                    .font(.system(size: 11.5)).foregroundColor(gold)
                             }
                         }
                     }
@@ -666,12 +666,12 @@ struct PodcastCameraSection: View {
                         HStack {
                             Image(systemName: a.hasVideo == false ? "mic.fill" : "video.fill").foregroundColor(gold)
                             Text(e.separateTracks ? (e.people.first { $0.angle == i }?.name ?? "Person \(i + 1)") : "Camera \(i + 1)")
-                                .font(.system(size: 12, weight: .semibold)).foregroundColor(.white)
-                            Text(URL(fileURLWithPath: a.path).lastPathComponent).font(.system(size: 11)).foregroundColor(Color.white.opacity(0.6)).lineLimit(1)
+                                .font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.ink)
+                            Text(URL(fileURLWithPath: a.path).lastPathComponent).font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.6)).lineLimit(1)
                             Spacer()
                             Text(e.separateTracks ? (i == 0 || a.offset == 0 ? "starts with the others" : String(format: "lined up (%@%.1fs)", a.offset >= 0 ? "+" : "", a.offset))
                                  : i == 0 ? "sound comes from here" : String(format: "lined up (%@%.1fs)", a.offset >= 0 ? "+" : "", a.offset))
-                                .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.45))
+                                .font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
                             if i > 0 {
                                 Button { store.update(id) { $0.angles.remove(at: i) }; store.analyze(id) } label: { Image(systemName: "minus.circle") }
                                     .buttonStyle(.borderless)
@@ -681,7 +681,7 @@ struct PodcastCameraSection: View {
                     Button { addAngle() } label: { Label(e.separateTracks ? "Add another person's recording…" : "Add another camera angle…", systemImage: "plus") }.controlSize(.small)
                     Text(e.separateTracks ? "Each person's own mic decides who is talking. Quick back-and-forth shows everyone side by side."
                          : "With one camera, AutoClip makes extra shots by zooming in on whoever is talking.")
-                        .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.4))
+                        .font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
                 }
                 AssessCard(title: "Camera style") {
                     PillTabs(selection: plan(\.cameraStyle), items: [("calm", "Calm — long shots"), ("balanced", "Balanced"), ("lively", "Lively — more cuts")])
@@ -689,14 +689,14 @@ struct PodcastCameraSection: View {
                     Toggle("Show names on screen", isOn: setting(\.showNames))
                     Toggle("Title card at the start, end card at the end", isOn: setting(\.titleCard))
                     HStack {
-                        Text("Cover art").font(.system(size: 12)).foregroundColor(.white)
+                        Text("Cover art").font(.system(size: 13)).foregroundColor(Theme.ink)
                         Text(e.settings.coverPath.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "none")
-                            .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.5)).lineLimit(1)
+                            .font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.55)).lineLimit(1)
                         Button("Choose…") { pickCover() }.controlSize(.small)
                         if e.settings.coverPath != nil { Button("Remove") { store.update(id) { $0.settings.coverPath = nil } }.controlSize(.small) }
                     }
                     Text("Cover art shows on the title card and is embedded in the podcast audio file.")
-                        .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.4))
+                        .font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
                     Button("Re-plan every shot") { store.replanShots(id, resetManual: true) }
                         .controlSize(.small).help("Also replaces shots you changed by hand")
                 }
@@ -747,13 +747,13 @@ struct PodcastSoundSection: View {
                     if e.settings.cleanVoice {
                         if AudioCleaner.hasVoiceIsolation {
                             HStack {
-                                Text("Strength").font(.system(size: 11)).foregroundColor(Color.white.opacity(0.6))
+                                Text("Strength").font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.6))
                                 Slider(value: setting(\.strength), in: 0.3...1).frame(width: 220)
-                                Text("\(Int(e.settings.strength * 100))%").font(.system(size: 11, design: .monospaced)).foregroundColor(Color.white.opacity(0.6))
+                                Text("\(Int(e.settings.strength * 100))%").font(.system(size: 12, design: .monospaced)).foregroundColor(Theme.ink.opacity(0.6))
                             }
                         } else {
                             Text("Voice isolation needs macOS 14 or later; AutoClip will still remove rumble and hum.")
-                                .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.45))
+                                .font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
                         }
                     }
                     Toggle("Even out the voices (a loud host and a quiet guest end up at the same level)", isOn: setting(\.levelVoices))
@@ -768,17 +768,17 @@ struct PodcastSoundSection: View {
                     musicRow("Intro", path: e.settings.introPath, set: { p in store.update(id) { $0.settings.introPath = p } })
                     if e.settings.introPath != nil {
                         Stepper("Plays alone for \(Int(e.settings.introLead)) seconds, then fades under the first words",
-                                value: setting(\.introLead), in: 2...20, step: 1).font(.system(size: 11))
+                                value: setting(\.introLead), in: 2...20, step: 1).font(.system(size: 12))
                     }
                     musicRow("Outro", path: e.settings.outroPath, set: { p in store.update(id) { $0.settings.outroPath = p } })
                     if e.settings.outroPath != nil {
                         Stepper("Comes in under the last words and plays \(Int(e.settings.outroTail)) seconds after",
-                                value: setting(\.outroTail), in: 2...30, step: 1).font(.system(size: 11))
+                                value: setting(\.outroTail), in: 2...30, step: 1).font(.system(size: 12))
                     }
                     musicRow("Music bed", path: e.settings.musicBedPath, set: { p in store.update(id) { $0.settings.musicBedPath = p } })
                     if e.settings.musicBedPath != nil {
                         HStack {
-                            Text("Volume under the talking").font(.system(size: 11)).foregroundColor(Color.white.opacity(0.6))
+                            Text("Volume under the talking").font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.6))
                             Slider(value: setting(\.musicVolume), in: 0.02...0.3).frame(width: 200)
                         }
                     }
@@ -790,9 +790,9 @@ struct PodcastSoundSection: View {
     private func musicRow(_ label: String, path: String?, set: @escaping (String?) -> Void) -> some View {
         HStack {
             Image(systemName: "music.note").foregroundColor(gold)
-            Text(label).font(.system(size: 12, weight: .semibold)).foregroundColor(.white).frame(width: 80, alignment: .leading)
-            Text(path.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "none").font(.system(size: 11))
-                .foregroundColor(Color.white.opacity(0.55)).lineLimit(1)
+            Text(label).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.ink).frame(width: 80, alignment: .leading)
+            Text(path.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "none").font(.system(size: 12))
+                .foregroundColor(Theme.ink.opacity(0.55)).lineLimit(1)
             Spacer()
             Button("Choose…") {
                 let p = NSOpenPanel()
@@ -833,14 +833,14 @@ struct PodcastNotesSection: View {
                     AssessCard(title: "Title ideas") {
                         ForEach(n.titles, id: \.self) { t in
                             HStack {
-                                Text(t).font(.system(size: 13, weight: .semibold)).foregroundColor(.white)
+                                Text(t).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.ink)
                                 Spacer()
                                 Button("Use") { store.update(id) { $0.title = t } }.controlSize(.small).disabled(e.title == t)
                             }
                         }
                     }
                     AssessCard(title: "Description") {
-                        Text(n.description).font(.system(size: 12)).foregroundColor(Color.white.opacity(0.85)).textSelection(.enabled)
+                        Text(n.description).font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.85)).textSelection(.enabled)
                             .fixedSize(horizontal: false, vertical: true)
                         Button(copied == "desc" ? "Copied" : "Copy") { copy(n.description, "desc") }.controlSize(.small)
                     }
@@ -849,29 +849,29 @@ struct PodcastNotesSection: View {
                         ForEach(Array(n.chapters.enumerated()), id: \.offset) { _, c in
                             HStack {
                                 Button(podcastTime(c.time <= 1 ? 0 : lead + e.editedTime(c.time))) { seek(e.editedTime(c.time)) }
-                                    .buttonStyle(.plain).font(.system(size: 11, design: .monospaced)).foregroundColor(gold)
-                                Text(c.title).font(.system(size: 12)).foregroundColor(.white)
+                                    .buttonStyle(.plain).font(.system(size: 12, design: .monospaced)).foregroundColor(gold)
+                                Text(c.title).font(.system(size: 13)).foregroundColor(Theme.ink)
                             }
                         }
                     }
                     HStack(alignment: .top, spacing: 14) {
                         AssessCard(title: "Keywords") {
-                            Text(n.keywords.joined(separator: ", ")).font(.system(size: 12)).foregroundColor(Color.white.opacity(0.8)).textSelection(.enabled)
+                            Text(n.keywords.joined(separator: ", ")).font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.8)).textSelection(.enabled)
                         }
                         if !n.guests.isEmpty {
-                            AssessCard(title: "Guests") { Text(n.guests.joined(separator: ", ")).font(.system(size: 12)).foregroundColor(.white) }
+                            AssessCard(title: "Guests") { Text(n.guests.joined(separator: ", ")).font(.system(size: 13)).foregroundColor(Theme.ink) }
                         }
                     }
                     if !n.quotes.isEmpty {
                         AssessCard(title: "Quotes") {
                             ForEach(n.quotes, id: \.self) { q in
-                                Text("“\(q)”").font(.system(size: 12)).italic().foregroundColor(Color.white.opacity(0.85)).fixedSize(horizontal: false, vertical: true)
+                                Text("“\(q)”").font(.system(size: 13)).italic().foregroundColor(Theme.ink.opacity(0.85)).fixedSize(horizontal: false, vertical: true)
                             }
                         }
                     }
                     if !n.socialPost.isEmpty {
                         AssessCard(title: "Social post") {
-                            Text(n.socialPost).font(.system(size: 12)).foregroundColor(Color.white.opacity(0.85)).textSelection(.enabled)
+                            Text(n.socialPost).font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.85)).textSelection(.enabled)
                                 .fixedSize(horizontal: false, vertical: true)
                             Button(copied == "social" ? "Copied" : "Copy") { copy(n.socialPost, "social") }.controlSize(.small)
                         }
@@ -880,10 +880,10 @@ struct PodcastNotesSection: View {
             } else {
                 AssessCard(title: "Show notes and chapters") {
                     Text("The AI reads the episode and writes three title ideas, a description, chapters with timestamps, keywords, quotes and a social post. Chapters are added to the podcast audio file. Costs a few cents.")
-                        .font(.system(size: 12)).foregroundColor(Color.white.opacity(0.7)).fixedSize(horizontal: false, vertical: true)
+                        .font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.7)).fixedSize(horizontal: false, vertical: true)
                     Button { store.writeNotes(id) } label: { Label("Write show notes", systemImage: "sparkles") }
                         .buttonStyle(PrimaryButtonStyle()).disabled(store.status[id] != nil)
-                    if let err = store.errors[id] { Text(err).font(.system(size: 11)).foregroundColor(warn) }
+                    if let err = store.errors[id] { Text(err).font(.system(size: 12)).foregroundColor(warn) }
                 }
             }
         }
@@ -919,7 +919,7 @@ struct PodcastExportSection: View {
                             }
                         }
                         Text("Each size follows whoever is talking. Vertical and square sizes frame one person at a time.")
-                            .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.4))
+                            .font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
                     }
                 }
                 AssessCard(title: "Podcast audio") {
@@ -932,17 +932,17 @@ struct PodcastExportSection: View {
                     .fixedSize()
                     if PodcastAudio.ffmpeg() == nil {
                         Text("MP3 needs ffmpeg (brew install ffmpeg). Without it, AutoClip saves M4A, which every podcast host accepts.")
-                            .font(.system(size: 10)).foregroundColor(warn)
+                            .font(.system(size: 11.5)).foregroundColor(warn)
                     }
                     Text("Includes the title\(e.notes == nil ? "" : ", chapters")\(e.settings.coverPath == nil ? "" : " and cover art"). \(e.notes == nil ? "Write show notes first to add chapters." : "")")
-                        .font(.system(size: 10)).foregroundColor(Color.white.opacity(0.45))
+                        .font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
                 }
                 AssessCard(title: "Also saved") {
                     Text("• Transcript (.txt) with who said what\n• Captions (.srt) for YouTube\(e.notes == nil ? "" : "\n• Show notes (.txt)")")
-                        .font(.system(size: 12)).foregroundColor(Color.white.opacity(0.75))
+                        .font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.75))
                     HStack {
                         Text(store.exportFolder(e).path.replacingOccurrences(of: NSHomeDirectory(), with: "~"))
-                            .font(.system(size: 11, design: .monospaced)).foregroundColor(Color.white.opacity(0.5)).lineLimit(1)
+                            .font(.system(size: 12, design: .monospaced)).foregroundColor(Theme.ink.opacity(0.55)).lineLimit(1)
                         Button("Show in Finder") {
                             try? FileManager.default.createDirectory(at: store.exportFolder(e), withIntermediateDirectories: true)
                             NSWorkspace.shared.activateFileViewerSelecting([store.exportFolder(e)])
@@ -956,18 +956,18 @@ struct PodcastExportSection: View {
                         .disabled(store.status[id] != nil || (e.settings.formats.isEmpty && !e.settings.exportAudio && !e.isAudioOnly))
                     if let st = store.status[id] {
                         if let p = store.progress[id] { ProgressView(value: p).frame(width: 160) } else { ProgressView().controlSize(.small) }
-                        Text(st).font(.system(size: 12)).foregroundColor(Color.white.opacity(0.7))
+                        Text(st).font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.7))
                         Button("Stop") { store.cancel(id) }.controlSize(.small)
                     }
                 }
-                if let err = store.errors[id] { Text(err).font(.system(size: 11)).foregroundColor(warn) }
+                if let err = store.errors[id] { Text(err).font(.system(size: 12)).foregroundColor(warn) }
                 if !e.exports.isEmpty {
                     AssessCard(title: "Exported") {
                         ForEach(e.exports.sorted { $0.key < $1.key }, id: \.key) { k, path in
                             HStack {
                                 Image(systemName: k == "audio" ? "waveform" : ["transcript", "srt", "notes"].contains(k) ? "doc.text" : "film")
                                     .foregroundColor(gold)
-                                Text(URL(fileURLWithPath: path).lastPathComponent).font(.system(size: 12)).foregroundColor(.white).lineLimit(1)
+                                Text(URL(fileURLWithPath: path).lastPathComponent).font(.system(size: 13)).foregroundColor(Theme.ink).lineLimit(1)
                                 Spacer()
                                 Button("Show") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)]) }.controlSize(.small)
                             }

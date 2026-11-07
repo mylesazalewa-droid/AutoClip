@@ -20,9 +20,9 @@ struct ImproveShortTab: View {
 
     private func working(_ text: String) -> some View {
         VStack(spacing: 12) {
-            Text("Reviewing your short").font(Theme.display(26, weight: .medium)).foregroundColor(.white)
+            Text("Reviewing your short").font(Theme.display(26, weight: .medium)).foregroundColor(Theme.ink)
             ProgressView(value: model.progress).tint(Theme.action).frame(width: 340)
-            Text(text).font(.system(size: 12)).foregroundColor(Theme.muted)
+            Text(text).font(.system(size: 13)).foregroundColor(Theme.muted)
             Button("Cancel") { model.cancel() }.buttonStyle(SecondaryButtonStyle(compact: true))
         }
     }
@@ -30,7 +30,7 @@ struct ImproveShortTab: View {
     private var landing: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 26) {
-                CinematicHero(path: nil, eyebrow: "Create", title: "Improve a Short",
+                CinematicHero(path: nil, eyebrow: "Create", title: "Improve a Clip",
                               detail: "Drop in a video you've already made. AutoClip looks for a stronger hook, silences to cut and a better order, and you choose what to keep. Your original file isn't changed.",
                               height: 400, icon: "wand.and.stars") {
                     Button { choose() } label: { Label("Choose a video", systemImage: "plus") }.buttonStyle(PrimaryButtonStyle())
@@ -45,10 +45,10 @@ struct ImproveShortTab: View {
                     return true
                 }
                 if let e = model.error {
-                    Text(e).font(.system(size: 12)).foregroundColor(Theme.danger).fixedSize(horizontal: false, vertical: true)
+                    Text(e).font(.system(size: 13)).foregroundColor(Theme.danger).fixedSize(horizontal: false, vertical: true)
                 }
                 Text("Works best on someone talking to camera, from the version without music or captions. On-screen text and music can't be separated once they're in the video.")
-                    .font(.system(size: 12)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                    .font(.system(size: 13)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
                 if !model.reviews.isEmpty {
                     SectionTitle(title: "Your reviews", count: model.reviews.count)
                     ForEach(model.reviews) { r in row(r) }
@@ -73,7 +73,7 @@ struct ImproveShortTab: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(r.title).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.cream).lineLimit(1)
                         Text("\(assessTime(r.duration)) · reviewed \(r.createdAt.formatted(date: .abbreviated, time: .omitted))")
-                            .font(.system(size: 11)).foregroundColor(Theme.muted)
+                            .font(.system(size: 12)).foregroundColor(Theme.muted)
                     }
                     Spacer()
                 }
@@ -83,7 +83,7 @@ struct ImproveShortTab: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            Button { confirmDelete = r } label: { Image(systemName: "trash").font(.system(size: 12)) }
+            Button { confirmDelete = r } label: { Image(systemName: "trash").font(.system(size: 13)) }
                 .buttonStyle(.plain).foregroundColor(Theme.muted).padding(8).help("Delete this review")
         }
     }
@@ -244,7 +244,7 @@ private struct ShortReviewPage: View {
         VStack(spacing: 12) {
             HStack {
                 Button { player.pause(); model.currentPath = nil } label: {
-                    Label("All shorts", systemImage: "chevron.left").font(.system(size: 12, weight: .medium)).foregroundColor(gold)
+                    Label("All shorts", systemImage: "chevron.left").font(.system(size: 13, weight: .medium)).foregroundColor(gold)
                 }
                 .buttonStyle(.plain)
                 .disabled(saving != nil)
@@ -254,7 +254,7 @@ private struct ShortReviewPage: View {
             ZStack(alignment: .top) {
                 VideoPlayer(player: player)
                 if showAfter, review.choices.useHookText, time < 3, !review.choices.hookText.isEmpty {
-                    Text(review.choices.hookText).font(.system(size: 17, weight: .bold)).foregroundColor(.white).multilineTextAlignment(.center)
+                    Text(review.choices.hookText).font(.system(size: 17, weight: .bold)).foregroundColor(Theme.ink).multilineTextAlignment(.center)
                         .padding(.horizontal, 12).padding(.vertical, 8)
                         .background(RoundedRectangle(cornerRadius: 9).fill(Color.black.opacity(0.7)))
                         .padding(.top, 54).padding(.horizontal, 16)
@@ -264,9 +264,9 @@ private struct ShortReviewPage: View {
             .aspectRatio(aspect, contentMode: .fit)
             .frame(maxHeight: 720)
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.white.opacity(0.1), lineWidth: 1))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Theme.ink.opacity(0.1), lineWidth: 1))
 
-            if let buildError { Text(buildError).font(.system(size: 11)).foregroundColor(Theme.danger) }
+            if let buildError { Text(buildError).font(.system(size: 12)).foregroundColor(Theme.danger) }
             let after = ShortDoctor.length(of: ranges)
             Text("\(assessTime(review.duration)) → \(assessTime(after)) · \(Int((review.duration - after).rounded()))s shorter")
                 .font(.system(size: 13, weight: .medium)).foregroundColor(Theme.text).monospacedDigit()
@@ -286,7 +286,7 @@ private struct ShortReviewPage: View {
             }
             Button { announce() } label: { Label(results.latest(forVideo: review.path) == nil ? "Posted it? Add results" : "Update results", systemImage: "chart.line.uptrend.xyaxis") }
                 .buttonStyle(SecondaryButtonStyle(compact: true))
-            if let saveError { Text(saveError).font(.system(size: 11)).foregroundColor(Theme.danger).fixedSize(horizontal: false, vertical: true) }
+            if let saveError { Text(saveError).font(.system(size: 12)).foregroundColor(Theme.danger).fixedSize(horizontal: false, vertical: true) }
             Spacer(minLength: 0)
         }
     }
@@ -320,7 +320,7 @@ private struct ShortReviewPage: View {
         let pacingAfter = ShortDoctor.pacingScore(words: review.words, ranges: ranges)
         let hookAfter = review.choices.useHook ? review.hook?.scoreAfter : nil
         return VStack(alignment: .leading, spacing: 14) {
-            Text(review.title).font(Theme.display(26, weight: .medium)).foregroundColor(.white).lineLimit(2)
+            Text(review.title).font(Theme.display(26, weight: .medium)).foregroundColor(Theme.ink).lineLimit(2)
             if !review.summary.isEmpty {
                 Text(review.summary).font(.system(size: 13)).foregroundColor(Theme.text).fixedSize(horizontal: false, vertical: true)
             }
@@ -330,7 +330,7 @@ private struct ShortReviewPage: View {
                 score("Clarity", review.clarityScore, after: nil, why: "How easy the message is to follow. An opinion from \(engineName), not a measurement.")
                 score("Ending", review.endingScore, after: nil, why: "Whether it finishes strongly. An opinion from \(engineName), not a measurement.")
             }
-            Text("Reviewed by \(engineName).").font(.system(size: 10)).foregroundColor(Theme.faint)
+            Text("Reviewed by \(engineName).").font(.system(size: 11.5)).foregroundColor(Theme.faint)
         }
         .padding(18).frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.surface))
@@ -345,7 +345,7 @@ private struct ShortReviewPage: View {
         VStack(alignment: .leading, spacing: 4) {
             ScoreRing(title: title, value: before, why: why)
             if let after, after != before {
-                Text("\(before) → \(after) after").font(.system(size: 10, weight: .medium)).foregroundColor(after > before ? Theme.good : Theme.warn).padding(.leading, 68)
+                Text("\(before) → \(after) after").font(.system(size: 11.5, weight: .medium)).foregroundColor(after > before ? Theme.good : Theme.warn).padding(.leading, 68)
             }
         }
     }
@@ -363,7 +363,7 @@ private struct ShortReviewPage: View {
                     Label("Captions look burned into the picture. They can't be removed, and they stay with their words wherever a cut lands.", systemImage: "captions.bubble")
                 }
             }
-            .font(.system(size: 12)).foregroundColor(Theme.warn)
+            .font(.system(size: 13)).foregroundColor(Theme.warn)
             .padding(14).frame(maxWidth: .infinity, alignment: .leading)
             .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.warn.opacity(0.09)))
         }
@@ -377,7 +377,7 @@ private struct ShortReviewPage: View {
         Toggle(isOn: on) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.cream)
-                if let detail { Text(detail).font(.system(size: 11)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true) }
+                if let detail { Text(detail).font(.system(size: 12)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true) }
             }
         }
         .toggleStyle(.switch).tint(Theme.sand)
@@ -396,7 +396,7 @@ private struct ShortReviewPage: View {
         }) {
             if review.choices.useHook {
                 Toggle("Also keep it where it was said (play it twice, as a teaser)", isOn: $review.choices.keepHookInPlace)
-                    .toggleStyle(.checkbox).font(.system(size: 12)).foregroundColor(Theme.text)
+                    .toggleStyle(.checkbox).font(.system(size: 13)).foregroundColor(Theme.text)
             }
             Rectangle().fill(Theme.line).frame(height: 1)
             toggle($review.choices.useHookText, "Add on-screen hook text", "Shows for the first 3 seconds.")
@@ -421,7 +421,7 @@ private struct ShortReviewPage: View {
     private var orderCard: some View {
         AssessCard(title: "Better order") {
             toggle($review.choices.useOrder, "Rearrange the lines", review.orderWhy.isEmpty ? nil : review.orderWhy)
-            Text("Listen through after using this: a moved line can lose what it depended on.").font(.system(size: 11)).foregroundColor(Theme.muted)
+            Text("Listen through after using this: a moved line can lose what it depended on.").font(.system(size: 12)).foregroundColor(Theme.muted)
         }
     }
 
@@ -429,9 +429,9 @@ private struct ShortReviewPage: View {
         AssessCard(title: "Ending") {
             if let last = review.ending?.line {
                 toggle($review.choices.useEnding, "Finish on this line", review.ending?.note)
-                Text("“\(line(last))”").font(Theme.display(14).italic()).foregroundColor(.white).fixedSize(horizontal: false, vertical: true)
+                Text("“\(line(last))”").font(Theme.display(14).italic()).foregroundColor(Theme.ink).fixedSize(horizontal: false, vertical: true)
             } else if let note = review.ending?.note {
-                Text(note).font(.system(size: 12)).foregroundColor(Theme.text).fixedSize(horizontal: false, vertical: true)
+                Text(note).font(.system(size: 13)).foregroundColor(Theme.text).fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -444,7 +444,7 @@ private struct ShortReviewPage: View {
             }
             let out = lines.indices.filter { !order.contains($0) }
             if !out.isEmpty {
-                Text("TAKEN OUT").font(.system(size: 9, weight: .semibold)).tracking(1.2).foregroundColor(Theme.faint).padding(.top, 6)
+                Text("TAKEN OUT").font(.system(size: 11, weight: .semibold)).tracking(1.2).foregroundColor(Theme.faint).padding(.top, 6)
                 ForEach(out, id: \.self) { i in lineRow(i, moved: false) }
             }
         }
@@ -464,15 +464,15 @@ private struct ShortReviewPage: View {
                 Text(line(i)).font(.system(size: 13)).foregroundColor(isDropped ? Theme.faint : Theme.text)
                     .strikethrough(isDropped).fixedSize(horizontal: false, vertical: true)
                 if let suggestion, !isDropped {
-                    Text("Suggested cut: \(suggestion.why)").font(.system(size: 10)).foregroundColor(Theme.warn)
+                    Text("Suggested cut: \(suggestion.why)").font(.system(size: 11.5)).foregroundColor(Theme.warn)
                 }
             }
             Spacer(minLength: 4)
             if moved && !isDropped {
-                Text("Moved").font(.system(size: 9, weight: .semibold)).foregroundColor(gold)
+                Text("Moved").font(.system(size: 11, weight: .semibold)).foregroundColor(gold)
             }
             if lines.indices.contains(i) {
-                Text(assessTime(lines[i].start)).font(.system(size: 10, design: .monospaced)).foregroundColor(Theme.faint)
+                Text(assessTime(lines[i].start)).font(.system(size: 11.5, design: .monospaced)).foregroundColor(Theme.faint)
             }
         }
     }

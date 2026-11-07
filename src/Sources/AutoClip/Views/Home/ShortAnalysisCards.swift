@@ -24,23 +24,23 @@ struct DropOffCard: View {
         AssessCard(title: "Drop-off map", subtitle: "Where viewers are likely to leave. This is an estimate from the video, not real viewer data.") {
             if issues.isEmpty {
                 Text("Nothing stands out. No long pauses, repeats or slow stretches were found.")
-                    .font(.system(size: 12)).foregroundColor(Theme.text)
+                    .font(.system(size: 13)).foregroundColor(Theme.text)
             } else {
                 strip
                 let open = issues.filter { !DropOffMap.isFixed($0, review.choices) }.count
                 Text(open == 0 ? "All \(issues.count) are handled in your edit." : "\(open) of \(issues.count) still open in your edit.")
-                    .font(.system(size: 11)).foregroundColor(Theme.muted)
+                    .font(.system(size: 12)).foregroundColor(Theme.muted)
                 let list = showAll ? ranked : Array(ranked.prefix(6))
                 ForEach(list) { row($0) }
                 if ranked.count > 6 {
                     Button(showAll ? "Show fewer" : "Show all \(ranked.count)") { showAll.toggle() }
-                        .buttonStyle(.plain).font(.system(size: 11, weight: .medium)).foregroundColor(Theme.sand)
+                        .buttonStyle(.plain).font(.system(size: 12, weight: .medium)).foregroundColor(Theme.sand)
                 }
             }
             if let real, real.heldAt3s != nil || real.heldAtHalf != nil || real.heldAtEnd != nil {
                 Rectangle().fill(Theme.line).frame(height: 1)
-                Text("REAL VIEWERS").font(.system(size: 9, weight: .semibold)).tracking(1.2).foregroundColor(Theme.faint)
-                Text(realSummary(real)).font(.system(size: 12)).foregroundColor(Theme.text).fixedSize(horizontal: false, vertical: true)
+                Text("REAL VIEWERS").font(.system(size: 11, weight: .semibold)).tracking(1.2).foregroundColor(Theme.faint)
+                Text(realSummary(real)).font(.system(size: 13)).foregroundColor(Theme.text).fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -65,7 +65,7 @@ struct DropOffCard: View {
                 Text("Speech").frame(height: 12)
                 Text("Picture").frame(height: 12)
             }
-            .font(.system(size: 9, weight: .medium)).foregroundColor(Theme.faint)
+            .font(.system(size: 11, weight: .medium)).foregroundColor(Theme.faint)
             GeometryReader { geo in
                 let width = geo.size.width
                 ZStack(alignment: .topLeading) {
@@ -83,7 +83,7 @@ struct DropOffCard: View {
 
     private func lane(_ list: [DropOff], width: CGFloat) -> some View {
         ZStack(alignment: .leading) {
-            RoundedRectangle(cornerRadius: 3).fill(Color.white.opacity(0.07)).frame(width: width, height: 12)
+            RoundedRectangle(cornerRadius: 3).fill(Theme.ink.opacity(0.07)).frame(width: width, height: 12)
             ForEach(list) { issue in
                 let x = width * issue.start / max(review.duration, 0.1)
                 let w = max(4, width * (issue.end - issue.start) / max(review.duration, 0.1))
@@ -97,19 +97,19 @@ struct DropOffCard: View {
         let fixed = DropOffMap.isFixed(issue, review.choices)
         return HStack(alignment: .top, spacing: 10) {
             Button { onJump(issue.start) } label: {
-                Text(assessClock(issue.start)).font(.system(size: 11, design: .monospaced)).foregroundColor(Theme.sand).frame(width: 36, alignment: .leading)
+                Text(assessClock(issue.start)).font(.system(size: 12, design: .monospaced)).foregroundColor(Theme.sand).frame(width: 36, alignment: .leading)
             }
             .buttonStyle(.plain).help("Play this moment")
             Circle().fill(color(issue)).frame(width: 7, height: 7).padding(.top, 4)
             VStack(alignment: .leading, spacing: 2) {
-                Text(issue.title).font(.system(size: 12, weight: .semibold)).foregroundColor(fixed ? Theme.muted : Theme.cream)
-                Text(issue.detail).font(.system(size: 11)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                Text(issue.title).font(.system(size: 13, weight: .semibold)).foregroundColor(fixed ? Theme.muted : Theme.cream)
+                Text(issue.detail).font(.system(size: 12)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 6)
             if issue.fix != nil {
                 if fixed {
                     Button { DropOffMap.toggle(issue, &review.choices) } label: {
-                        Label("Fixed", systemImage: "checkmark").font(.system(size: 11, weight: .medium)).foregroundColor(Theme.good)
+                        Label("Fixed", systemImage: "checkmark").font(.system(size: 12, weight: .medium)).foregroundColor(Theme.good)
                     }
                     .buttonStyle(.plain).help("Undo this fix")
                 } else {
@@ -145,12 +145,12 @@ struct HookLabCard<Extra: View>: View {
             }
             ForEach(Array((now?.notes ?? []).enumerated()), id: \.offset) { _, n in
                 Label(n.text, systemImage: n.good ? "checkmark.circle" : "exclamationmark.circle")
-                    .font(.system(size: 11)).foregroundColor(n.good ? Theme.muted : Theme.warn)
+                    .font(.system(size: 12)).foregroundColor(n.good ? Theme.muted : Theme.warn)
             }
             Rectangle().fill(Theme.line).frame(height: 1)
             optionRow(title: "Your opening", text: review.lines.first.map(ShortDoctor.spokenText) ?? "", why: nil, reading: nil, isOn: chosen == nil, badge: nil, action: onPreviewOriginal)
             if options.isEmpty {
-                Text("No other line works as an opening by itself.").font(.system(size: 12)).foregroundColor(Theme.muted)
+                Text("No other line works as an opening by itself.").font(.system(size: 13)).foregroundColor(Theme.muted)
             }
             ForEach(options) { o in
                 optionRow(title: nil, text: o.text, why: o.why, reading: o.reading, isOn: chosen == o.line, badge: results.insight(forOpening: o.text)) { onPreview(o) }
@@ -167,23 +167,23 @@ struct HookLabCard<Extra: View>: View {
     private func meter(_ title: String, _ value: Int?) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(value.map(String.init) ?? "…").font(Theme.display(24, weight: .medium)).foregroundColor(value.map { $0 >= 70 ? Theme.good : $0 >= 50 ? Theme.cream : Theme.warn } ?? Theme.faint).monospacedDigit()
-            Text(title).font(.system(size: 10, weight: .medium)).foregroundColor(Theme.muted)
+            Text(title).font(.system(size: 11.5, weight: .medium)).foregroundColor(Theme.muted)
         }
     }
 
     private func optionRow(title: String?, text: String, why: String?, reading: HookReading?, isOn: Bool, badge: ResultInsight?, action: @escaping () -> Void) -> some View {
         HStack(alignment: .top, spacing: 10) {
             VStack(alignment: .leading, spacing: 4) {
-                if let title { Text(title.uppercased()).font(.system(size: 9, weight: .semibold)).tracking(1.2).foregroundColor(Theme.faint) }
+                if let title { Text(title.uppercased()).font(.system(size: 11, weight: .semibold)).tracking(1.2).foregroundColor(Theme.faint) }
                 Text("“\(text)”").font(Theme.display(14).italic()).foregroundColor(isOn ? .white : Theme.text).fixedSize(horizontal: false, vertical: true)
-                if let why, !why.isEmpty { Text(why).font(.system(size: 11)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true) }
+                if let why, !why.isEmpty { Text(why).font(.system(size: 12)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true) }
                 if let reading {
                     Text("Words \(reading.words) · Picture \(reading.picture.map(String.init) ?? "…") · Sound \(reading.sound)")
-                        .font(.system(size: 10, weight: .medium)).foregroundColor(Theme.faint).monospacedDigit()
+                        .font(.system(size: 11.5, weight: .medium)).foregroundColor(Theme.faint).monospacedDigit()
                 }
                 if let badge {
                     Text("From your results: \(badge.detail.lowercased().replacingOccurrences(of: ".", with: "")) (\(badge.count) shorts vs \(badge.others))")
-                        .font(.system(size: 10, weight: .medium)).foregroundColor(badge.difference > 0 ? Theme.good : Theme.warn).fixedSize(horizontal: false, vertical: true)
+                        .font(.system(size: 11.5, weight: .medium)).foregroundColor(badge.difference > 0 ? Theme.good : Theme.warn).fixedSize(horizontal: false, vertical: true)
                 }
             }
             Spacer(minLength: 6)

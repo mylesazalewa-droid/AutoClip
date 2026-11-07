@@ -7,12 +7,12 @@ struct SettingsView: View {
         TabView {
             GeneralSettings().tabItem { Label("General", systemImage: "gearshape") }
             AISettings().tabItem { Label("AI", systemImage: "sparkles") }
-            ReelSettings().tabItem { Label("Reels", systemImage: "play.rectangle.on.rectangle") }
+            ReelSettings().tabItem { Label("Clips", systemImage: "play.rectangle.on.rectangle") }
             AutoImportView().tabItem { Label("Autopilot", systemImage: "dot.radiowaves.left.and.right") }
             PlanSettings().tabItem { Label("Plan", systemImage: "key") }
         }
         .frame(width: 560)
-        .preferredColorScheme(.dark)
+        .appLook()
         .tint(Theme.action)
     }
 }
@@ -22,7 +22,7 @@ private struct SettingsSection<Content: View>: View {
     @ViewBuilder var content: Content
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(title.uppercased()).font(.system(size: 10, weight: .semibold)).tracking(1.4).foregroundColor(Theme.faint)
+            Text(title.uppercased()).font(.system(size: 11.5, weight: .semibold)).tracking(1.4).foregroundColor(Theme.faint)
             content
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -37,7 +37,7 @@ private struct Row<Content: View>: View {
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.system(size: 13))
-                if let detail { Text(detail).font(.system(size: 11)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true) }
+                if let detail { Text(detail).font(.system(size: 12)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true) }
             }
             Spacer(minLength: 12)
             content
@@ -47,6 +47,7 @@ private struct Row<Content: View>: View {
 
 private struct GeneralSettings: View {
     @AppStorage("sounds_on") private var sounds = true
+    @AppStorage(AppAppearance.key) private var appearance = AppAppearance.dark.rawValue
     @AppStorage("menubar_on") private var menuBar = true
     @ObservedObject private var updater = Updater.shared
     @ObservedObject private var auto = AutoImport.shared
@@ -54,6 +55,12 @@ private struct GeneralSettings: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
+            SettingsSection(title: "Look") {
+                Row(title: "Appearance", detail: "Light is easier to read in a bright office") {
+                    Picker("", selection: $appearance) { ForEach(AppAppearance.allCases) { Text($0.label).tag($0.rawValue) } }
+                        .pickerStyle(.segmented).labelsHidden().frame(width: 240)
+                }
+            }
             SettingsSection(title: "App") {
                 Row(title: "Open AutoClip when this Mac starts", detail: auto.loginNote) {
                     Toggle("", isOn: Binding(get: { auto.opensAtLogin }, set: { auto.setOpensAtLogin($0) })).labelsHidden().toggleStyle(.switch)
@@ -67,7 +74,7 @@ private struct GeneralSettings: View {
                 }
                 HStack {
                     Button("Check now") { Task { await updater.check(manual: true) } }
-                    if let s = updater.status { Text(s).font(.system(size: 11)).foregroundColor(.secondary) }
+                    if let s = updater.status { Text(s).font(.system(size: 12)).foregroundColor(.secondary) }
                 }
             }
             SettingsSection(title: "Help") {
@@ -75,7 +82,7 @@ private struct GeneralSettings: View {
                     Button("Show tips again") { UserDefaults.standard.set(true, forKey: "tips_reset"); tipsNote = "Tips come back the next time AutoClip opens." }
                     Button("Open the help guide") { HelpPages.open() }
                 }
-                if let tipsNote { Text(tipsNote).font(.system(size: 11)).foregroundColor(.secondary) }
+                if let tipsNote { Text(tipsNote).font(.system(size: 12)).foregroundColor(.secondary) }
             }
         }
         .padding(24)
@@ -104,12 +111,12 @@ private struct AISettings: View {
                     ForEach(LLMClipService.AIProvider.allCases) { p in Text(p.rawValue).tag(p.rawValue) }
                 }
                 .pickerStyle(.radioGroup).labelsHidden()
-                Text("Model: \(provider.modelLabel)").font(.system(size: 11, design: .monospaced)).foregroundColor(.secondary)
+                Text("Model: \(provider.modelLabel)").font(.system(size: 12, design: .monospaced)).foregroundColor(.secondary)
                 HStack(spacing: 8) {
                     Image(systemName: hasKey[provider] == true ? "checkmark.seal.fill" : "key")
                         .foregroundColor(hasKey[provider] == true ? Theme.good : .secondary)
                     Text(hasKey[provider] == true ? "A key for \(provider.rawValue) is saved in your Keychain." : "No key saved for \(provider.rawValue).")
-                        .font(.system(size: 12))
+                        .font(.system(size: 13))
                     Spacer()
                     if hasKey[provider] == true {
                         Button("Remove") { save("") }.controlSize(.small)
@@ -117,13 +124,13 @@ private struct AISettings: View {
                 }
                 HStack {
                     SecureField(hasKey[provider] == true ? "Paste a new key to replace it" : provider.keyPlaceholder, text: $newKey)
-                        .textFieldStyle(.roundedBorder).font(.system(size: 12, design: .monospaced))
+                        .textFieldStyle(.roundedBorder).font(.system(size: 13, design: .monospaced))
                         .onSubmit { save(newKey) }
                     Button("Save key") { save(newKey) }.disabled(newKey.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
                 Text("The key stays in your Keychain and is only sent to \(provider.rawValue). The AI company bills you directly, so set a spending limit in your account.")
-                    .font(.system(size: 11)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
-                if let note { Text(note).font(.system(size: 11)).foregroundColor(Theme.good) }
+                    .font(.system(size: 12)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+                if let note { Text(note).font(.system(size: 12)).foregroundColor(Theme.good) }
             }
             SettingsSection(title: "On this Mac") {
                 Row(title: "Use on-device AI for simple jobs", detail: "Hooks, captions and topic lists run free and private through Ollama, when it's installed and running.") {
@@ -163,7 +170,7 @@ private struct ReelSettings: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            SettingsSection(title: "New reels") {
+            SettingsSection(title: "New clips") {
                 Row(title: "Find the sermon in a full service", detail: "For recordings over 30 minutes") { Toggle("", isOn: $findSermon).labelsHidden().toggleStyle(.switch) }
                 Row(title: "Length") {
                     Picker("", selection: $target) {
@@ -186,7 +193,7 @@ private struct ReelSettings: View {
                     }
                 }
             }
-            Text("Caption style is set in the editor's Captions tab, and new reels use the last one you chose.").font(.system(size: 11)).foregroundColor(.secondary)
+            Text("Caption style is set in the editor's Captions tab, and new clips use the last one you chose.").font(.system(size: 12)).foregroundColor(.secondary)
         }
         .padding(24)
     }
@@ -200,10 +207,10 @@ private struct PlanSettings: View {
             Text(license.status).font(Theme.display(22)).foregroundColor(Theme.cream)
             if let info = license.info {
                 Text("Licensed to \(info.name). \(info.expires.map { "Ends \($0.formatted(date: .long, time: .omitted))." } ?? "Never ends.")")
-                    .font(.system(size: 12)).foregroundColor(.secondary)
+                    .font(.system(size: 13)).foregroundColor(.secondary)
             } else {
                 Text("The free trial makes clips from \(License.trialSermons) sermons. Trial exports carry a small “Made with AutoClip” mark.")
-                    .font(.system(size: 12)).foregroundColor(.secondary)
+                    .font(.system(size: 13)).foregroundColor(.secondary)
             }
             HStack {
                 Button(license.licensed ? "Manage license…" : "Enter a license key…") { show = true }

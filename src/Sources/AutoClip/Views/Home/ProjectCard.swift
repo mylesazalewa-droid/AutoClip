@@ -23,12 +23,12 @@ struct ProjectCard: View {
                         .clipped()
                 } else {
                     Rectangle()
-                        .fill(Color.white.opacity(0.05))
+                        .fill(Theme.ink.opacity(0.05))
                         .frame(height: 160)
                         .overlay(
                             Image(systemName: "film")
                                 .font(.system(size: 32))
-                                .foregroundColor(Color.white.opacity(0.15))
+                                .foregroundColor(Theme.ink.opacity(0.55))
                         )
                 }
 
@@ -39,21 +39,21 @@ struct ProjectCard: View {
                         VStack(spacing: 4) {
                             HStack(spacing: 4) {
                                 Image(systemName: "waveform")
-                                    .font(.system(size: 10))
+                                    .font(.system(size: 11.5))
                                     .foregroundColor(gold)
                                 Text(appState.analyzeStatus)
-                                    .font(.system(size: 10))
-                                    .foregroundColor(Color.white.opacity(0.7))
+                                    .font(.system(size: 11.5))
+                                    .foregroundColor(Theme.ink.opacity(0.7))
                                     .lineLimit(1)
                                 Spacer()
                                 Text("\(Int(appState.analyzeProgress * 100))%")
-                                    .font(.system(size: 10, design: .monospaced))
+                                    .font(.system(size: 11.5, design: .monospaced))
                                     .foregroundColor(gold)
                             }
                             GeometryReader { geo in
                                 ZStack(alignment: .leading) {
                                     RoundedRectangle(cornerRadius: 2)
-                                        .fill(Color.white.opacity(0.15))
+                                        .fill(Theme.ink.opacity(0.15))
                                         .frame(height: 3)
                                     RoundedRectangle(cornerRadius: 2)
                                         .fill(gold)
@@ -77,11 +77,11 @@ struct ProjectCard: View {
                             Button(action: { AppState.shared.reanalyzeProject(project) }) {
                                 HStack(spacing: 4) {
                                     Image(systemName: "arrow.clockwise")
-                                        .font(.system(size: 10, weight: .semibold))
+                                        .font(.system(size: 11.5, weight: .semibold))
                                     Text("Reanalyze")
-                                        .font(.system(size: 11, weight: .medium))
+                                        .font(.system(size: 12, weight: .medium))
                                 }
-                                .foregroundColor(.white)
+                                .foregroundColor(Theme.ink)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 5)
                                 .background(Color.black.opacity(0.65))
@@ -92,9 +92,9 @@ struct ProjectCard: View {
                             Button(action: { LibraryService.shared.deleteProject(project) }) {
                                 HStack(spacing: 4) {
                                     Image(systemName: "trash")
-                                        .font(.system(size: 10, weight: .semibold))
+                                        .font(.system(size: 11.5, weight: .semibold))
                                     Text("Delete")
-                                        .font(.system(size: 11, weight: .medium))
+                                        .font(.system(size: 12, weight: .medium))
                                 }
                                 .foregroundColor(Theme.danger)
                                 .padding(.horizontal, 8)
@@ -116,23 +116,23 @@ struct ProjectCard: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(project.title)
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.white)
+                    .foregroundColor(Theme.ink)
                     .lineLimit(1)
 
                 HStack(spacing: 4) {
                     Text(project.formattedDuration)
-                        .font(.system(size: 11))
-                        .foregroundColor(Color.white.opacity(0.5))
+                        .font(.system(size: 12))
+                        .foregroundColor(Theme.ink.opacity(0.55))
                     Circle()
-                        .fill(Color.white.opacity(0.3))
+                        .fill(Theme.ink.opacity(0.3))
                         .frame(width: 2.5, height: 2.5)
                     Text("\(project.clipCount) clips")
-                        .font(.system(size: 11))
-                        .foregroundColor(Color.white.opacity(0.5))
+                        .font(.system(size: 12))
+                        .foregroundColor(Theme.ink.opacity(0.55))
                     Spacer()
                     Text(project.relativeDate)
-                        .font(.system(size: 11))
-                        .foregroundColor(Color.white.opacity(0.35))
+                        .font(.system(size: 12))
+                        .foregroundColor(Theme.ink.opacity(0.55))
                 }
             }
             .padding(.horizontal, 12)
@@ -143,7 +143,7 @@ struct ProjectCard: View {
         .cornerRadius(8)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(isHovered ? Theme.sand.opacity(0.4) : Color.white.opacity(0.06), lineWidth: 1)
+                .stroke(isHovered ? Theme.sand.opacity(0.4) : Theme.ink.opacity(0.06), lineWidth: 1)
         )
         .onHover { isHovered = $0 }
     }

@@ -173,7 +173,7 @@ enum WorshipClips {
             try await write(path: path, moments: [m], to: folder.appendingPathComponent(name)) { progress((Double(i) + $0) / steps) }
             list += "\(String(format: "%02d", i + 1)). \(assessTime(m.time))  \(m.caption)\n"
         }
-        try await write(path: path, moments: sorted, to: folder.appendingPathComponent("Rehearsal reel.mp4")) {
+        try await write(path: path, moments: sorted, to: folder.appendingPathComponent("Rehearsal clip.mp4")) {
             progress((Double(sorted.count) + $0) / steps)
         }
         try? list.write(to: folder.appendingPathComponent("Watch list.txt"), atomically: true, encoding: .utf8)

@@ -424,7 +424,7 @@ struct ReelDraft: Identifiable, Codable, Equatable {
     func render(to url: URL, progress: @escaping (Double, String) -> Void) async throws {
         let clips = renderClips
         guard let first = clips.first else {
-            throw NSError(domain: "AutoClip", code: 5, userInfo: [NSLocalizedDescriptionKey: "This reel has no sentences switched on."])
+            throw NSError(domain: "AutoClip", code: 5, userInfo: [NSLocalizedDescriptionKey: "This clip has no sentences switched on."])
         }
         try await VideoExportService.shared.createHighlightReel(
             clips: clips, sourceVideoURL: URL(fileURLWithPath: first.sourceVideoPath),
@@ -478,7 +478,7 @@ struct ReelDraft: Identifiable, Codable, Equatable {
 enum ReelExportLocation {
     /// Folder picker that starts in the last folder used (shared with Auto Reels creation).
     @MainActor
-    static func pick(title: String = "Choose where to save your reel") -> URL? {
+    static func pick(title: String = "Choose where to save your clip") -> URL? {
         let panel = NSOpenPanel()
         panel.title = title
         panel.canChooseFiles = false

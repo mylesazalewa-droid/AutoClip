@@ -88,13 +88,14 @@ enum VideoFrames {
 struct AmbientBackdrop: View {
     @ObservedObject private var backdrop = Backdrop.shared
     @State private var image: CGImage?
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         Theme.bg
             .overlay {
                 if let image {
                     Image(decorative: image, scale: 1).resizable().scaledToFill()
-                        .opacity(0.62)
+                        .opacity(scheme == .dark ? 0.62 : 0.22)
                         .transition(.opacity)
                         .id(image.hashValue)
                 }
@@ -121,7 +122,7 @@ struct VideoFrameView: View {
 
     var body: some View {
         ZStack {
-            Color.white.opacity(0.03)
+            Theme.ink.opacity(0.03)
             if let image { Image(decorative: image, scale: 1).resizable().scaledToFill() }
         }
         .task(id: path) {
@@ -168,7 +169,7 @@ struct CinematicHero<Actions: View>: View {
             } else {
                 LinearGradient(colors: [Theme.navy.opacity(0.8), Theme.olive.opacity(0.35)], startPoint: .topLeading, endPoint: .bottomTrailing)
                     .overlay(alignment: .trailing) {
-                        Image(systemName: icon).font(.system(size: 170, weight: .thin)).foregroundColor(Color.white.opacity(0.07)).padding(.trailing, 90)
+                        Image(systemName: icon).font(.system(size: 170, weight: .thin)).foregroundColor(Theme.ink.opacity(0.55)).padding(.trailing, 90)
                     }
             }
             // Shade so the words read over any picture
@@ -177,12 +178,12 @@ struct CinematicHero<Actions: View>: View {
             LinearGradient(colors: [.clear, .black.opacity(0.35)], startPoint: .center, endPoint: .bottom)
 
             VStack(alignment: .leading, spacing: 14) {
-                Text(eyebrow.uppercased()).font(.system(size: 11, weight: .semibold)).tracking(2.2).foregroundColor(Theme.sand)
-                Text(title).font(Theme.display(46, weight: .medium)).foregroundColor(.white)
+                Text(eyebrow.uppercased()).font(.system(size: 12, weight: .semibold)).tracking(2.2).foregroundColor(Theme.sand)
+                Text(title).font(Theme.display(46, weight: .medium)).foregroundColor(Theme.ink)
                     .lineLimit(2).minimumScaleFactor(0.7).frame(maxWidth: 680, alignment: .leading)
                     .shadow(color: .black.opacity(0.4), radius: 8, y: 2)
                 if let detail {
-                    Text(detail).font(.system(size: 14)).foregroundColor(Color.white.opacity(0.78)).lineLimit(2).frame(maxWidth: 620, alignment: .leading)
+                    Text(detail).font(.system(size: 14)).foregroundColor(Theme.ink.opacity(0.78)).lineLimit(2).frame(maxWidth: 620, alignment: .leading)
                 }
                 HStack(spacing: 10) { actions }.padding(.top, 6)
             }
@@ -191,7 +192,8 @@ struct CinematicHero<Actions: View>: View {
         .frame(height: height)
         .frame(maxWidth: .infinity)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Color.white.opacity(0.1), lineWidth: 1))
+        .environment(\.colorScheme, .dark)
+        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Theme.ink.opacity(0.1), lineWidth: 1))
         .shadow(color: .black.opacity(0.45), radius: 30, y: 14)
         .task(id: path) { if let path { Backdrop.shared.path = path } }
     }
@@ -204,7 +206,7 @@ struct SectionTitle: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(title).font(Theme.display(22, weight: .medium)).foregroundColor(Theme.cream)
-            if let count { Text("\(count)").font(.system(size: 12, weight: .medium)).foregroundColor(Theme.muted) }
+            if let count { Text("\(count)").font(.system(size: 13, weight: .medium)).foregroundColor(Theme.muted) }
         }
     }
 }
@@ -233,9 +235,7 @@ struct AppSidebar: View {
         VStack(alignment: .leading, spacing: 4) {
             Button { active = .projects } label: {
                 HStack(spacing: 10) {
-                    Image(systemName: "scissors").font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.bg)
-                        .frame(width: 30, height: 30)
-                        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Theme.sand))
+                    LogoMark(size: 30)
                     Text("AUTOCLIP").font(Theme.display(16, weight: .medium)).tracking(2.6).foregroundColor(Theme.cream)
                 }
             }
@@ -247,8 +247,8 @@ struct AppSidebar: View {
                 row("Results", "chart.line.uptrend.xyaxis", .results)
             } else {
                 group("Create")
-                row("Auto Reels", "play.rectangle.on.rectangle", .autoReels)
-                row("Improve a Short", "wand.and.stars", .improve)
+                row("Clips", "play.rectangle.on.rectangle", .autoReels)
+                row("Improve a Clip", "wand.and.stars", .improve)
                 row("Podcast", "mic", .podcast)
                 group("Review")
                 row("Rehearse", "text.book.closed", .rehearse)
@@ -274,8 +274,8 @@ struct AppSidebar: View {
                 if !volunteer.enabled { PlanChip() }
                 Button { CommandBar.shared.toggle() } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: "command").font(.system(size: 10))
-                        Text("K to do anything").font(.system(size: 11))
+                        Image(systemName: "command").font(.system(size: 11.5))
+                        Text("K to do anything").font(.system(size: 12))
                     }
                     .foregroundColor(Theme.faint).padding(.horizontal, 12).padding(.vertical, 4)
                     .contentShape(Rectangle())
@@ -290,11 +290,11 @@ struct AppSidebar: View {
         .frame(width: 228)
         .frame(maxHeight: .infinity)
         .background(Color.black.opacity(0.28))
-        .overlay(Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1), alignment: .trailing)
+        .overlay(Rectangle().fill(Theme.ink.opacity(0.08)).frame(width: 1), alignment: .trailing)
     }
 
     private func group(_ title: String) -> some View {
-        Text(title.uppercased()).font(.system(size: 10, weight: .semibold)).tracking(1.6).foregroundColor(Theme.faint)
+        Text(title.uppercased()).font(.system(size: 11.5, weight: .semibold)).tracking(1.6).foregroundColor(Theme.faint)
             .padding(.horizontal, 12).padding(.top, 20).padding(.bottom, 4)
     }
 
@@ -319,7 +319,7 @@ private struct SidebarLink: View {
                 Image(systemName: icon).font(.system(size: 13, weight: isActive ? .semibold : .regular)).frame(width: 20)
                     .foregroundColor(isActive ? Theme.sand : Theme.muted)
                 Text(title).font(.system(size: 13, weight: isActive ? .semibold : .regular))
-                    .foregroundColor(isActive ? .white : hover ? Theme.text : Color.white.opacity(0.72))
+                    .foregroundColor(isActive ? .white : hover ? Theme.text : Theme.ink.opacity(0.72))
                 Spacer()
                 if working {
                     Circle().fill(Theme.sand).frame(width: 7, height: 7).help("Working")
@@ -327,7 +327,7 @@ private struct SidebarLink: View {
             }
             .padding(.horizontal, 12).padding(.vertical, 9)
             .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .fill(Color.white.opacity(isActive ? 0.13 : hover ? 0.06 : 0)))
+                .fill(Theme.ink.opacity(isActive ? 0.13 : hover ? 0.06 : 0)))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

@@ -31,7 +31,7 @@ struct VideoSkimmerView: View {
             ZStack(alignment: .leading) {
                 // Track background
                 RoundedRectangle(cornerRadius: 3)
-                    .fill(Color.white.opacity(0.10))
+                    .fill(Theme.ink.opacity(0.10))
                     .frame(height: 6)
 
                 // Word tick marks
@@ -40,7 +40,7 @@ struct VideoSkimmerView: View {
                     let rel = (w2.startTime - clip.startTime) / max(clip.duration, 1)
                     let x = CGFloat(rel) * w
                     Rectangle()
-                        .fill(Color.white.opacity(0.25))
+                        .fill(Theme.ink.opacity(0.25))
                         .frame(width: 1, height: 4)
                         .offset(x: x, y: 1)
                 }
@@ -48,7 +48,7 @@ struct VideoSkimmerView: View {
                 // Hover fill (ghost preview)
                 if let hf = hoverFraction {
                     RoundedRectangle(cornerRadius: 3)
-                        .fill(Color.white.opacity(0.07))
+                        .fill(Theme.ink.opacity(0.07))
                         .frame(width: CGFloat(hf) * w, height: 6)
                 }
 
@@ -61,7 +61,7 @@ struct VideoSkimmerView: View {
                 // Hover line
                 if let hf = hoverFraction {
                     Rectangle()
-                        .fill(Color.white.opacity(0.5))
+                        .fill(Theme.ink.opacity(0.5))
                         .frame(width: 1, height: 18)
                         .offset(x: CGFloat(hf) * w - 0.5, y: -6)
                 }
@@ -144,17 +144,17 @@ struct VideoSkimmerView: View {
                     } else {
                         Image(systemName: "film")
                             .font(.system(size: 14))
-                            .foregroundColor(Color.white.opacity(0.2))
+                            .foregroundColor(Theme.ink.opacity(0.55))
                     }
                 }
                 .overlay(
                     RoundedRectangle(cornerRadius: 5)
-                        .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                        .stroke(Theme.ink.opacity(0.15), lineWidth: 1)
                 )
 
                 Text(formatTimestamp(time))
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(.white)
+                    .font(.system(size: 11.5, design: .monospaced))
+                    .foregroundColor(Theme.ink)
                     .padding(.horizontal, 5)
                     .padding(.vertical, 2)
                     .background(Color.black.opacity(0.7))

@@ -181,7 +181,7 @@ extension ReelDraft {
         }
         if includedSentenceCount == 0 && before.includedSentenceCount > 0 {
             self = before
-            return ([], ["That would cut the whole reel, so nothing changed."])
+            return ([], ["That would cut the whole clip, so nothing changed."])
         }
         return (done, skipped)
     }

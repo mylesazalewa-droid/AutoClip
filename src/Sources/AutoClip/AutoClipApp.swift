@@ -5,6 +5,7 @@ struct AutoClipApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @AppStorage("menubar_on") private var menuBarOn = true
     @AppStorage("sounds_on") private var soundsOn = true
+    @AppStorage(AppAppearance.key) private var appearance = AppAppearance.dark.rawValue
 
     var body: some Scene {
         WindowGroup(id: "main") {
@@ -27,6 +28,9 @@ struct AutoClipApp: App {
             CommandGroup(after: .toolbar) {
                 Toggle("Show in Menu Bar", isOn: $menuBarOn)
                 Toggle("Play Sounds", isOn: $soundsOn)
+                Picker("Appearance", selection: $appearance) {
+                    ForEach(AppAppearance.allCases) { Text($0.label).tag($0.rawValue) }
+                }
             }
             CommandMenu("Project") {
                 Button("Import Video...") { AppState.shared.triggerImport() }
@@ -37,13 +41,13 @@ struct AutoClipApp: App {
         }
 
         // Auto Reels: one window per video's reels, with a large preview
-        WindowGroup("Reels", id: "reel-window", for: UUID.self) { $id in
-            if let id { ReelWindowView(recordID: id).tint(Theme.action).preferredColorScheme(.dark) }
+        WindowGroup("Clips", id: "reel-window", for: UUID.self) { $id in
+            if let id { ReelWindowView(recordID: id).tint(Theme.action).appLook() }
         }
         .defaultSize(width: 1280, height: 820)
 
         // The editor, as big as you like
-        WindowGroup("Edit Reel", id: "reel-editor", for: EditorTarget.self) { $t in
+        WindowGroup("Edit Clip", id: "reel-editor", for: EditorTarget.self) { $t in
             if let t { ReelEditorHost(target: t) }
         }
         .defaultSize(width: 1320, height: 880)
@@ -51,9 +55,9 @@ struct AutoClipApp: App {
         Settings { SettingsView() }
 
         MenuBarExtra(isInserted: $menuBarOn) {
-            MenuBarPanel().preferredColorScheme(.dark)
+            MenuBarPanel().appLook()
         } label: {
-            Image(systemName: "scissors")
+            Image(systemName: "waveform")
         }
         .menuBarExtraStyle(.window)
     }
@@ -104,7 +108,7 @@ struct MainWindow: View {
             }
             .frame(minWidth: 900, idealWidth: 1280, minHeight: 600, idealHeight: 800)
             .tint(Theme.action)
-            .preferredColorScheme(.dark)
+            .appLook()
             .task {
                 AutoImport.shared.start()
                 ProblemReports.shared.start()

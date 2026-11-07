@@ -49,11 +49,11 @@ struct ReelEditorHost: View {
                                })
                     .navigationTitle(d.title)
             } else {
-                Text("This reel was deleted.").foregroundColor(Theme.muted).frame(maxWidth: .infinity, maxHeight: .infinity)
+                Text("This clip was deleted.").foregroundColor(Theme.muted).frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .background(Theme.bg)
-        .preferredColorScheme(.dark)
+        .appLook()
         .tint(Theme.action)
         .background(WindowAccessor { $0.setFrameAutosaveName("AutoClipEditor") })
     }
@@ -123,8 +123,8 @@ struct EditTimeline: View {
                 // Clips
                 ForEach(pieceSpans, id: \.index) { s in
                     ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 4).fill(s.index % 2 == 0 ? Color.white.opacity(0.16) : Color.white.opacity(0.1))
-                        Text("\(s.index + 1)").font(.system(size: 9, weight: .semibold)).foregroundColor(Color.white.opacity(0.55)).padding(.leading, 4)
+                        RoundedRectangle(cornerRadius: 4).fill(s.index % 2 == 0 ? Theme.ink.opacity(0.16) : Theme.ink.opacity(0.1))
+                        Text("\(s.index + 1)").font(.system(size: 11, weight: .semibold)).foregroundColor(Theme.ink.opacity(0.55)).padding(.leading, 4)
                     }
                     .frame(width: max(2, x(s.end) - x(s.start) - 1), height: 22).offset(x: x(s.start), y: 9)
                 }
@@ -146,7 +146,7 @@ struct EditTimeline: View {
             })
         }
         .frame(height: 40)
-        .help("Clips, sentences, the hook (sand), verse cards (blue) and movement (orange). Click to jump.")
+        .help("Moments, sentences, the hook (sand), verse cards (blue) and movement (orange). Click to jump.")
     }
 }
 

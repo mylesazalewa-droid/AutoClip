@@ -27,7 +27,7 @@ final class VolunteerMode: ObservableObject {
 
         var summary: String {
             let size = ReelEditorView.sizes.first { $0.0.rawValue == formatRaw }?.1 ?? "9:16"
-            let count = (reelCount ?? 0) > 0 ? "\(reelCount!) reels" : "Automatic number of reels"
+            let count = (reelCount ?? 0) > 0 ? "\(reelCount!) clips" : "Automatic number of clips"
             return "\(size) · about \(Int(targetDuration ?? 90)) seconds · \(count) · captions \(captions ?? true ? "on" : "off")"
         }
     }

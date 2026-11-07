@@ -32,12 +32,12 @@ struct ExportOptionsView: View {
             HStack {
                 Text("Export Clip")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(Theme.ink)
                 Spacer()
                 Button(action: { dismiss() }) {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 18))
-                        .foregroundColor(Color.white.opacity(0.3))
+                        .foregroundColor(Theme.ink.opacity(0.55))
                 }
                 .buttonStyle(.plain)
             }
@@ -45,7 +45,7 @@ struct ExportOptionsView: View {
             .padding(.top, 18)
             .padding(.bottom, 14)
 
-            Divider().background(Color.white.opacity(0.08))
+            Divider().background(Theme.ink.opacity(0.08))
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
@@ -66,10 +66,10 @@ struct ExportOptionsView: View {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("Burn Captions Into Video")
                                         .font(.system(size: 13, weight: .medium))
-                                        .foregroundColor(.white)
+                                        .foregroundColor(Theme.ink)
                                     Text("Captions are permanently embedded in the exported file")
-                                        .font(.system(size: 11))
-                                        .foregroundColor(Color.white.opacity(0.4))
+                                        .font(.system(size: 12))
+                                        .foregroundColor(Theme.ink.opacity(0.55))
                                 }
                             }
                             .toggleStyle(SwitchToggleStyle(tint: gold))
@@ -78,8 +78,8 @@ struct ExportOptionsView: View {
                                 VStack(alignment: .leading, spacing: 10) {
                                     // Style picker
                                     Text("Caption Style")
-                                        .font(.system(size: 11, weight: .semibold))
-                                        .foregroundColor(Color.white.opacity(0.4))
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundColor(Theme.ink.opacity(0.55))
 
                                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 6)], spacing: 6) {
                                         ForEach(CaptionStyle.all) { style in
@@ -92,7 +92,7 @@ struct ExportOptionsView: View {
                                         .onChange(of: captionLook) { $0.save() }
                                 }
                                 .padding(12)
-                                .background(Color.white.opacity(0.04))
+                                .background(Theme.ink.opacity(0.04))
                                 .cornerRadius(8)
                                 .transition(.opacity.combined(with: .move(edge: .top)))
                             }
@@ -112,7 +112,7 @@ struct ExportOptionsView: View {
                 .padding(.vertical, 16)
             }
 
-            Divider().background(Color.white.opacity(0.08))
+            Divider().background(Theme.ink.opacity(0.08))
 
             // Export button / progress
             VStack(spacing: 10) {
@@ -121,8 +121,8 @@ struct ExportOptionsView: View {
                         ProgressView(value: exportProgress)
                             .accentColor(Theme.action)
                         Text(exportStatus)
-                            .font(.system(size: 12))
-                            .foregroundColor(Color.white.opacity(0.5))
+                            .font(.system(size: 13))
+                            .foregroundColor(Theme.ink.opacity(0.55))
                     }
                 } else if exportDone {
                     HStack(spacing: 6) {
@@ -135,7 +135,7 @@ struct ExportOptionsView: View {
                 } else {
                     if let err = exportError {
                         Text(err)
-                            .font(.system(size: 11))
+                            .font(.system(size: 12))
                             .foregroundColor(Theme.danger)
                             .multilineTextAlignment(.center)
                     }
@@ -147,7 +147,7 @@ struct ExportOptionsView: View {
                             Text("Export \(format.rawValue)")
                                 .font(.system(size: 15, weight: .bold))
                         }
-                        .foregroundColor(.black)
+                        .foregroundColor(Theme.onSand)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                         .background(gold)
@@ -171,8 +171,8 @@ struct ExportOptionsView: View {
     private func section<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(Color.white.opacity(0.3))
+                .font(.system(size: 11.5, weight: .semibold))
+                .foregroundColor(Theme.ink.opacity(0.55))
                 .tracking(1)
             content()
         }
@@ -184,19 +184,19 @@ struct ExportOptionsView: View {
             HStack(spacing: 12) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 6)
-                        .fill(selected ? gold.opacity(0.15) : Color.white.opacity(0.05))
+                        .fill(selected ? gold.opacity(0.15) : Theme.ink.opacity(0.05))
                         .frame(width: 36, height: 36)
                     Image(systemName: fmt.icon)
                         .font(.system(size: 16))
-                        .foregroundColor(selected ? gold : Color.white.opacity(0.5))
+                        .foregroundColor(selected ? gold : Theme.ink.opacity(0.5))
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(fmt.rawValue)
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(selected ? .white : Color.white.opacity(0.7))
+                        .foregroundColor(selected ? .white : Theme.ink.opacity(0.7))
                     Text(fmt.description)
-                        .font(.system(size: 11))
-                        .foregroundColor(Color.white.opacity(0.35))
+                        .font(.system(size: 12))
+                        .foregroundColor(Theme.ink.opacity(0.55))
                 }
                 Spacer()
                 if selected {
@@ -207,7 +207,7 @@ struct ExportOptionsView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(selected ? gold.opacity(0.07) : Color.white.opacity(0.04))
+            .background(selected ? gold.opacity(0.07) : Theme.ink.opacity(0.04))
             .cornerRadius(8)
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
@@ -224,12 +224,12 @@ struct ExportOptionsView: View {
             captionLook = CaptionLook(preset: style)
         }) {
             Text(style.name)
-                .font(.system(size: 11, weight: selected ? .semibold : .regular))
-                .foregroundColor(selected ? .black : Color.white.opacity(0.6))
+                .font(.system(size: 12, weight: selected ? .semibold : .regular))
+                .foregroundColor(selected ? .black : Theme.ink.opacity(0.6))
                 .padding(.horizontal, 8)
                 .padding(.vertical, 5)
                 .frame(maxWidth: .infinity)
-                .background(selected ? gold : Color.white.opacity(0.08))
+                .background(selected ? gold : Theme.ink.opacity(0.08))
                 .cornerRadius(5)
         }
         .buttonStyle(.plain)
@@ -239,14 +239,14 @@ struct ExportOptionsView: View {
         VStack(spacing: 3) {
             Text(value)
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(.white)
+                .foregroundColor(Theme.ink)
             Text(label)
-                .font(.system(size: 10))
-                .foregroundColor(Color.white.opacity(0.4))
+                .font(.system(size: 11.5))
+                .foregroundColor(Theme.ink.opacity(0.55))
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 8)
-        .background(Color.white.opacity(0.04))
+        .background(Theme.ink.opacity(0.04))
         .cornerRadius(6)
     }
 

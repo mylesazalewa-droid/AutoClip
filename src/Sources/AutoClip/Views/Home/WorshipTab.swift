@@ -60,7 +60,7 @@ struct WorshipTab: View {
         VStack(spacing: 12) {
             Text("Assessing the worship").font(Theme.display(22)).foregroundColor(Theme.cream)
             ProgressView(value: progress).tint(Theme.action).frame(width: 320)
-            Text(text).font(.system(size: 12)).foregroundColor(Theme.muted)
+            Text(text).font(.system(size: 13)).foregroundColor(Theme.muted)
             Button("Cancel") { job?.cancel(); job = nil; status = nil }.buttonStyle(SecondaryButtonStyle(compact: true))
         }
     }
@@ -83,12 +83,12 @@ struct WorshipTab: View {
                 }
                 HStack(spacing: 10) {
                     Button { chooseFile() } label: { Label("Add a recording", systemImage: "plus") }.buttonStyle(PrimaryButtonStyle(compact: true))
-                    TextField("Or paste a YouTube link", text: $link).textFieldStyle(.roundedBorder).font(.system(size: 12)).frame(maxWidth: 340)
+                    TextField("Or paste a YouTube link", text: $link).textFieldStyle(.roundedBorder).font(.system(size: 13)).frame(maxWidth: 340)
                         .onSubmit { addLink() }
                     Button("Get it") { addLink() }.buttonStyle(SecondaryButtonStyle(compact: true))
                         .disabled(link.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
-                if let error { Text(error).font(.system(size: 12)).foregroundColor(Theme.danger).fixedSize(horizontal: false, vertical: true) }
+                if let error { Text(error).font(.system(size: 13)).foregroundColor(Theme.danger).fixedSize(horizontal: false, vertical: true) }
                 if reports.count >= 2 { trend }
                 if !reports.isEmpty { goalsCard(current: nil) }
                 if reports.isEmpty {
@@ -114,13 +114,13 @@ struct WorshipTab: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(r.title).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.cream).lineLimit(1)
                     Text("\(r.date.formatted(date: .abbreviated, time: .omitted)) · \(s.namedSongs.count) song\(s.namedSongs.count == 1 ? "" : "s")")
-                        .font(.system(size: 11)).foregroundColor(Theme.muted)
+                        .font(.system(size: 12)).foregroundColor(Theme.muted)
                 }
                 Spacer()
                 ForEach(Self.scoreList(s), id: \.0) { name, v in
                     VStack(spacing: 2) {
                         Text(v.map(String.init) ?? "–").font(.system(size: 14, weight: .semibold, design: .serif)).foregroundColor(Theme.cream).monospacedDigit()
-                        Text(name).font(.system(size: 9)).foregroundColor(Theme.faint)
+                        Text(name).font(.system(size: 11)).foregroundColor(Theme.faint)
                     }
                     .frame(width: 88)
                 }
@@ -131,7 +131,7 @@ struct WorshipTab: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        Button { confirmDelete = r } label: { Image(systemName: "trash").font(.system(size: 12)) }
+        Button { confirmDelete = r } label: { Image(systemName: "trash").font(.system(size: 13)) }
             .buttonStyle(.plain).foregroundColor(Theme.muted).padding(8).help("Delete this assessment")
         }
     }
@@ -248,7 +248,7 @@ struct WorshipTab: View {
             VStack(alignment: .leading, spacing: 18) {
                 HStack {
                     Button { player.pause(); current = nil; reports = WorshipStore.all() } label: {
-                        Label("All services", systemImage: "chevron.left").font(.system(size: 12, weight: .medium)).foregroundColor(gold)
+                        Label("All services", systemImage: "chevron.left").font(.system(size: 13, weight: .medium)).foregroundColor(gold)
                     }.buttonStyle(.plain)
                     Spacer()
                     Button { confirmDelete = r } label: { Label("Delete", systemImage: "trash") }
@@ -261,15 +261,15 @@ struct WorshipTab: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Text(r.title).font(Theme.display(24)).foregroundColor(Theme.cream).lineLimit(2)
                         DatePicker("Service date", selection: Binding(get: { r.date }, set: { d in save { $0.date = d } }), displayedComponents: .date)
-                            .font(.system(size: 12)).foregroundColor(Theme.muted).fixedSize()
+                            .font(.system(size: 13)).foregroundColor(Theme.muted).fixedSize()
                         rangeControls(r)
                         Button { copySummary(s) } label: {
                             Label(copied ? "Copied" : "Copy summary for the team", systemImage: copied ? "checkmark" : "doc.on.doc")
                         }.buttonStyle(SecondaryButtonStyle(compact: true))
                         if let previous = previousFocus(r) {
                             VStack(alignment: .leading, spacing: 3) {
-                                Text("LAST TIME'S FOCUS").font(.system(size: 9, weight: .semibold)).tracking(1.2).foregroundColor(Theme.faint)
-                                Text(previous).font(.system(size: 12)).foregroundColor(Theme.text).fixedSize(horizontal: false, vertical: true)
+                                Text("LAST TIME'S FOCUS").font(.system(size: 11, weight: .semibold)).tracking(1.2).foregroundColor(Theme.faint)
+                                Text(previous).font(.system(size: 13)).foregroundColor(Theme.text).fixedSize(horizontal: false, vertical: true)
                             }
                         }
                     }
@@ -303,7 +303,7 @@ struct WorshipTab: View {
 
     private func rangeControls(_ r: WorshipReport) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("WORSHIP PART").font(.system(size: 9, weight: .semibold)).tracking(1.2).foregroundColor(Theme.faint)
+            Text("WORSHIP PART").font(.system(size: 11, weight: .semibold)).tracking(1.2).foregroundColor(Theme.faint)
             Text("\(assessTime(r.rangeStart)) to \(assessTime(r.rangeEnd))").font(.system(size: 13, weight: .medium)).foregroundColor(Theme.text).monospacedDigit()
             HStack(spacing: 6) {
                 Button("Start here") { let t = playhead; if t < r.rangeEnd { save { $0.rangeStart = t } } }.controlSize(.small)
@@ -313,7 +313,7 @@ struct WorshipTab: View {
             let stale = WorshipStats(r).needsRewatch
             if stale {
                 Text("This was measured before AutoClip could tell clapping from raised hands, or find exhortations.")
-                    .font(.system(size: 11)).foregroundColor(Theme.warn).fixedSize(horizontal: false, vertical: true)
+                    .font(.system(size: 12)).foregroundColor(Theme.warn).fixedSize(horizontal: false, vertical: true)
             }
             if stale || r.visual.map({ r.rangeStart < $0.start - 5 || r.rangeEnd > $0.end + 5 }) == true {
                 Button { rewatch(r) } label: { Label("Measure again", systemImage: "eye") }.buttonStyle(PrimaryButtonStyle(compact: true))
@@ -344,7 +344,7 @@ struct WorshipTab: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Worship Analysis").font(Theme.display(22)).foregroundColor(Theme.cream)
                     Text("\(s.namedSongs.count) song\(s.namedSongs.count == 1 ? "" : "s") · Analyzed \(r.analyzedAt.formatted(.relative(presentation: .named)))")
-                        .font(.system(size: 11)).foregroundColor(Theme.muted)
+                        .font(.system(size: 12)).foregroundColor(Theme.muted)
                 }
             }
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 200), alignment: .leading)], alignment: .leading, spacing: 16) {
@@ -355,10 +355,10 @@ struct WorshipTab: View {
                 ScoreRing(title: "Communication", value: s.communicationScore, why: "Inviting the room in, quiet gaps between songs, filler words and how long the talking runs.")
             }
             Text("A guide from what the recording shows. Compare weeks recorded the same way.")
-                .font(.system(size: 10)).foregroundColor(Theme.faint)
+                .font(.system(size: 11.5)).foregroundColor(Theme.faint)
             Rectangle().fill(Theme.line).frame(height: 1)
             VStack(alignment: .leading, spacing: 10) {
-                Text("THROUGH THE WORSHIP").font(.system(size: 9, weight: .semibold)).tracking(1.4).foregroundColor(Theme.muted)
+                Text("THROUGH THE WORSHIP").font(.system(size: 11, weight: .semibold)).tracking(1.4).foregroundColor(Theme.muted)
                 flowStrip(r, s)
                 row("Clapping heard or team", s.clapMarks, r)
                 row("Applause and cheers", s.applauseMarks, r)
@@ -389,7 +389,7 @@ struct WorshipTab: View {
             GeometryReader { geo in
                 let span = max(1, r.rangeEnd - r.rangeStart)
                 ZStack(alignment: .leading) {
-                    Capsule().fill(Color.white.opacity(0.06))
+                    Capsule().fill(Theme.ink.opacity(0.06))
                     ForEach(s.parts) { p in
                         Rectangle().fill(color(p.kind))
                             .frame(width: max(1, CGFloat(p.length / span) * geo.size.width), height: 18)
@@ -408,7 +408,7 @@ struct WorshipTab: View {
         switch k {
         case .song: return Theme.sand.opacity(0.75)
         case .talk: return Theme.oliveLight.opacity(0.8)
-        case .quiet: return Color.white.opacity(0.08)
+        case .quiet: return Theme.ink.opacity(0.08)
         }
     }
 
@@ -424,11 +424,11 @@ struct WorshipTab: View {
         setlistCard(s)
         AssessCard(title: "Songs", subtitle: s.report.setlist.isEmpty ? "Add your setlist to see these by name. Songs with no break between them show as one until you do." : "Click a time to play. Pause where a song really starts and press Starts here to correct it.") {
             if s.namedSongs.isEmpty {
-                Text("No songs found in this part. Use Start here and End here to set the worship part.").font(.system(size: 12)).foregroundColor(Theme.muted)
+                Text("No songs found in this part. Use Start here and End here to set the worship part.").font(.system(size: 13)).foregroundColor(Theme.muted)
             }
             ForEach(Array(s.namedSongs.enumerated()), id: \.element.id) { i, song in songRow(i, song, s) }
             if !s.quietGaps.isEmpty {
-                Text("Quiet gaps").font(.system(size: 11, weight: .semibold)).foregroundColor(Theme.muted).padding(.top, 4)
+                Text("Quiet gaps").font(.system(size: 12, weight: .semibold)).foregroundColor(Theme.muted).padding(.top, 4)
                 HStack(spacing: 8) { ForEach(s.quietGaps) { g in TimeLink(time: g.start, play: play) } }
             }
         }
@@ -441,15 +441,15 @@ struct WorshipTab: View {
                 Text("\(i + 1)").font(Theme.display(15)).foregroundColor(gold).frame(width: 22)
                 Text(song.name).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.cream).lineLimit(1)
                 if song.source == .estimate {
-                    Text("Start is a guess").font(.system(size: 9, weight: .medium)).foregroundColor(Theme.warn)
+                    Text("Start is a guess").font(.system(size: 11, weight: .medium)).foregroundColor(Theme.warn)
                         .help("The title wasn't heard, so this start is estimated. Pause where it really starts and press Starts here.")
                 } else if song.source == .lyrics {
-                    Text("Found from the lyrics").font(.system(size: 9)).foregroundColor(Theme.faint)
+                    Text("Found from the lyrics").font(.system(size: 11)).foregroundColor(Theme.faint)
                         .help("No break in the music here, so the change is placed between where each title is sung. It may be off by a little.")
                 }
                 Spacer()
                 TimeLink(time: song.part.start, play: play)
-                Text(assessTime(song.part.length)).font(.system(size: 12)).foregroundColor(Theme.text).monospacedDigit().frame(width: 44, alignment: .trailing)
+                Text(assessTime(song.part.length)).font(.system(size: 13)).foregroundColor(Theme.text).monospacedDigit().frame(width: 44, alignment: .trailing)
                 if let index = song.setIndex {
                     Button("Starts here") { let t = playhead; save { $0.setlist[index].start = t; $0.setlist[index].source = .manual } }
                         .controlSize(.small).help("Set this song's start to where the video is paused")
@@ -469,20 +469,20 @@ struct WorshipTab: View {
     }
 
     private func stat(_ text: String, _ help: String) -> some View {
-        Text(text).font(.system(size: 11)).foregroundColor(Theme.muted).help(help)
+        Text(text).font(.system(size: 12)).foregroundColor(Theme.muted).help(help)
     }
 
     private func setlistCard(_ s: WorshipStats) -> some View {
         AssessCard(title: "Setlist", subtitle: "Paste your songs in order, one per line. AutoClip names each song and uses the lyrics to split medleys.") {
-            TextEditor(text: $setlistText).font(.system(size: 12)).scrollContentBackground(.hidden)
+            TextEditor(text: $setlistText).font(.system(size: 13)).scrollContentBackground(.hidden)
                 .padding(6).frame(height: 96)
-                .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.05)))
+                .background(RoundedRectangle(cornerRadius: 8).fill(Theme.ink.opacity(0.05)))
             HStack(spacing: 10) {
                 Button("Match the setlist") { matchSetlist() }.buttonStyle(SecondaryButtonStyle(compact: true))
                 if !s.report.setlist.isEmpty {
                     Button("Clear") { setlistText = ""; setlistNote = nil; save { $0.setlist = [] } }.controlSize(.small)
                 }
-                if let setlistNote { Text(setlistNote).font(.system(size: 11)).foregroundColor(Theme.muted) }
+                if let setlistNote { Text(setlistNote).font(.system(size: 12)).foregroundColor(Theme.muted) }
             }
         }
     }
@@ -508,26 +508,26 @@ struct WorshipTab: View {
         let recent = Array(reports.sorted { $0.date > $1.date }.prefix(6).reversed())
         return AssessCard(title: "Goals", subtitle: "Targets the team is working toward, checked on every service. Oldest to newest, up to the last 6.") {
             if goals.isEmpty {
-                Text("No goals yet. Add one to track it week by week.").font(.system(size: 12)).foregroundColor(Theme.muted)
+                Text("No goals yet. Add one to track it week by week.").font(.system(size: 13)).foregroundColor(Theme.muted)
             }
             ForEach(goals) { goal in
                 HStack(spacing: 10) {
-                    Text(goal.title).font(.system(size: 12)).foregroundColor(Theme.text).lineLimit(1)
+                    Text(goal.title).font(.system(size: 13)).foregroundColor(Theme.text).lineLimit(1)
                     Spacer()
                     ForEach(recent, id: \.videoPath) { report in
                         let v = goal.value(in: WorshipStats(report))
                         let isCurrent = report.videoPath == r?.videoPath
                         Text(v.map { goal.text($0) } ?? "–")
-                            .font(.system(size: 10, weight: isCurrent ? .bold : .medium)).monospacedDigit()
+                            .font(.system(size: 11.5, weight: isCurrent ? .bold : .medium)).monospacedDigit()
                             .foregroundColor(v == nil ? Theme.faint : goal.met(v!) ? Theme.good : Theme.warn)
                             .frame(minWidth: 36).padding(.vertical, 3)
-                            .background(RoundedRectangle(cornerRadius: 5).fill(isCurrent ? Color.white.opacity(0.1) : Color.white.opacity(0.03)))
+                            .background(RoundedRectangle(cornerRadius: 5).fill(isCurrent ? Theme.ink.opacity(0.1) : Theme.ink.opacity(0.03)))
                             .help("\(report.title), \(report.date.formatted(date: .abbreviated, time: .omitted))")
                     }
                     Stepper("", value: Binding(get: { goal.target }, set: { v in setGoal(goal.id) { $0.target = v } }),
                             in: goal.measure.range, step: goal.measure.step).labelsHidden().controlSize(.small)
                     Button { goals.removeAll { $0.id == goal.id }; WorshipGoals.save(goals) } label: { Image(systemName: "xmark") }
-                        .buttonStyle(.plain).font(.system(size: 9)).foregroundColor(Theme.faint).help("Remove this goal")
+                        .buttonStyle(.plain).font(.system(size: 11)).foregroundColor(Theme.faint).help("Remove this goal")
                 }
             }
             Menu("Add a goal") {
@@ -535,7 +535,7 @@ struct WorshipTab: View {
                     Button(m.rawValue) { goals.append(.init(measure: m, target: m.defaultTarget)); WorshipGoals.save(goals) }
                 }
             }
-            .menuStyle(.borderlessButton).fixedSize().font(.system(size: 12))
+            .menuStyle(.borderlessButton).fixedSize().font(.system(size: 13))
         }
     }
 
@@ -547,16 +547,16 @@ struct WorshipTab: View {
 
     private func clipsCard(_ r: WorshipReport, _ s: WorshipStats) -> some View {
         let count = clipMoments(r, s).count
-        return AssessCard(title: "Rehearsal clips", subtitle: "Makes about 20 seconds around each note with the note on screen, plus one reel of them all to watch together.") {
+        return AssessCard(title: "Rehearsal clips", subtitle: "Makes about 20 seconds around each note with the note on screen, plus one clip of them all to watch together.") {
             if r.visual == nil {
-                Text("This recording has no picture, so clips can't be made.").font(.system(size: 12)).foregroundColor(Theme.muted)
+                Text("This recording has no picture, so clips can't be made.").font(.system(size: 13)).foregroundColor(Theme.muted)
             } else {
                 Toggle("Also include possible feedback and volume jumps", isOn: $includeFlagged).toggleStyle(.checkbox)
-                    .font(.system(size: 12)).foregroundColor(Theme.text)
+                    .font(.system(size: 13)).foregroundColor(Theme.text)
                 if let p = clipStatus {
                     HStack(spacing: 10) {
                         ProgressView(value: p).tint(Theme.action)
-                        Text("\(Int(p * 100))%").font(.system(size: 11)).foregroundColor(Theme.muted).monospacedDigit()
+                        Text("\(Int(p * 100))%").font(.system(size: 12)).foregroundColor(Theme.muted).monospacedDigit()
                         Button("Cancel") { clipTask?.cancel() }.controlSize(.small)
                     }
                 } else {
@@ -568,7 +568,7 @@ struct WorshipTab: View {
                         }
                     }
                 }
-                if let clipError { Text(clipError).font(.system(size: 11)).foregroundColor(Theme.danger).fixedSize(horizontal: false, vertical: true) }
+                if let clipError { Text(clipError).font(.system(size: 12)).foregroundColor(Theme.danger).fixedSize(horizontal: false, vertical: true) }
             }
         }
     }
@@ -627,7 +627,7 @@ struct WorshipTab: View {
     private func stage(_ r: WorshipReport, _ s: WorshipStats) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             if r.visual == nil {
-                AssessCard(title: "Stage") { Text("This recording has no picture, so stage presence and smiles can't be read.").font(.system(size: 12)).foregroundColor(Theme.muted) }
+                AssessCard(title: "Stage") { Text("This recording has no picture, so stage presence and smiles can't be read.").font(.system(size: 13)).foregroundColor(Theme.muted) }
             } else {
                 AssessCard(title: "Pointers") { pointerList(s.stagePointers) }
                 HStack(spacing: 12) {
@@ -637,7 +637,7 @@ struct WorshipTab: View {
                     metric(s.averagePeople.map { String(format: "%.1f", $0) } ?? "–", "people in shot on average")
                 }
                 Text("Camera choices shape these numbers. A wide shot can't show smiles, and someone singing toward a screen reads as facing away.")
-                    .font(.system(size: 10)).foregroundColor(Theme.faint)
+                    .font(.system(size: 11.5)).foregroundColor(Theme.faint)
             }
         }
     }
@@ -645,7 +645,7 @@ struct WorshipTab: View {
     private func metric(_ big: String, _ small: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(big).font(Theme.display(22)).foregroundColor(gold).monospacedDigit()
-            Text(small).font(.system(size: 10)).foregroundColor(Theme.muted)
+            Text(small).font(.system(size: 11.5)).foregroundColor(Theme.muted)
         }
         .padding(12).frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 10).fill(Theme.surface))
@@ -655,12 +655,12 @@ struct WorshipTab: View {
         VStack(alignment: .leading, spacing: 14) {
             AssessCard(title: "Pointers") { pointerList(s.communicationPointers) }
             AssessCard(title: "What was said", subtitle: "\(assessTime(s.talkSeconds)) of talking\(s.averageWPM.map { String(format: " · %.0f words a minute", $0) } ?? "")") {
-                if s.talks.isEmpty { Text("Nothing found.").font(.system(size: 12)).foregroundColor(Theme.muted) }
+                if s.talks.isEmpty { Text("Nothing found.").font(.system(size: 13)).foregroundColor(Theme.muted) }
                 ForEach(s.talks) { t in
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
                         TimeLink(time: t.start, play: play)
-                        Text(t.overMusic == true ? "Exhortation" : "Talking").font(.system(size: 10, weight: .semibold)).foregroundColor(gold).frame(width: 70, alignment: .leading)
-                        Text(t.text).font(.system(size: 12)).foregroundColor(Theme.text).fixedSize(horizontal: false, vertical: true)
+                        Text(t.overMusic == true ? "Exhortation" : "Talking").font(.system(size: 11.5, weight: .semibold)).foregroundColor(gold).frame(width: 70, alignment: .leading)
+                        Text(t.text).font(.system(size: 13)).foregroundColor(Theme.text).fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
@@ -673,7 +673,7 @@ struct WorshipTab: View {
                 HStack(spacing: 8) {
                     Picker("", selection: $noteCategory) { ForEach(Self.categories, id: \.self) { Text($0).tag($0) } }
                         .labelsHidden().fixedSize()
-                    TextField("What did you notice?", text: $noteText).textFieldStyle(.roundedBorder).font(.system(size: 12))
+                    TextField("What did you notice?", text: $noteText).textFieldStyle(.roundedBorder).font(.system(size: 13))
                         .onSubmit { addNote() }
                     Button("Add") { addNote() }.buttonStyle(SecondaryButtonStyle(compact: true))
                         .disabled(noteText.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -681,11 +681,11 @@ struct WorshipTab: View {
                 ForEach(r.notes.sorted { $0.time < $1.time }) { n in
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
                         TimeLink(time: n.time, play: play)
-                        Text(n.category).font(.system(size: 10, weight: .semibold)).foregroundColor(gold).frame(width: 90, alignment: .leading)
-                        Text(n.text).font(.system(size: 12)).foregroundColor(Theme.text).fixedSize(horizontal: false, vertical: true)
+                        Text(n.category).font(.system(size: 11.5, weight: .semibold)).foregroundColor(gold).frame(width: 90, alignment: .leading)
+                        Text(n.text).font(.system(size: 13)).foregroundColor(Theme.text).fixedSize(horizontal: false, vertical: true)
                         Spacer()
                         Button { save { $0.notes.removeAll { $0.id == n.id } } } label: { Image(systemName: "xmark") }
-                            .buttonStyle(.plain).font(.system(size: 9)).foregroundColor(Theme.faint).help("Delete this note")
+                            .buttonStyle(.plain).font(.system(size: 11)).foregroundColor(Theme.faint).help("Delete this note")
                     }
                 }
             }
@@ -694,10 +694,10 @@ struct WorshipTab: View {
             AssessCard(title: "How did it feel?", subtitle: "Your team's own rating, which the numbers can't give you.") {
                 ForEach(Self.categories, id: \.self) { c in
                     HStack(spacing: 10) {
-                        Text(c).font(.system(size: 12)).foregroundColor(Theme.text).frame(width: 110, alignment: .leading)
+                        Text(c).font(.system(size: 13)).foregroundColor(Theme.text).frame(width: 110, alignment: .leading)
                         ForEach(1...5, id: \.self) { n in
                             Button { save { $0.ratings[c] = $0.ratings[c] == n ? nil : n } } label: {
-                                Image(systemName: (r.ratings[c] ?? 0) >= n ? "circle.fill" : "circle").font(.system(size: 12)).foregroundColor(gold)
+                                Image(systemName: (r.ratings[c] ?? 0) >= n ? "circle.fill" : "circle").font(.system(size: 13)).foregroundColor(gold)
                             }.buttonStyle(.plain)
                         }
                     }
@@ -705,7 +705,7 @@ struct WorshipTab: View {
             }
             AssessCard(title: "Focus for next time", subtitle: "Shown on your next service so you can see if it improved.") {
                 TextField("One thing to work on", text: Binding(get: { r.focus }, set: { v in save { $0.focus = v } }), axis: .vertical)
-                    .textFieldStyle(.roundedBorder).font(.system(size: 12)).lineLimit(2...4)
+                    .textFieldStyle(.roundedBorder).font(.system(size: 13)).lineLimit(2...4)
             }
         }
     }
@@ -724,9 +724,9 @@ struct WorshipTab: View {
                 HStack(spacing: 10) {
                     Button { runCoach(s) } label: { Label(r.coach == nil ? "Write the coaching" : "Write it again", systemImage: "sparkles") }
                         .buttonStyle(PrimaryButtonStyle(compact: true)).disabled(coachStatus != nil)
-                    if let coachStatus { ProgressView().controlSize(.small); Text(coachStatus).font(.system(size: 11)).foregroundColor(Theme.muted) }
+                    if let coachStatus { ProgressView().controlSize(.small); Text(coachStatus).font(.system(size: 12)).foregroundColor(Theme.muted) }
                 }
-                if let coachError { Text(coachError).font(.system(size: 11)).foregroundColor(Theme.danger).fixedSize(horizontal: false, vertical: true) }
+                if let coachError { Text(coachError).font(.system(size: 12)).foregroundColor(Theme.danger).fixedSize(horizontal: false, vertical: true) }
             }
             if let c = r.coach {
                 AssessCard(title: "Summary") { Text(c.summary).font(.system(size: 13)).foregroundColor(Theme.text).fixedSize(horizontal: false, vertical: true) }
@@ -734,7 +734,7 @@ struct WorshipTab: View {
                 coachList("What to work on", c.improvements, icon: "arrow.up.circle", color: Theme.warn)
                 AssessCard(title: "Rehearsal plan") {
                     ForEach(Array(c.rehearsal.enumerated()), id: \.offset) { i, step in
-                        Text("\(i + 1). \(step)").font(.system(size: 12)).foregroundColor(Theme.text).fixedSize(horizontal: false, vertical: true)
+                        Text("\(i + 1). \(step)").font(.system(size: 13)).foregroundColor(Theme.text).fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
@@ -745,10 +745,10 @@ struct WorshipTab: View {
         AssessCard(title: title) {
             ForEach(items) { n in
                 HStack(alignment: .top, spacing: 8) {
-                    Image(systemName: icon).font(.system(size: 12)).foregroundColor(color)
+                    Image(systemName: icon).font(.system(size: 13)).foregroundColor(color)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(n.title).font(.system(size: 12, weight: .semibold)).foregroundColor(Theme.cream)
-                        Text(n.detail).font(.system(size: 12)).foregroundColor(Theme.text).fixedSize(horizontal: false, vertical: true)
+                        Text(n.title).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.cream)
+                        Text(n.detail).font(.system(size: 13)).foregroundColor(Theme.text).fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }

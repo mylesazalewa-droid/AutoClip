@@ -71,7 +71,7 @@ enum StorageScan {
         add("Speakers", [root.appendingPathComponent("Speakers.json")] + jsonFiles(in: root.appendingPathComponent("Speakers")))
         add("Assess", jsonFiles(in: root.appendingPathComponent("Assess")))
         add("Worship", jsonFiles(in: root.appendingPathComponent("Worship")))
-        add("Improve a Short", jsonFiles(in: root.appendingPathComponent("Shorts")))
+        add("Improve a Clip", jsonFiles(in: root.appendingPathComponent("Shorts")))
         add("Results", jsonFiles(in: root.appendingPathComponent("Results")))
         add("Podcast", jsonFiles(in: root.appendingPathComponent("Podcasts")))
         if let id = Bundle.main.bundleIdentifier, let saved = UserDefaults.standard.persistentDomain(forName: id) {
@@ -79,7 +79,7 @@ enum StorageScan {
                 let lower = key.lowercased()
                 // Only ever looks for file names, and has no business near anything secret
                 if ["key", "token", "secret", "password"].contains(where: lower.contains) { continue }
-                let label = lower.hasPrefix("autoreels") ? "Auto Reels" : "Settings"
+                let label = lower.hasPrefix("autoreels") ? "Clips" : "Settings"
                 if let d = value as? Data { out.append((label, String(decoding: d, as: UTF8.self))) }
                 else if let s = value as? String { out.append((label, s)) }
                 else if let list = value as? [String] { out.append((label, list.joined(separator: "\n"))) }
@@ -116,7 +116,7 @@ enum StorageScan {
             func dir(_ name: String) -> URL { root.appendingPathComponent(name) }
             let movies = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Movies/AutoClip Podcasts")
             var groups = [
-                group("Sermon videos", "Imported and downloaded videos. Reels you've finished keep working without these, but you can't re-edit or make new clips from a video once it's gone.", "film", dirs: [dir("Videos")], canClear: true, saved: saved),
+                group("Sermon videos", "Imported and downloaded videos. Clips you've finished keep working without these, but you can't re-edit or make new clips from a video once it's gone.", "film", dirs: [dir("Videos")], canClear: true, saved: saved),
                 group("Audio uploads", "The waveform videos made for audio files. Your original audio file isn't kept here.", "waveform", dirs: [dir("Audio")], canClear: true, saved: saved),
                 group("Practice recordings", "Recordings made in Assess.", "mic", dirs: [dir("Practice")], canClear: true, saved: saved),
                 group("Podcasts", "Podcast episodes and their exports.", "mic.circle", dirs: [dir("Podcasts"), movies], canClear: true, saved: saved),
@@ -129,9 +129,9 @@ enum StorageScan {
             let reels = Set(reelFiles).filter { !$0.hasPrefix(inside) && !$0.hasPrefix(movies.path + "/") && FileManager.default.fileExists(atPath: $0) }
             let reelItems = reels.map { p -> StorageItem in
                 let url = URL(fileURLWithPath: p), m = measure(url)
-                return StorageItem(url: url, bytes: m.bytes, modified: m.modified, usedBy: ["Auto Reels"])
+                return StorageItem(url: url, bytes: m.bytes, modified: m.modified, usedBy: ["Clips"])
             }.sorted { $0.bytes > $1.bytes }
-            groups.append(StorageGroup(title: "Finished reels", detail: "Your exported reels, wherever you saved them. Delete these from Auto Reels so the project stays tidy.", icon: "play.rectangle.on.rectangle",
+            groups.append(StorageGroup(title: "Finished clips", detail: "Your exported clips, wherever you saved them. Delete these from Clips so the project stays tidy.", icon: "play.rectangle.on.rectangle",
                                        bytes: reelItems.reduce(0) { $0 + $1.bytes }, items: reelItems, canClear: false))
             let values = try? URL(fileURLWithPath: NSHomeDirectory()).resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey, .volumeTotalCapacityKey])
             return StorageReport(groups: groups.filter { !$0.items.isEmpty }.sorted { $0.bytes > $1.bytes },

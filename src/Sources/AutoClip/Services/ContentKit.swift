@@ -94,7 +94,7 @@ enum ContentKit {
                     var seo = p; seo.hookText = d.hook ?? ""
                     seoByID[d.id] = seo
                 }
-                var md = "# Posts — \(record.title)\n\nOne post per reel. Copy the caption, then the hashtags.\n"
+                var md = "# Posts — \(record.title)\n\nOne post per clip. Copy the caption, then the hashtags.\n"
                 for (i, d) in drafts.enumerated() {
                     guard let p = seoByID[d.id] else { continue }
                     md += "\n---\n\n## \(i + 1). \(d.title)  (\(Int(d.duration.rounded()))s)\n\n"
@@ -147,23 +147,23 @@ enum ContentKit {
 
         // Every reel, rendered (or copied when its export is up to date)
         if o.reels && !drafts.isEmpty {
-            let dir = folder.appendingPathComponent("Reels")
+            let dir = folder.appendingPathComponent("Clips")
             try fm.createDirectory(at: dir, withIntermediateDirectories: true)
             for (i, d) in drafts.enumerated() {
                 let name = String(format: "%02d ", i + 1) + safe(d.title)
                 let url = dir.appendingPathComponent(name + ".mp4")
                 try? fm.removeItem(at: url)
                 if let p = d.exportedPath, !d.editedSinceExport, fm.fileExists(atPath: p) {
-                    await progress("Copying reel \(i + 1) of \(drafts.count)…")
+                    await progress("Copying clip \(i + 1) of \(drafts.count)…")
                     try? fm.copyItem(at: URL(fileURLWithPath: p), to: url)
                 } else {
                     var copy = d
                     copy.seo = nil   // the posts file has the copy; no stray .txt per reel
                     do {
                         try await copy.render(to: url) { p, _ in
-                            Task { @MainActor in progress("Rendering reel \(i + 1) of \(drafts.count) — \(Int(p * 100))%") }
+                            Task { @MainActor in progress("Rendering clip \(i + 1) of \(drafts.count) — \(Int(p * 100))%") }
                         }
-                    } catch { skipped.append("Reel \(i + 1): \(error.localizedDescription)") }
+                    } catch { skipped.append("Clip \(i + 1): \(error.localizedDescription)") }
                 }
             }
         }
@@ -171,13 +171,13 @@ enum ContentKit {
         // A simple week plan
         if !drafts.isEmpty {
             let days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-            var plan = "# Posting plan — \(record.title)\n\nOne reel a day. Reels you already exported (your picks) come first. Move days around to suit you.\n\n"
+            var plan = "# Posting plan — \(record.title)\n\nOne clip a day. Clips you already exported (your picks) come first. Move days around to suit you.\n\n"
             let ordered = drafts.filter { $0.exportedPath != nil } + drafts.filter { $0.exportedPath == nil }
             for (i, d) in ordered.enumerated() {
                 let day = i < days.count ? days[i] : "Week \(i / 7 + 1), \(days[i % 7])"
                 plan += "- **\(day):** \(d.title) (\(Int(d.duration.rounded()))s)\n"
             }
-            if o.graphics && hasAI { plan += "\nPost the carousel mid-week and a quote card on the days without a reel.\n" }
+            if o.graphics && hasAI { plan += "\nPost the carousel mid-week and a quote card on the days without a clip.\n" }
             try? plan.write(to: folder.appendingPathComponent("Posting plan.md"), atomically: true, encoding: .utf8)
         }
 

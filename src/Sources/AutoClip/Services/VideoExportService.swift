@@ -1794,7 +1794,7 @@ class VideoExportService {
         }
 
         // ── Pass 3: export ────────────────────────────────────────────────────
-        await MainActor.run { progress(0.65, "Exporting reel...") }
+        await MainActor.run { progress(0.65, "Exporting clip...") }
 
         // Load the true composition duration so we can set an explicit timeRange on the session.
         // This prevents AVFoundation from guessing the duration (which can cause -11803).
@@ -1828,7 +1828,7 @@ class VideoExportService {
 
         let timer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { _ in
             let p = 0.65 + Double(session.progress) * 0.35
-            DispatchQueue.main.async { progress(p, "Exporting reel...") }
+            DispatchQueue.main.async { progress(p, "Exporting clip...") }
         }
         RunLoop.main.add(timer, forMode: .common)
         await session.export()

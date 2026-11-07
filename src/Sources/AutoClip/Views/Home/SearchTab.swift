@@ -97,10 +97,10 @@ struct SearchTab: View {
             HStack(spacing: 6) {
                 ForEach(["forgiveness", "grace", "fear", "prayer", "purpose", "identity"], id: \.self) { s in
                     Button(s.capitalized) { query = s }
-                        .buttonStyle(.plain).font(.system(size: 11, weight: .medium))
+                        .buttonStyle(.plain).font(.system(size: 12, weight: .medium))
                         .foregroundColor(query == s ? Theme.bg : Theme.text.opacity(0.8))
                         .padding(.horizontal, 12).padding(.vertical, 5)
-                        .background(Capsule().fill(query == s ? Theme.sand : Color.white.opacity(0.05)))
+                        .background(Capsule().fill(query == s ? Theme.sand : Theme.ink.opacity(0.05)))
                         .overlay(Capsule().stroke(Theme.line, lineWidth: 1))
                 }
                 Spacer()
@@ -110,7 +110,7 @@ struct SearchTab: View {
                 .labelsHidden().controlSize(.small).fixedSize()
                 if library.contains(where: \.isPractice) {
                     Toggle("Include practice runs", isOn: $includePractice).toggleStyle(.switch).controlSize(.mini)
-                        .font(.system(size: 11)).foregroundColor(Theme.muted)
+                        .font(.system(size: 12)).foregroundColor(Theme.muted)
                 }
             }
         }
@@ -142,26 +142,25 @@ struct SearchTab: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 16) {
                 if loading {
-                    HStack(spacing: 8) { ProgressView().controlSize(.small)
-                        Text("Reading your transcripts…").font(.system(size: 12)).foregroundColor(Color.white.opacity(0.6)) }
+                    PlaceholderRows(count: 4, label: "Reading your transcripts…")
                 } else if query.trimmingCharacters(in: .whitespaces).isEmpty {
                     intro
                 } else if found.isEmpty {
                     Text("Nothing found for “\(query)” in \(library.count) transcribed video\(library.count == 1 ? "" : "s").")
-                        .font(.system(size: 13)).foregroundColor(Color.white.opacity(0.6))
+                        .font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.6))
                 } else {
                     HStack {
                         Text("\(total) mention\(total == 1 ? "" : "s") in \(found.count) message\(found.count == 1 ? "" : "s")")
-                            .font(.system(size: 13, weight: .semibold)).foregroundColor(.white)
+                            .font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.ink)
                         Spacer()
                         if let c = compiled {
-                            Text(c).font(.system(size: 11)).foregroundColor(Theme.good)
+                            Text(c).font(.system(size: 12)).foregroundColor(Theme.good)
                         }
                         Button { makeCompilation(found) } label: {
                             Label("Make a compilation", systemImage: "rectangle.stack.badge.plus")
                         }
                         .buttonStyle(PrimaryButtonStyle(compact: true))
-                        .help("Every moment you said this, joined into a short reel and a full-length video you can edit and export")
+                        .help("Every moment you said this, joined into a short clip and a full-length video you can edit and export")
                     }
                     ForEach(found, id: \.talk.path) { group in
                         talkResults(group.talk, group.hits)
@@ -182,19 +181,19 @@ struct SearchTab: View {
     private func talkResults(_ talk: Talk, _ hits: [Hit]) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .firstTextBaseline) {
-                if talk.isPractice { Image(systemName: "mic.fill").font(.system(size: 10)).foregroundColor(gold) }
-                Text(talk.title).font(.system(size: 13, weight: .semibold)).foregroundColor(.white).lineLimit(1)
+                if talk.isPractice { Image(systemName: "mic.fill").font(.system(size: 11.5)).foregroundColor(gold) }
+                Text(talk.title).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.ink).lineLimit(1)
                 Text(talk.date.formatted(date: .abbreviated, time: .omitted))
-                    .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.4))
+                    .font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.55))
                 Spacer()
-                Text("\(hits.count)×").font(.system(size: 12, weight: .bold, design: .rounded)).foregroundColor(gold)
+                Text("\(hits.count)×").font(.system(size: 13, weight: .bold, design: .rounded)).foregroundColor(gold)
             }
             ForEach(hits.prefix(40)) { h in
                 Button { play(talk, at: h.time) } label: {
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
-                        Text(assessTime(h.time)).font(.system(size: 11, design: .monospaced)).foregroundColor(gold)
+                        Text(assessTime(h.time)).font(.system(size: 12, design: .monospaced)).foregroundColor(gold)
                             .frame(width: 56, alignment: .leading)
-                        Text(highlighted(h.text)).font(.system(size: 12)).foregroundColor(Color.white.opacity(0.8))
+                        Text(highlighted(h.text)).font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.8))
                             .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
                         Spacer(minLength: 0)
                     }
@@ -204,10 +203,10 @@ struct SearchTab: View {
                 .buttonStyle(.plain)
             }
             if hits.count > 40 {
-                Text("+ \(hits.count - 40) more").font(.system(size: 11)).foregroundColor(Color.white.opacity(0.4)).padding(.leading, 6)
+                Text("+ \(hits.count - 40) more").font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.55)).padding(.leading, 6)
             }
         }
-        .padding(12).background(Color.white.opacity(0.04)).cornerRadius(10)
+        .padding(12).background(Theme.ink.opacity(0.04)).cornerRadius(10)
     }
 
     /// The sentence with the matched words in gold.
@@ -217,7 +216,7 @@ struct SearchTab: View {
         for phrase in terms.phrases {
             var range = out.startIndex..<out.endIndex
             while let r = out[range].range(of: phrase, options: .caseInsensitive) {
-                out[r].foregroundColor = gold; out[r].font = .system(size: 12, weight: .semibold)
+                out[r].foregroundColor = gold; out[r].font = .system(size: 13, weight: .semibold)
                 range = r.upperBound..<out.endIndex
             }
         }
@@ -229,7 +228,7 @@ struct SearchTab: View {
                   let lo = AttributedString.Index(range.lowerBound, within: out),
                   let hi = AttributedString.Index(range.upperBound, within: out) else { return }
             out[lo..<hi].foregroundColor = gold
-            out[lo..<hi].font = .system(size: 12, weight: .semibold)
+            out[lo..<hi].font = .system(size: 13, weight: .semibold)
         }
         return out
     }
@@ -297,7 +296,7 @@ struct SearchTab: View {
         rec.sourceVideoPath = first.talk.path
         rec.contentKind = ContentKind.current.rawValue
         reelsStore.add(rec)
-        compiled = "Saved to Auto Reels"
+        compiled = "Saved to Clips"
         openWindow(id: "reel-window", value: rec.id)
     }
 
@@ -307,27 +306,27 @@ struct SearchTab: View {
         VStack(alignment: .leading, spacing: 12) {
             if let p = playing {
                 VideoPlayer(player: player).frame(height: 214).cornerRadius(8)
-                Text(p.title).font(.system(size: 12, weight: .semibold)).foregroundColor(.white).lineLimit(2)
+                Text(p.title).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.ink).lineLimit(2)
             } else {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.04))
+                    RoundedRectangle(cornerRadius: 8).fill(Theme.ink.opacity(0.04))
                     VStack(spacing: 6) {
                         Image(systemName: "play.circle").font(.system(size: 28)).foregroundColor(gold.opacity(0.7))
-                        Text("Click a result to hear it").font(.system(size: 11)).foregroundColor(Color.white.opacity(0.5))
+                        Text("Click a result to hear it").font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.55))
                     }
                 }
                 .frame(height: 214)
             }
-            Divider().background(Color.white.opacity(0.08))
-            Text("LIBRARY").font(.system(size: 10, weight: .semibold)).foregroundColor(Color.white.opacity(0.35)).tracking(1)
+            Divider().background(Theme.ink.opacity(0.08))
+            Text("LIBRARY").font(.system(size: 11.5, weight: .semibold)).foregroundColor(Theme.ink.opacity(0.55)).tracking(1)
             Text("\(library.count) video\(library.count == 1 ? "" : "s") searchable")
-                .font(.system(size: 12)).foregroundColor(.white)
+                .font(.system(size: 13)).foregroundColor(Theme.ink)
             if !untranscribed.isEmpty {
                 Text("\(untranscribed.count) more \(untranscribed.count == 1 ? "isn't" : "aren't") transcribed yet, so \(untranscribed.count == 1 ? "it isn't" : "they aren't") searched.")
-                    .font(.system(size: 11)).foregroundColor(Color.white.opacity(0.55)).fixedSize(horizontal: false, vertical: true)
+                    .font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.55)).fixedSize(horizontal: false, vertical: true)
                 if let transcribing {
                     HStack(spacing: 6) { ProgressView().controlSize(.small)
-                        Text(transcribing).font(.system(size: 11)).foregroundColor(Color.white.opacity(0.6)).lineLimit(2) }
+                        Text(transcribing).font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.6)).lineLimit(2) }
                     Button("Stop after this one") { stopTranscribing = true }.controlSize(.small)
                 } else {
                     Button { transcribeRest() } label: { Label("Transcribe them", systemImage: "text.bubble") }

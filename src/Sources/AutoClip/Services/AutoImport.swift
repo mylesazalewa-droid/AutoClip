@@ -227,7 +227,7 @@ final class AutoImport: ObservableObject {
         // One note a day is enough
         let already = log.last.map { Calendar.current.isDateInToday(Date(timeIntervalSince1970: $0.date)) && $0.title == "Daily limit reached" } ?? false
         if !already {
-            note("Daily limit reached", "Autopilot made reels from \(settings.dailyLimit) today. Anything else waits until tomorrow.", ok: false)
+            note("Daily limit reached", "Autopilot made clips from \(settings.dailyLimit) today. Anything else waits until tomorrow.", ok: false)
         }
     }
 
@@ -235,7 +235,7 @@ final class AutoImport: ObservableObject {
         do {
             status = "Getting “\(title)”…"
             let url = try await fetch()
-            status = "Making reels from “\(title)”…"
+            status = "Making clips from “\(title)”…"
             let started = Date().timeIntervalSince1970
             let d = UserDefaults.standard
             let format = VideoExportService.ExportFormat(rawValue: d.string(forKey: "ar_format") ?? "") ?? .vertical9x16
@@ -266,11 +266,11 @@ final class AutoImport: ObservableObject {
             await task.value
             guard let rec = AutoReelsStore.shared.reels.first(where: { $0.dateCreated >= started && $0.genParams?.sourceTitle == title }) else {
                 let err = AutoReelsStore.shared.activeJobs.first { $0.id == jobID }?.error
-                note(title, err ?? "Couldn't make reels.", ok: false)
+                note(title, err ?? "Couldn't make clips.", ok: false)
                 notify("Auto-import couldn't finish", "\(title): \(err ?? "no reels were made")")
                 return
             }
-            var detail = "\(rec.drafts?.count ?? 0) reels ready"
+            var detail = "\(rec.drafts?.count ?? 0) clips ready"
             if makeKit ?? settings.makeKit, !(rec.drafts ?? []).isEmpty {
                 status = "Building the content kit for “\(title)”…"
                 try? FileManager.default.createDirectory(at: kitFolder, withIntermediateDirectories: true)
