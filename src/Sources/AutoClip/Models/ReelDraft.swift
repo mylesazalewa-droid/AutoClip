@@ -230,7 +230,7 @@ struct ReelDraft: Identifiable, Codable, Equatable {
         var clip: Clip
         var firstSentenceID: UUID
         var lastSentenceID: UUID
-        /// false when the run starts/ends at a word cut inside a sentence (nudges don't apply there)
+        /// true when the run starts/ends at the first/last kept word of its sentence, which is where nudges apply
         var startsAtSentence: Bool
         var endsAtSentence: Bool
     }
@@ -248,13 +248,15 @@ struct ReelDraft: Identifiable, Codable, Equatable {
             var tokens: [Token] = []
             for s in piece.sentences {
                 guard s.included else { tokens.append(.sentenceBreak); continue }
-                for (k, w) in s.words.enumerated() {
+                // A cut word at either end doesn't change where the sentence really starts or ends
+                let kept = s.words.filter { !s.isCut($0) }
+                for w in s.words {
                     if s.isCut(w) { tokens.append(.wordCut(w)); continue }
                     // A long silence before this word (and nothing cut in between): trim it
                     if pausesTight, case let .word(prev, _, _, _)? = tokens.last, w.startTime - prev.endTime > pauseLimit {
                         tokens.append(.pause)
                     }
-                    tokens.append(.word(w, sentence: s, firstInSentence: k == 0, lastInSentence: k == s.words.count - 1))
+                    tokens.append(.word(w, sentence: s, firstInSentence: w.id == kept.first?.id, lastInSentence: w.id == kept.last?.id))
                 }
             }
             var cur: [(Word, Sentence, Bool, Bool)] = []
@@ -264,17 +266,16 @@ struct ReelDraft: Identifiable, Codable, Equatable {
                 defer { cur = [] }
                 guard let (first, firstS, firstIsSentStart, _) = cur.first,
                       let (last, lastS, _, lastIsSentEnd) = cur.last else { return }
-                let startsAtSentence = cutBefore == nil
-                let endsAtSentence = cutAfter == nil
                 var start: Double
                 if let cut = cutBefore { start = max(first.startTime - 0.03, cut.endTime) }
-                else {
-                    start = first.startTime - (pauseBefore ? 0.08 : 0.1) + (firstIsSentStart ? (firstS.startNudge ?? 0) : 0)
-                }
+                else { start = first.startTime - (pauseBefore ? 0.08 : 0.1) }
+                if firstIsSentStart { start += firstS.startNudge ?? 0 }
                 var end: Double
                 if let cut = cutAfter { end = min(last.endTime + 0.05, cut.startTime) }
-                else { end = last.endTime + (pauseAfter ? 0.14 : 0.25) + (lastIsSentEnd ? (lastS.endNudge ?? 0) : 0) }
-                start = max(0, start); end = max(start + 0.15, end)
+                else { end = last.endTime + (pauseAfter ? 0.14 : 0.25) }
+                if lastIsSentEnd { end += lastS.endNudge ?? 0 }
+                // However far it's nudged, the start stops at the last word, so a run can't vanish
+                start = max(0, min(start, last.startTime)); end = max(start + 0.15, end)
                 let words = cur.map(\.0)
                 var c = Clip(id: UUID(), title: words.prefix(8).map(\.word).joined(separator: " "),
                              startTime: start, endTime: end,
@@ -288,8 +289,8 @@ struct ReelDraft: Identifiable, Codable, Equatable {
                     if f.mode == "split" { c.splitX = [f.x, f.x2 ?? 0.75] }
                 }
                 runs.append(Run(clip: c, firstSentenceID: firstS.id, lastSentenceID: lastS.id,
-                                startsAtSentence: startsAtSentence && firstIsSentStart,
-                                endsAtSentence: endsAtSentence && lastIsSentEnd))
+                                startsAtSentence: firstIsSentStart,
+                                endsAtSentence: lastIsSentEnd))
             }
             for tok in tokens {
                 switch tok {

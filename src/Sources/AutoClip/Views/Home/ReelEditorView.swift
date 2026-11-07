@@ -1020,8 +1020,10 @@ struct ReelEditorView: View {
             framingRow(i)
             neighbourButton(i, before: true)
             ForEach(Array(piece.sentences.enumerated()), id: \.element.id) { j, s in
-                let startsRun = s.included && (j == 0 || !piece.sentences[j - 1].included)
-                let endsRun = s.included && (j == piece.sentences.count - 1 || !piece.sentences[j + 1].included)
+                // A sentence with every word cut has nothing to adjust, so the row goes to the next one that plays
+                let plays = { (k: Int) in piece.sentences.indices.contains(k) && !piece.sentences[k].keptWords.isEmpty }
+                let startsRun = plays(j) && !plays(j - 1)
+                let endsRun = plays(j) && !plays(j + 1)
                 if startsRun { nudgeRow(piece: i, sentence: j, isStart: true) }
                 let now = playing?.id == s.id ? playing : nil
                 HStack(alignment: .top, spacing: 8) {
