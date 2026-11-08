@@ -72,6 +72,8 @@ struct SlideInteraction {
     var tapLayer: (UUID) -> Void
     var moveLayer: (UUID, CGSize) -> Void
     var tapEmpty: () -> Void
+    /// The words were dragged up or down by this fraction of the slide's height
+    var moveText: (CGFloat) -> Void = { _ in }
 }
 
 /// One slide at full size (1080 wide). Used for the live preview (scaled) and for export.
@@ -81,6 +83,7 @@ struct SlideCanvas: View {
     let index: Int
     let images: SlideImages
     var interaction: SlideInteraction? = nil
+    @GestureState private var textDrag: CGFloat = 0
 
     private var pal: CarouselPalette { CarouselPalette(carousel) }
     private var W: CGFloat { carousel.shape.size.width }
@@ -138,6 +141,12 @@ struct SlideCanvas: View {
             VStack(alignment: .leading, spacing: 0) {
                 topBar
                 content
+                    .offset(y: CGFloat(slide.textNudge ?? 0) * H + textDrag)
+                    .gesture(interaction == nil ? nil :
+                        DragGesture(minimumDistance: 6)
+                            // Drag distances arrive in the slide's own (full-size) units
+                            .updating($textDrag) { v, s, _ in s = v.translation.height }
+                            .onEnded { v in interaction?.moveText(v.translation.height / H) })
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: contentAlignment)
                     .padding(.top, style == .split ? blockH - 72 - 40 + 56 : 24)
                     .padding(.bottom, bottomRoom)
@@ -160,7 +169,13 @@ struct SlideCanvas: View {
 
     private var hasRibbon: Bool { [.bold, .editorial, .color, .film].contains(style) }
     private var contentAlignment: Alignment {
-        style == .photo || ((artBehind && artStrong) || hasBG) && !style.light && style != .split ? .bottomLeading : .leading
+        switch slide.textAlign {
+        case "top": return .topLeading
+        case "middle": return .leading
+        case "bottom": return .bottomLeading
+        default: break
+        }
+        return style == .photo || ((artBehind && artStrong) || hasBG) && !style.light && style != .split ? .bottomLeading : .leading
     }
     private var bottomRoom: CGFloat {
         if style == .split { return 40 }

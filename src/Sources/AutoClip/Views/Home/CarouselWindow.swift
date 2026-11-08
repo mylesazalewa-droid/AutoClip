@@ -261,7 +261,7 @@ struct CarouselWindow: View {
         .background(Theme.ink.opacity(0.03))
         .overlay(alignment: .bottom) { if editingField != nil { inlineEditor.padding(.bottom, 16) } }
         .overlay(alignment: .topLeading) {
-            Text("Click words to edit them · drag stickers to move them")
+            Text("Click words to edit them · drag the words up or down · drag stickers to move them")
                 .font(.system(size: 11.5)).foregroundColor(Theme.faint).padding(10)
         }
     }
@@ -281,7 +281,14 @@ struct CarouselWindow: View {
                 }
                 selectedLayer = id
             },
-            tapEmpty: { editingField = nil; selectedLayer = nil })
+            tapEmpty: { editingField = nil; selectedLayer = nil },
+            moveText: { dy in
+                let i = selected
+                update { list in
+                    guard list.indices.contains(i) else { return }
+                    list[i].textNudge = min(0.45, max(-0.45, (list[i].textNudge ?? 0) + Double(dy)))
+                }
+            })
     }
 
     /// The box that appears over the slide when you click its words.
@@ -525,6 +532,26 @@ struct CarouselWindow: View {
                 if list.indices.contains(selected) {
                     let s = list[selected]
                     section("\(isPosts ? "Post" : "Slide") \(selected + 1) · \(s.kind.label)") {
+                        HStack(spacing: 8) {
+                            Text("Words").font(.system(size: 11.5)).foregroundColor(Theme.muted)
+                            Picker("", selection: Binding(get: { s.textAlign ?? "auto" }, set: { v in
+                                let i = selected
+                                update { list in
+                                    guard list.indices.contains(i) else { return }
+                                    list[i].textAlign = v == "auto" ? nil : v
+                                    list[i].textNudge = nil
+                                }
+                            })) {
+                                Text("Auto").tag("auto")
+                                Image(systemName: "arrow.up.to.line").help("Top").tag("top")
+                                Image(systemName: "arrow.up.and.down").help("Middle").tag("middle")
+                                Image(systemName: "arrow.down.to.line").help("Bottom").tag("bottom")
+                            }
+                            .pickerStyle(.segmented).labelsHidden()
+                            Button { nudgeText(-0.03) } label: { Image(systemName: "chevron.up") }.help("Move the words up a little")
+                            Button { nudgeText(0.03) } label: { Image(systemName: "chevron.down") }.help("Move the words down a little")
+                        }
+                        .controlSize(.small)
                         field("Label", text: itemBinding(\.eyebrow))
                         field(s.kind == .scripture ? "Verse" : s.kind == .quote ? "Quote" : "Headline", text: itemBinding(\.headline), lines: 4)
                         field("Words to highlight", text: itemBinding(\.emphasis))
@@ -689,6 +716,14 @@ struct CarouselWindow: View {
     private func timeLabel(_ t: Double) -> String { String(format: "Photo at %d:%02d", Int(t) / 60, Int(t) % 60) }
 
     // MARK: Editing
+
+    private func nudgeText(_ by: Double) {
+        let i = selected
+        update { list in
+            guard list.indices.contains(i) else { return }
+            list[i].textNudge = min(0.45, max(-0.45, (list[i].textNudge ?? 0) + by))
+        }
+    }
 
     private func nudge(_ by: Double) {
         let i = selected

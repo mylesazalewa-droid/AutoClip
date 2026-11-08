@@ -71,6 +71,10 @@ struct SermonCarousel: Codable, Equatable {
         // 3.16: a picture behind the slide (AI-made or your own) and stickers on top
         var bgPath: String?
         var layers: [Layer]?
+        /// Where the words sit: "top", "middle" or "bottom" (nil = the style decides)
+        var textAlign: String?
+        /// A further nudge up (minus) or down (plus), as a fraction of the slide's height
+        var textNudge: Double?
         var layerList: [Layer] {
             get { layers ?? [] }
             set { layers = newValue.isEmpty ? nil : newValue }
