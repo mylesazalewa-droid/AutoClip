@@ -42,9 +42,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
                                 withCompletionHandler completionHandler: @escaping () -> Void) {
         let raw = response.notification.request.content.userInfo["record"] as? String
+        let page = response.notification.request.content.userInfo["page"] as? String
         Task { @MainActor in
             NSApp.activate(ignoringOtherApps: true)
-            if let raw, let id = UUID(uuidString: raw) {
+            if page == "social" {
+                HomeNav.shared.open(.social)
+            } else if let raw, let id = UUID(uuidString: raw) {
                 if response.actionIdentifier == Notifier.reviewAction { AutoReelsStore.shared.reviewOnOpen = id }
                 if let open = CommandBar.shared.openReel { open(id) }
             }
@@ -106,6 +109,19 @@ enum Notifier {
         n.userInfo = ["record": rec.id.uuidString]
         if let pic = await thumbnail(rec), let a = try? UNNotificationAttachment(identifier: "picture", url: pic) { n.attachments = [a] }
         try? await c.add(UNNotificationRequest(identifier: rec.id.uuidString, content: n, trigger: nil))
+    }
+
+    /// "Your Sunday is ready": the carousel and posts are made. Only when AutoClip isn't in front.
+    static func graphicsReady(_ rec: AutoReelRecord, _ c: SermonCarousel) async {
+        guard !NSApp.isActive else { return }
+        let center = UNUserNotificationCenter.current()
+        guard (try? await center.requestAuthorization(options: [.alert, .sound, .badge])) == true else { return }
+        let n = UNMutableNotificationContent()
+        n.title = "Your Sunday is ready"
+        n.body = "“\(rec.title)”: clips, a \(c.slides.count)-slide carousel and \(c.postList.count) posts for the week, ready to review."
+        n.sound = .default
+        n.userInfo = ["record": rec.id.uuidString, "page": "social"]
+        try? await center.add(UNNotificationRequest(identifier: "social-" + rec.id.uuidString, content: n, trigger: nil))
     }
 
     private static func thumbnail(_ rec: AutoReelRecord) async -> URL? {

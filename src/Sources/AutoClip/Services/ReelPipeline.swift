@@ -273,6 +273,7 @@ enum ReelPipeline {
             await MainActor.run {
                 AutoReelsStore.shared.add(finalRecord)
                 Task { await Notifier.reelsReady(finalRecord) }
+                OneClickSunday.afterClips(finalRecord)
                 store.updateJob(AutoReelJob(id: jobID, title: retryParams?.sourceTitle ?? finalReelTitle, progress: 1.0,
                                            statusMsg: "\(drafts.count) clip\(drafts.count == 1 ? "" : "s") ready — open to review & export",
                                            isFinished: true, error: nil))

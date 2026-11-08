@@ -167,9 +167,16 @@ private struct ReelSettings: View {
     @AppStorage("ar_hookStyle") private var hookStyle = HookStyle.pop.rawValue
     @AppStorage("ar_targetDur") private var target: Double = 90
     @AppStorage("ar_lastOutputDir") private var exportFolder = ""
+    @AppStorage(OneClickSunday.key) private var autoGraphics = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
+            SettingsSection(title: "One-click Sunday") {
+                Row(title: "Make social graphics with every sermon",
+                    detail: "When the clips are ready, AI also writes the carousel and a week of posts, and the plan is set. Uses one more AI request per sermon.") {
+                    Toggle("", isOn: $autoGraphics).labelsHidden().toggleStyle(.switch)
+                }
+            }
             SettingsSection(title: "New clips") {
                 Row(title: "Find the sermon in a full service", detail: "For recordings over 30 minutes") { Toggle("", isOn: $findSermon).labelsHidden().toggleStyle(.switch) }
                 Row(title: "Length") {

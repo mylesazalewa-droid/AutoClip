@@ -6,7 +6,11 @@ struct ThisWeekCard: View {
     @ObservedObject private var reels = AutoReelsStore.shared
     @ObservedObject private var results = ShortResultsStore.shared
     @Environment(\.openWindow) private var openWindow
+    @ObservedObject private var jobs = CarouselJobs.shared
     @State private var flagged = 0
+    @State private var graphics: SermonCarousel?
+    @State private var confirmGraphics = false
+    @AppStorage(OneClickSunday.key) private var autoGraphics = false
 
     private var latest: AutoReelRecord? {
         reels.reels.first { !($0.drafts ?? []).isEmpty && !SampleSermon.isSample(path: $0.sourceVideoPath ?? "") }
@@ -34,6 +38,16 @@ struct ThisWeekCard: View {
             if let rec = latest { sermon(rec) } else { start }
         }
         .padding(.horizontal, 32)
+        .task(id: latest?.id) { graphics = latest.flatMap { CarouselStore.load($0.id) } }
+        .onReceive(NotificationCenter.default.publisher(for: CarouselStore.changed)) { n in
+            if let id = n.object as? UUID, id == latest?.id { graphics = CarouselStore.load(id) }
+        }
+        .alert("Make this sermon's social graphics?", isPresented: $confirmGraphics) {
+            Button("Make them") { if let r = latest { jobs.make(r) } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("AI writes a carousel and a week of posts, and the posting plan is set. Uses one AI request. You can keep working while it's made.")
+        }
         .task(id: drafts.map(\.id)) {
             let ds = drafts
             flagged = await Task.detached(priority: .utility) { ds.filter { ContextGuard.quick($0).contains(where: \.serious) }.count }.value
@@ -76,6 +90,7 @@ struct ThisWeekCard: View {
                     if posted > 0 { chip("\(posted) posted", icon: "checkmark.circle", color: Theme.good) }
                 }
                 nextStep(rec)
+                sundayChecklist(rec)
                 if let p = nextToPost, let path = p.exportedPath {
                     HStack(spacing: 10) {
                         Image(systemName: "paperplane").foregroundColor(Theme.sand)
@@ -116,11 +131,60 @@ struct ThisWeekCard: View {
                     .buttonStyle(SecondaryButtonStyle())
                 Button { HomeNav.shared.open(.results) } label: { Text("Add results") }.buttonStyle(SecondaryButtonStyle())
             }
-            Button { openWindow(id: "carousel-window", value: rec.id) } label: {
-                Label(CarouselStore.exists(rec.id) ? "Open social graphics" : "Make social graphics", systemImage: "rectangle.split.3x1")
+        }
+    }
+
+    /// Sunday's three jobs, and where each one is up to.
+    private func sundayChecklist(_ rec: AutoReelRecord) -> some View {
+        let running = jobs.running(rec.id)
+        let posts = graphics?.postList.count ?? 0
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 18) {
+                step("Clips", detail: "\(drafts.count) ready", state: drafts.isEmpty ? .todo : .done)
+                step("Carousel and posts",
+                     detail: running ? (jobs.status[rec.id] ?? "Being made…") : graphics.map { "\($0.slides.count) slides · \(posts) posts" } ?? "Not made yet",
+                     state: running ? .working : graphics != nil ? .done : .todo)
+                step("Week plan", detail: posts > 0 ? "Ready to post" : "After the posts", state: posts > 0 ? .done : running ? .working : .todo)
+                Spacer(minLength: 0)
+                if graphics != nil {
+                    Button { HomeNav.shared.open(.social) } label: { Label("Open Social Graphics", systemImage: "rectangle.split.3x1") }
+                        .buttonStyle(SecondaryButtonStyle(compact: true))
+                } else if !running {
+                    Button { confirmGraphics = true } label: { Label("Make them", systemImage: "sparkles") }
+                        .buttonStyle(SecondaryButtonStyle(compact: true))
+                }
             }
-            .buttonStyle(SecondaryButtonStyle())
-            .help("The whole message as an Instagram carousel")
+            if let e = jobs.errors[rec.id] {
+                Text(e).font(.system(size: 12)).foregroundColor(Theme.danger).lineLimit(2)
+            }
+            if !autoGraphics {
+                Button { autoGraphics = true } label: {
+                    Label("Make these automatically for every sermon", systemImage: "wand.and.stars")
+                }
+                .buttonStyle(.link).font(.system(size: 12))
+                .help("One-click Sunday: when a sermon's clips are ready, the carousel, posts and plan are made too (one more AI request per sermon). Turn off in Settings → Clips.")
+            }
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 10).fill(Theme.ink.opacity(0.04)))
+    }
+
+    private enum StepState { case todo, working, done }
+
+    private func step(_ title: String, detail: String, state: StepState) -> some View {
+        HStack(spacing: 8) {
+            Group {
+                switch state {
+                case .done: Image(systemName: "checkmark.circle.fill").foregroundColor(Theme.good)
+                case .working: ProgressView().controlSize(.small)
+                case .todo: Image(systemName: "circle").foregroundColor(Theme.faint)
+                }
+            }
+            .font(.system(size: 15)).frame(width: 18)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title).font(.system(size: 12.5, weight: .semibold)).foregroundColor(Theme.ink)
+                Text(detail).font(.system(size: 11.5)).foregroundColor(Theme.muted).lineLimit(1)
+            }
         }
     }
 

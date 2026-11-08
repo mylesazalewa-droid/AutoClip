@@ -449,6 +449,26 @@ Respond with ONLY valid JSON, no markdown:
     static func err(_ m: String) -> NSError { NSError(domain: "AutoClip", code: 31, userInfo: [NSLocalizedDescriptionKey: m]) }
 }
 
+// MARK: One-click Sunday
+
+/// When it's on, a sermon's carousel, week of posts and posting plan are made as soon as its
+/// clips are ready, so everything is waiting to review on Monday.
+@MainActor
+enum OneClickSunday {
+    static let key = "auto_social_graphics"
+    static var on: Bool {
+        get { UserDefaults.standard.bool(forKey: key) }
+        set { UserDefaults.standard.set(newValue, forKey: key) }
+    }
+
+    /// Called when a sermon's clips are ready.
+    static func afterClips(_ rec: AutoReelRecord) {
+        guard on, !SampleSermon.isSample(path: rec.sourceVideoPath ?? ""),
+              !CarouselStore.exists(rec.id) else { return }
+        CarouselJobs.shared.make(rec)
+    }
+}
+
 // MARK: Writing in the background
 
 /// Carousels being written, so the work carries on when the window closes and the Social
@@ -500,6 +520,7 @@ final class CarouselJobs: ObservableObject {
                 }
                 CarouselStore.save(c, for: rec.id)
                 finished[rec.id] = Date()
+                Task { await Notifier.graphicsReady(rec, c) }
             } catch {
                 errors[rec.id] = error.localizedDescription
             }
