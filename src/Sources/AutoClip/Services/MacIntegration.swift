@@ -10,6 +10,10 @@ import TipKit
 final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.servicesProvider = ServiceProvider.shared
+        // Use the icon in this copy of the app, not one macOS cached from an older version
+        if let url = (Bundle.main.url(forResource: "AutoClipIcon", withExtension: "icns") ?? Bundle.main.url(forResource: "AppIcon", withExtension: "icns")), let icon = NSImage(contentsOf: url) {
+            NSApp.applicationIconImage = icon
+        }
         NSUpdateDynamicServices()
         UNUserNotificationCenter.current().delegate = self
         Notifier.registerCategories()
