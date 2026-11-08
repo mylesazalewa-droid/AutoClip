@@ -9,3 +9,5 @@ plutil -replace CFBundleDocumentTypes -json '[{"CFBundleTypeName":"Video or audi
 cp "$(dirname "$0")/Resources/AppIcon.icns" "$1/Contents/Resources/AutoClipIcon.icns"
 rm -f "$1/Contents/Resources/AppIcon.icns"
 plutil -replace CFBundleIconFile -string "AutoClipIcon" "$PLIST"
+# Review links are opened from phones on the same Wi-Fi
+plutil -replace NSLocalNetworkUsageDescription -string "AutoClip shares review links with phones on your Wi-Fi so someone can approve clips and graphics." "$PLIST"

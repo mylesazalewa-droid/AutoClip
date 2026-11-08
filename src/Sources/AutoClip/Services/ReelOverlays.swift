@@ -253,6 +253,14 @@ enum ReelOverlays {
             out.append(Placed(image: img, frame: CGRect(x: size.width - w - size.width * 0.04, y: size.height * 0.115, width: w, height: h),
                               start: 0, end: duration, pop: false, still: true))
         }
+        // The church's logo sits top left, opposite the series label
+        if let kit = BrandKit.load(), kit.logoOnClips, let logo = BrandLogo.image(onDark: true, kit: kit) {
+            let aspect = CGFloat(logo.width) / max(1, CGFloat(logo.height))
+            var h = size.height * 0.04, w = h * aspect
+            if w > size.width * 0.3 { w = size.width * 0.3; h = w / aspect }
+            out.append(Placed(image: logo, frame: CGRect(x: size.width * 0.05, y: size.height * 0.115, width: w, height: h),
+                              start: 0, end: duration, pop: false, still: true))
+        }
         return out
     }
 

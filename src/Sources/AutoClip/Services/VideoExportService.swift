@@ -1622,7 +1622,7 @@ class VideoExportService {
         let reelDuration = reelOffset
         // Hook text + verse cards, laid out for the final frame size
         let verses = options.verseCards ? VerseDetector.find(in: remappedWords) : []
-        let overlays = (options.hookText != nil || !verses.isEmpty || options.seriesTag != nil)
+        let overlays = (options.hookText != nil || !verses.isEmpty || options.seriesTag != nil || BrandKit.load()?.logoOnClips == true)
             ? ReelOverlays.layout(hook: options.hookText, verses: verses,
                                   look: options.overlayLook ?? options.captionLook ?? CaptionLook(preset: options.captionStyle),
                                   size: renderSize, duration: reelDuration, hookStyle: options.hookStyle, tag: options.seriesTag)

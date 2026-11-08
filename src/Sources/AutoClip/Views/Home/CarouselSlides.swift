@@ -83,6 +83,8 @@ struct SlideCanvas: View {
     let index: Int
     let images: SlideImages
     var interaction: SlideInteraction? = nil
+    /// The brand to sign it with (the saved one unless the Brand kit page is previewing changes)
+    var kit: BrandKit? = BrandKit.load()
     @GestureState private var textDrag: CGFloat = 0
 
     private var pal: CarouselPalette { CarouselPalette(carousel) }
@@ -364,7 +366,13 @@ struct SlideCanvas: View {
     }
 
     private var bottomBar: some View {
-        HStack(alignment: .center) {
+        HStack(alignment: .center, spacing: 16) {
+            if let kit, kit.logoOnGraphics,
+               let logo = BrandLogo.image(onDark: style == .photo || hasBG || pal.groundNS.luminance < 0.5, kit: kit) {
+                let aspect = CGFloat(logo.width) / max(1, CGFloat(logo.height))
+                Image(decorative: logo, scale: 1).resizable().interpolation(.high)
+                    .frame(width: min(260, 52 * aspect), height: min(260, 52 * aspect) / aspect)
+            }
             Text(carousel.handle).font(.system(size: 28, weight: .semibold)).foregroundColor(pal.soft).lineLimit(1)
             Spacer(minLength: 20)
             if single {
@@ -865,11 +873,12 @@ struct ScaledSlide: View {
     let images: SlideImages
     let scale: CGFloat
     var interaction: SlideInteraction? = nil
+    var kit: BrandKit? = BrandKit.load()
 
     var body: some View {
         let size = carousel.shape.size
         SlideCanvas(carousel: carousel, slide: carousel.slides[index], index: index, images: images,
-                    interaction: interaction)
+                    interaction: interaction, kit: kit)
             .scaleEffect(scale, anchor: .topLeading)
             .frame(width: size.width * scale, height: size.height * scale, alignment: .topLeading)
             .clipped()

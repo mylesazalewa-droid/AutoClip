@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
-enum HomeTab: String { case projects, autoClips, autoReels, social, improve, podcast, rehearse, assess, worship, results, storage, search }
+enum HomeTab: String { case projects, autoClips, autoReels, social, improve, podcast, rehearse, assess, worship, results, storage, search, brand, approvals }
 
 struct HomeView: View {
     @ObservedObject private var library = LibraryService.shared
@@ -20,7 +20,7 @@ struct HomeView: View {
     @State private var visited: Set<HomeTab> = []
     /// Each page's backdrop, to go back to when you return to it
     @State private var backdrops: [HomeTab: String] = [:]
-    private static let allTabs: [HomeTab] = [.projects, .autoClips, .autoReels, .social, .improve, .podcast, .rehearse, .assess, .worship, .results, .storage, .search]
+    private static let allTabs: [HomeTab] = [.projects, .autoClips, .autoReels, .social, .improve, .podcast, .rehearse, .assess, .worship, .results, .storage, .search, .brand, .approvals]
 
     @ViewBuilder private func page(_ tab: HomeTab) -> some View {
         switch tab {
@@ -33,6 +33,8 @@ struct HomeView: View {
         case .worship: PlanGate(feature: .worship) { WorshipTab() }
         case .results: ResultsTab()
         case .storage: StorageTab()
+        case .brand: BrandKitTab()
+        case .approvals: ApprovalsTab()
         case .search: SearchTab()
         case .autoClips:
             VStack(spacing: 0) {

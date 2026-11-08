@@ -256,9 +256,11 @@ struct AppSidebar: View {
                 row("Assess", "waveform.badge.magnifyingglass", .assess)
                 row("Worship", "music.note", .worship)
                 row("Results", "chart.line.uptrend.xyaxis", .results)
+                row("Approvals", "checkmark.seal", .approvals)
                 group("Find")
                 row("Search", "magnifyingglass", .search)
                 group("Manage")
+                row("Brand kit", "paintpalette", .brand)
                 row("Storage", "internaldrive", .storage)
             }
 

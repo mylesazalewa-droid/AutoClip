@@ -22,7 +22,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             UserDefaults.standard.set(false, forKey: "tips_reset")
         }
         try? Tips.configure([.displayFrequency(.immediate)])
-        Task { @MainActor in DockStatus.shared.start() }
+        Task { @MainActor in
+            DockStatus.shared.start()
+            ReviewStore.shared.startIfNeeded()
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -47,6 +50,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             NSApp.activate(ignoringOtherApps: true)
             if page == "social" {
                 HomeNav.shared.open(.social)
+            } else if page == "approvals" {
+                HomeNav.shared.open(.approvals)
             } else if let raw, let id = UUID(uuidString: raw) {
                 if response.actionIdentifier == Notifier.reviewAction { AutoReelsStore.shared.reviewOnOpen = id }
                 if let open = CommandBar.shared.openReel { open(id) }

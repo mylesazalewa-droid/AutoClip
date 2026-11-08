@@ -16,6 +16,8 @@ struct SocialGraphicsTab: View {
     @State private var copiedDay: String?
     @State private var dropping = false
     @State private var confirmDelete: AutoReelRecord?
+    @State private var reviewFor: AutoReelRecord?
+    @ObservedObject private var reviews = ReviewStore.shared
     @AppStorage("social_hidden") private var hiddenRaw = ""
     private var hidden: Set<String> { Set(hiddenRaw.split(separator: ",").map(String.init)) }
     private var preparing: [AutoReelJob] { reels.activeJobs.filter { !$0.isFinished } }
@@ -70,6 +72,13 @@ struct SocialGraphicsTab: View {
                             VStack(spacing: 8) { ForEach(notYet) { row($0) } }
                         }
                     }
+                    let removed = sermons.filter { carousels[$0.id] == nil && hidden.contains($0.id.uuidString) }.count
+                    if removed > 0 {
+                        Button { hiddenRaw = "" } label: {
+                            Label("Show \(removed) removed sermon\(removed == 1 ? "" : "s")", systemImage: "eye")
+                        }
+                        .buttonStyle(.link).font(.system(size: 12))
+                    }
                 }
                 .padding(.horizontal, 32).padding(.bottom, 40)
             }
@@ -99,6 +108,7 @@ struct SocialGraphicsTab: View {
         .onChange(of: jobs.finished) { _, _ in reload() }
         .task(id: previewKeys) { await loadPreviews() }
         .sheet(item: $graphicsFor) { SocialGraphicsView(record: $0, gold: Theme.sand) }
+        .sheet(item: $reviewFor) { ReviewSendSheet(record: $0) }
         .alert("Delete this carousel and its posts?", isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } })) {
             Button("Delete", role: .destructive) { if let r = confirmDelete { CarouselStore.delete(r.id) }; confirmDelete = nil }
             Button("Cancel", role: .cancel) { confirmDelete = nil }
@@ -136,6 +146,9 @@ struct SocialGraphicsTab: View {
                 .shadow(color: .black.opacity(0.25), radius: 8, y: 4)
             Text(rec.title).font(.system(size: 11.5)).foregroundColor(Theme.muted).lineLimit(1)
         }
+        .overlay(alignment: .topLeading) {
+            if let r = reviews.latest(c.postList[i].id, kind: .post) { ReviewBadge(item: r).padding(6) }
+        }
         .contentShape(Rectangle())
         .onTapGesture { open(rec, posts: true, index: i) }
         .help("Open and edit this post")
@@ -151,6 +164,7 @@ struct SocialGraphicsTab: View {
         .contextMenu {
             Button("Edit") { open(rec, posts: true, index: i) }
             Button("Copy caption") { copy(c.postList[i].caption ?? "") }
+            Button("Send for review…") { reviewFor = rec }
             Divider()
             Button("Delete post", role: .destructive) { deletePost(rec, c.postList[i].id) }
         }
@@ -343,12 +357,16 @@ struct SocialGraphicsTab: View {
             .help("Open and edit this carousel")
             .contextMenu {
                 Button("Edit") { open(rec, posts: false, index: 0) }
+                Button("Send for review…") { reviewFor = rec }
                 Divider()
                 Button("Delete carousel and posts…", role: .destructive) { confirmDelete = rec }
             }
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(rec.title).font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.ink).lineLimit(1)
+                HStack(spacing: 8) {
+                    Text(rec.title).font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.ink).lineLimit(1)
+                    if let r = reviews.latest(rec.id, kind: .carousel) { ReviewBadge(item: r) }
+                }
                 Text("\(c.slides.count) slides · \(c.postList.count) posts · \(c.style.label)")
                     .font(.system(size: 12)).foregroundColor(Theme.muted)
             }
@@ -364,6 +382,9 @@ struct SocialGraphicsTab: View {
                     .buttonStyle(SecondaryButtonStyle(compact: true))
                     .help("Quote cards and a thumbnail for the full message video")
                 Spacer(minLength: 0)
+                Button { reviewFor = rec } label: { Image(systemName: "checkmark.seal") }
+                    .buttonStyle(SecondaryButtonStyle(compact: true))
+                    .help("Send for review: a link someone can open on their phone to approve these")
                 Button { confirmDelete = rec } label: { Image(systemName: "trash") }
                     .buttonStyle(SecondaryButtonStyle(compact: true))
                     .help("Delete this carousel and its posts")

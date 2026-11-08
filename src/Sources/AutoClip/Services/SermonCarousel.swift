@@ -269,13 +269,15 @@ struct SermonCarousel: Codable, Equatable {
 extension SermonCarousel {
     static func prompt(sentences numbered: String, title: String, kind: ContentKind, carousel: Bool = true) -> String {
         let noun = kind.noun
+        let times = BrandKit.load()?.serviceTimes.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let inviteTimes = times.isEmpty ? "" : " Its body says when: \"\(times)\" (word for word)."
         let postScripture = kind.usesScripture ? "- 1 \"scripture\" post, only if a passage was clearly cited (same rules: reference exactly as given, never invented).\n" : ""
         let posts = """
 \(carousel ? "Also write" : "Write") "posts": 6 to 8 single Instagram posts for the week after the \(noun). Each stands alone (not part of a carousel):
 - 2 "quote" posts: lines in the speaker's own words (trim filler, never invent), max 22 words.
 \(postScripture)- 1 "question" post: a short, warm question people will answer in the comments, max 12 words.
 - 1 or 2 "bigIdea" posts: an encouragement drawn from the message, max 14 words.
-- 1 "invite" post: a short invitation to church next Sunday that ties to this message. headline max 7 words, body max 10 words.
+- 1 "invite" post: a short invitation to church next Sunday that ties to this message. headline max 7 words, body max 10 words.\(inviteTimes)
 Each post has "kind", "eyebrow" (2 to 3 words), "headline", "emphasis" (1 to 3 words copied from its headline), "body" (short or empty), "reference", "sentence", and "caption" (1 or 2 sentences for Instagram).
 """
         if !carousel {
@@ -396,6 +398,10 @@ Respond with ONLY valid JSON, no markdown:
             let look = postLooks[out.count % postLooks.count]
             s.style = look.0; s.font = look.1
             s.photo = kind == .quote || look.0 == .split
+            if let b = BrandKit.load() {
+                if out.count % 2 == 1, let second = b.secondaryHex { s.accentHex = second }
+                if b.font != .auto { s.font = b.font }
+            }
             out.append(s)
         }
         return out
@@ -428,8 +434,10 @@ Respond with ONLY valid JSON, no markdown:
             // Keep the church's design choices when rewriting
             out.adoptDesign(of: saved)
             if out.posts == nil { out.posts = saved.posts }
-        } else if let d = CarouselStore.loadDefault() {
-            out.adoptDesign(of: d)
+        } else {
+            if let d = CarouselStore.loadDefault() { out.adoptDesign(of: d) }
+            // A new carousel wears the church's brand
+            if let b = BrandKit.load() { out.applyBrand(b) }
         }
         if out.artPath == nil, let art = await MainActor.run(body: { SeriesStore.shared.series(containing: c.source)?.art }),
            FileManager.default.fileExists(atPath: art) {
@@ -556,6 +564,12 @@ enum CarouselStore {
         try? enc.encode(c).write(to: url(id), options: .atomic)
         if !c.handle.isEmpty { UserDefaults.standard.set(c.handle, forKey: "carousel_handle") }
         NotificationCenter.default.post(name: changed, object: id)
+    }
+
+    /// Every sermon that has a carousel.
+    static func allIDs() -> [UUID] {
+        let files = (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []
+        return files.compactMap { $0.hasSuffix(".json") ? UUID(uuidString: String($0.dropLast(5))) : nil }
     }
 
     static func exists(_ id: UUID) -> Bool { FileManager.default.fileExists(atPath: url(id).path) }

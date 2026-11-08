@@ -439,6 +439,18 @@ struct CarouselWindow: View {
         else { carousel?.font = t }
     }
 
+    private func useBrand(_ b: BrandKit) {
+        if isPosts {
+            update { if $0.indices.contains(selectedPost) {
+                $0[selectedPost].accentHex = b.primaryHex
+                if b.font != .auto { $0[selectedPost].font = b.font }
+            } }
+            if !b.signature.isEmpty { carousel?.handle = b.signature }
+        } else {
+            carousel?.applyBrand(b, posts: false)
+        }
+    }
+
     @ViewBuilder private var inspector: some View {
         if let c = carousel, let l = look {
             VStack(alignment: .leading, spacing: 22) {
@@ -455,7 +467,7 @@ struct CarouselWindow: View {
                         }
                     }
                     HStack(spacing: 8) {
-                        ForEach(SermonCarousel.accents, id: \.self) { hex in
+                        ForEach(SermonCarousel.swatches, id: \.self) { hex in
                             Circle().fill(Color(nsColor: NSColor(hexString: hex))).frame(width: 24, height: 24)
                                 .overlay(Circle().stroke(Theme.ink, lineWidth: l.accentHex == hex ? 2 : 0).padding(-3))
                                 .onTapGesture { setAccent(hex) }
@@ -474,6 +486,11 @@ struct CarouselWindow: View {
                     if isPosts {
                         Button { applyLookToAllPosts() } label: { Label("Use this look for every post", systemImage: "square.on.square") }
                             .buttonStyle(.link).font(.system(size: 12))
+                    }
+                    if let b = BrandKit.load() {
+                        Button { useBrand(b) } label: { Label("Use our brand colour and type", systemImage: "paintpalette") }
+                            .buttonStyle(.link).font(.system(size: 12))
+                            .help("From the Brand kit page")
                     }
                 }
 
@@ -532,6 +549,17 @@ struct CarouselWindow: View {
                 if list.indices.contains(selected) {
                     let s = list[selected]
                     section("\(isPosts ? "Post" : "Slide") \(selected + 1) · \(s.kind.label)") {
+                        HStack(spacing: 8) {
+                            Text("Type").font(.system(size: 11.5)).foregroundColor(Theme.muted)
+                            Picker("", selection: Binding(get: { s.kind }, set: { changeKind(selected, to: $0) })) {
+                                ForEach(SermonCarousel.Kind.allCases, id: \.self) { k in
+                                    Label(k.label, systemImage: k.icon).tag(k)
+                                }
+                            }
+                            .labelsHidden().fixedSize()
+                            .help("Turn this \(isPosts ? "post" : "slide") into another kind. The words stay.")
+                            Spacer()
+                        }
                         HStack(spacing: 8) {
                             Text("Words").font(.system(size: 11.5)).foregroundColor(Theme.muted)
                             Picker("", selection: Binding(get: { s.textAlign ?? "auto" }, set: { v in
@@ -752,6 +780,25 @@ struct CarouselWindow: View {
         select(i + 1)
     }
 
+    /// Changes one slide or post into another kind, keeping its words.
+    private func changeKind(_ i: Int, to k: SermonCarousel.Kind) {
+        update { list in
+            guard list.indices.contains(i), list[i].kind != k else { return }
+            let old = list[i].kind
+            var s = list[i]
+            s.kind = k
+            // A label that was only the old kind's default follows the new kind
+            if s.eyebrow.isEmpty || s.eyebrow == old.defaultEyebrow { s.eyebrow = k.defaultEyebrow }
+            if k == .scripture && s.reference.isEmpty { s.reference = "Book 1:1" }
+            if k == .invite && s.body.isEmpty {
+                let times = BrandKit.load()?.serviceTimes ?? ""
+                s.body = times.isEmpty ? "Sundays at 9 and 11" : times
+            }
+            if k == .quote && old != .quote { s.photo = true }
+            list[i] = s
+        }
+    }
+
     private func delete(_ i: Int) {
         guard let c = carousel, items(c).count > minCount, items(c).indices.contains(i) else { return }
         update { $0.remove(at: i) }
@@ -766,7 +813,10 @@ struct CarouselWindow: View {
                                      emphasis: k == .invite ? "Sunday" : "words",
                                      time: list.indices.contains(selected) ? list[selected].time : 0)
         if k == .scripture { s.reference = "Book 1:1" }
-        if k == .invite { s.body = "Sundays at 9 and 11" }
+        if k == .invite {
+            let times = BrandKit.load()?.serviceTimes ?? ""
+            s.body = times.isEmpty ? "Sundays at 9 and 11" : times
+        }
         s.photo = k == .quote
         if isPosts {
             let look = SermonCarousel.postLooks[list.count % SermonCarousel.postLooks.count]
