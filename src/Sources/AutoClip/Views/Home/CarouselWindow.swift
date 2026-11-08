@@ -30,15 +30,27 @@ struct CarouselWindow: View {
     @State private var copied = false
     @State private var hovered: UUID?
     @State private var savedDefault = false
+    @State private var editingField: SlideInteraction.Field?
+    @State private var selectedLayer: UUID?
+    @State private var showBG = false
+    @State private var bgScene: GraphicsAI.Scene = .auto
+    @State private var bgPrompt = ""
+    @State private var bgBusy = false
+    @State private var bgError: String?
+    @State private var rewriting = false
+    @FocusState private var editorFocus: Bool
 
     private var record: AutoReelRecord? { store.reels.first { $0.id == recordID } }
     private var isPosts: Bool { mode == .posts }
     private var selected: Int { isPosts ? selectedPost : selectedSlide }
-    private func select(_ i: Int) { if isPosts { selectedPost = i } else { selectedSlide = i } }
+    private func select(_ i: Int) {
+        if isPosts { selectedPost = i } else { selectedSlide = i }
+        editingField = nil; selectedLayer = nil
+    }
     private func items(_ c: SermonCarousel) -> [SermonCarousel.Slide] { isPosts ? c.postList : c.slides }
     /// What draws item `i`: the carousel itself, or a one-slide copy in the post's own look
     private func display(_ c: SermonCarousel, _ i: Int) -> (c: SermonCarousel, i: Int) { isPosts ? (c.post(i), 0) : (c, i) }
-    private var minCount: Int { isPosts ? 1 : 2 }
+    private var minCount: Int { isPosts ? 0 : 2 }
     private var noun: String { isPosts ? "post" : "slide" }
 
     /// Changes the list being edited.
@@ -89,6 +101,7 @@ struct CarouselWindow: View {
         .onChange(of: jobs.errors[recordID]) { _, e in if let e { error = e } }
         .onChange(of: carousel) { _, new in if let new { CarouselStore.save(new, for: recordID) } }
         .task(id: photoKeys) { await loadPhotos() }
+        .sheet(isPresented: $showBG) { bgSheet }
         .alert("Rewrite the carousel?", isPresented: $confirmRewrite) {
             Button("Rewrite") { make() }
             Button("Cancel", role: .cancel) {}
@@ -116,9 +129,10 @@ struct CarouselWindow: View {
         return photos.images(d.c.slides[d.i], d.c)
     }
 
-    private func slideView(_ c: SermonCarousel, _ i: Int, scale: CGFloat) -> ScaledSlide {
+    private func slideView(_ c: SermonCarousel, _ i: Int, scale: CGFloat, interactive: Bool = false) -> ScaledSlide {
         let d = display(c, i)
-        return ScaledSlide(carousel: d.c, index: d.i, images: photos.images(d.c.slides[d.i], d.c), scale: scale)
+        return ScaledSlide(carousel: d.c, index: d.i, images: photos.images(d.c.slides[d.i], d.c), scale: scale,
+                           interaction: interactive ? interaction : nil)
     }
 
     // MARK: Header
@@ -235,7 +249,7 @@ struct CarouselWindow: View {
             let i = min(selected, n - 1)
             HStack(spacing: 16) {
                 arrow("chevron.left", enabled: i > 0) { select(i - 1) }
-                slideView(c, i, scale: max(0.1, s))
+                slideView(c, i, scale: max(0.1, s), interactive: true)
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                     .shadow(color: .black.opacity(0.3), radius: 18, y: 8)
                     .onDrag { dragSlide(c, i) }
@@ -245,6 +259,69 @@ struct CarouselWindow: View {
             .frame(width: geo.size.width, height: geo.size.height)
         }
         .background(Theme.ink.opacity(0.03))
+        .overlay(alignment: .bottom) { if editingField != nil { inlineEditor.padding(.bottom, 16) } }
+        .overlay(alignment: .topLeading) {
+            Text("Click words to edit them · drag stickers to move them")
+                .font(.system(size: 11.5)).foregroundColor(Theme.faint).padding(10)
+        }
+    }
+
+    private var interaction: SlideInteraction {
+        SlideInteraction(
+            editing: editingField, selectedLayer: selectedLayer,
+            tapField: { f in selectedLayer = nil; editingField = f; editorFocus = true },
+            tapLayer: { id in editingField = nil; selectedLayer = id },
+            moveLayer: { id, d in
+                let i = selected
+                update { list in
+                    guard list.indices.contains(i), let j = list[i].layerList.firstIndex(where: { $0.id == id }) else { return }
+                    var ls = list[i].layerList
+                    ls[j].x = min(1, max(0, ls[j].x + d.width)); ls[j].y = min(1, max(0, ls[j].y + d.height))
+                    list[i].layerList = ls
+                }
+                selectedLayer = id
+            },
+            tapEmpty: { editingField = nil; selectedLayer = nil })
+    }
+
+    /// The box that appears over the slide when you click its words.
+    @ViewBuilder private var inlineEditor: some View {
+        if let f = editingField {
+            let label: String = switch f {
+            case .eyebrow: "Label"
+            case .headline: "Words"
+            case .body: "Text"
+            case .reference: "Reference"
+            }
+            let kp: WritableKeyPath<SermonCarousel.Slide, String> = switch f {
+            case .eyebrow: \.eyebrow
+            case .headline: \.headline
+            case .body: \.body
+            case .reference: \.reference
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text(label.uppercased()).font(.system(size: 10.5, weight: .semibold)).tracking(1).foregroundColor(Theme.faint)
+                    Spacer()
+                    Button("Done") { editingField = nil }.buttonStyle(.link).keyboardShortcut(.defaultAction)
+                }
+                TextField(label, text: itemBinding(kp), axis: .vertical)
+                    .textFieldStyle(.plain).font(.system(size: 15)).foregroundColor(Theme.ink)
+                    .lineLimit(1...5).focused($editorFocus)
+                if f == .headline {
+                    HStack(spacing: 6) {
+                        Image(systemName: "highlighter").foregroundColor(Theme.sand).font(.system(size: 12))
+                        TextField("Words to highlight", text: itemBinding(\.emphasis))
+                            .textFieldStyle(.plain).font(.system(size: 13)).foregroundColor(Theme.text)
+                    }
+                }
+            }
+            .padding(14)
+            .frame(width: 460)
+            .background(RoundedRectangle(cornerRadius: 12).fill(Theme.bg))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.sand.opacity(0.5)))
+            .shadow(color: .black.opacity(0.35), radius: 16, y: 6)
+        }
     }
 
     private func arrow(_ icon: String, enabled: Bool, _ go: @escaping () -> Void) -> some View {
@@ -470,6 +547,40 @@ struct CarouselWindow: View {
                             .controlSize(.small)
                         }
                     }
+                    if ![.quote, .scripture].contains(s.kind) {
+                        section("Rewrite with AI") {
+                            HStack(spacing: 6) {
+                                ForEach(GraphicsAI.Rewrite.allCases) { how in
+                                    Button(how.label) { rewrite(how) }.disabled(rewriting)
+                                }
+                            }
+                            .controlSize(.small)
+                            if rewriting { HStack(spacing: 6) { ProgressView().controlSize(.mini); Text("Rewriting…").font(.system(size: 11.5)).foregroundColor(Theme.muted) } }
+                        }
+                    }
+                    section("Background picture") {
+                        if let p = s.bgPath, let img = NSImage(contentsOfFile: p) {
+                            HStack(spacing: 10) {
+                                Image(nsImage: img).resizable().scaledToFill().frame(width: 60, height: 74).clipped().cornerRadius(5)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Button("Make another with AI…") { openBG(s, c) }.buttonStyle(.link)
+                                    Button("Choose a photo…") { choosePhoto() }.buttonStyle(.link)
+                                    Button("Use on every \(noun)") { bgOnAll(p) }.buttonStyle(.link)
+                                    Button("Remove") { setBG(nil) }.buttonStyle(.link).foregroundColor(Theme.danger)
+                                }.font(.system(size: 12))
+                            }
+                        } else {
+                            Text("A picture behind the words: made by AI (Nano Banana) to suit this \(noun), or one of your own photos. The words stay editable on top.")
+                                .font(.system(size: 12)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                            HStack {
+                                Button { openBG(s, c) } label: { Label("Make with AI…", systemImage: "wand.and.stars") }
+                                    .buttonStyle(SecondaryButtonStyle(compact: true))
+                                Button { choosePhoto() } label: { Label("Your photo…", systemImage: "photo") }
+                                    .buttonStyle(SecondaryButtonStyle(compact: true))
+                            }
+                        }
+                    }
+                    stickersSection(s, l)
                     if isPosts {
                         section("Caption") {
                             TextEditor(text: Binding(get: { s.caption ?? "" }, set: { v in update { if $0.indices.contains(selectedPost) { $0[selectedPost].caption = v } } }))
@@ -628,6 +739,203 @@ struct CarouselWindow: View {
         }
         update { $0.insert(s, at: at) }
         select(at)
+    }
+
+    // MARK: Stickers
+
+    @ViewBuilder private func stickersSection(_ s: SermonCarousel.Slide, _ l: SermonCarousel) -> some View {
+        section("Stickers and drawings") {
+            let pal = CarouselPalette(l)
+            LazyVGrid(columns: Array(repeating: GridItem(.fixed(34), spacing: 6), count: 8), spacing: 6) {
+                ForEach(SermonCarousel.Doodle.allCases, id: \.self) { d in
+                    Button { addLayer(.doodle, d.rawValue) } label: {
+                        LayerView(layer: SermonCarousel.Layer(kind: .doodle, name: d.rawValue, x: 0.5, y: 0.5, size: 0.8, text: "Sunday • "),
+                                  pal: pal, W: 30, H: 30, interaction: nil)
+                            .frame(width: 30, height: 30)
+                    }
+                    .buttonStyle(.plain).frame(width: 34, height: 34)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(Theme.ink.opacity(0.06))).help(d.label)
+                }
+                ForEach(SermonCarousel.stickerSymbols, id: \.self) { name in
+                    Button { addLayer(.symbol, name) } label: {
+                        Image(systemName: name).font(.system(size: 16)).foregroundColor(Theme.ink).frame(width: 34, height: 34)
+                    }
+                    .buttonStyle(.plain)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(Theme.ink.opacity(0.06)))
+                }
+            }
+            if let id = selectedLayer, let layer = s.layerList.first(where: { $0.id == id }) {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Size").font(.system(size: 11.5)).foregroundColor(Theme.muted).frame(width: 46, alignment: .leading)
+                        Slider(value: layerBinding(id, \.size), in: 0.04...0.8)
+                    }
+                    HStack {
+                        Text("Turn").font(.system(size: 11.5)).foregroundColor(Theme.muted).frame(width: 46, alignment: .leading)
+                        Slider(value: layerBinding(id, \.rotation), in: -180...180)
+                    }
+                    HStack(spacing: 8) {
+                        Text("Colour").font(.system(size: 11.5)).foregroundColor(Theme.muted).frame(width: 46, alignment: .leading)
+                        ForEach([("Accent", nil as String?), ("Text", "ink"), ("White", "white")], id: \.0) { item in
+                            Button(item.0) { setLayerColour(id, item.1) }
+                                .buttonStyle(.link).font(.system(size: 12, weight: layer.colour == item.1 ? .bold : .regular))
+                        }
+                        ColorPicker("", selection: Binding(get: { Color(nsColor: NSColor(hexString: layer.colour ?? l.accentHex)) },
+                                                           set: { setLayerColour(id, NSColor($0).hexString) }), supportsOpacity: false)
+                            .labelsHidden()
+                    }
+                    if layer.name == SermonCarousel.Doodle.badge.rawValue {
+                        field("Words around the badge", text: Binding(get: { layer.text ?? "" }, set: { v in editLayer(id) { $0.text = v } }))
+                    }
+                    HStack {
+                        Button { duplicateLayer(id) } label: { Label("Duplicate", systemImage: "plus.square.on.square") }
+                        Button(role: .destructive) { removeLayer(id) } label: { Label("Remove", systemImage: "trash") }
+                    }
+                    .controlSize(.small)
+                }
+                .padding(10).background(RoundedRectangle(cornerRadius: 8).fill(Theme.ink.opacity(0.04)))
+            } else if !s.layerList.isEmpty {
+                Text("Click a sticker on the slide to size, turn, recolour or remove it.")
+                    .font(.system(size: 11.5)).foregroundColor(Theme.faint)
+            }
+        }
+    }
+
+    private func editLayer(_ id: UUID, _ f: (inout SermonCarousel.Layer) -> Void) {
+        let i = selected
+        update { list in
+            guard list.indices.contains(i), let j = list[i].layerList.firstIndex(where: { $0.id == id }) else { return }
+            var ls = list[i].layerList; f(&ls[j]); list[i].layerList = ls
+        }
+    }
+
+    private func layerBinding(_ id: UUID, _ kp: WritableKeyPath<SermonCarousel.Layer, Double>) -> Binding<Double> {
+        Binding(get: {
+            guard let c = carousel, items(c).indices.contains(selected) else { return 0 }
+            return items(c)[selected].layerList.first { $0.id == id }?[keyPath: kp] ?? 0
+        }, set: { v in editLayer(id) { $0[keyPath: kp] = v } })
+    }
+
+    private func setLayerColour(_ id: UUID, _ c: String?) { editLayer(id) { $0.colour = c } }
+
+    private func addLayer(_ kind: SermonCarousel.Layer.Kind, _ name: String) {
+        var l = SermonCarousel.Layer(kind: kind, name: name)
+        let n = Double((carousel.map { items($0) }?[safe: selected]?.layerList.count) ?? 0)
+        l.x = 0.72 - n * 0.06; l.y = 0.2 + n * 0.06
+        if [.underline, .squiggle, .arrow].contains(SermonCarousel.Doodle(rawValue: name)) { l.size = 0.34; l.x = 0.4; l.y = 0.62 }
+        if name == SermonCarousel.Doodle.badge.rawValue { l.size = 0.3; l.text = "See you Sunday • see you Sunday • " }
+        let i = selected
+        update { list in if list.indices.contains(i) { list[i].layerList.append(l) } }
+        selectedLayer = l.id
+    }
+
+    private func duplicateLayer(_ id: UUID) {
+        let i = selected
+        var newID: UUID?
+        update { list in
+            guard list.indices.contains(i), let l = list[i].layerList.first(where: { $0.id == id }) else { return }
+            var copy = l; copy.id = UUID(); copy.x = min(1, l.x + 0.05); copy.y = min(1, l.y + 0.05)
+            list[i].layerList.append(copy); newID = copy.id
+        }
+        selectedLayer = newID
+    }
+
+    private func removeLayer(_ id: UUID) {
+        let i = selected
+        update { list in if list.indices.contains(i) { list[i].layerList.removeAll { $0.id == id } } }
+        selectedLayer = nil
+    }
+
+    // MARK: Backgrounds
+
+    private func openBG(_ s: SermonCarousel.Slide, _ c: SermonCarousel) {
+        bgError = nil
+        bgPrompt = GraphicsAI.prompt(for: s, in: display(c, selected).c, scene: bgScene)
+        showBG = true
+    }
+
+    private var bgSheet: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Make a background with AI").font(Theme.display(20, weight: .medium)).foregroundColor(Theme.cream)
+            Text("Google's image AI (Nano Banana) paints a picture to sit behind this \(noun). It's told not to draw any words, so your text stays sharp and editable on top.")
+                .font(.system(size: 12.5)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
+            Picker("Scene", selection: $bgScene) {
+                ForEach(GraphicsAI.Scene.allCases) { Text($0.label).tag($0) }
+            }
+            .onChange(of: bgScene) { _, sc in
+                if let c = carousel, items(c).indices.contains(selected) {
+                    bgPrompt = GraphicsAI.prompt(for: items(c)[selected], in: display(c, selected).c, scene: sc)
+                }
+            }
+            Text("What to paint (you can change this)").font(.system(size: 11.5)).foregroundColor(Theme.muted)
+            TextEditor(text: $bgPrompt)
+                .font(.system(size: 12.5)).scrollContentBackground(.hidden).padding(6)
+                .frame(height: 130)
+                .background(RoundedRectangle(cornerRadius: 8).fill(Theme.ink.opacity(0.05)))
+            if let bgError { Text(bgError).font(.system(size: 12)).foregroundColor(Theme.danger).fixedSize(horizontal: false, vertical: true) }
+            HStack {
+                Text("Uses one image request on your Google key (or OpenAI's if that's the one you have).")
+                    .font(.system(size: 11)).foregroundColor(Theme.faint)
+                Spacer()
+                Button("Cancel") { showBG = false }.disabled(bgBusy)
+                Button { generateBG() } label: {
+                    if bgBusy { HStack(spacing: 6) { ProgressView().controlSize(.small); Text("Painting…") } }
+                    else { Label("Make it", systemImage: "wand.and.stars") }
+                }
+                .buttonStyle(PrimaryButtonStyle(compact: true)).disabled(bgBusy || bgPrompt.isEmpty)
+            }
+        }
+        .padding(22).frame(width: 540)
+        .background(Theme.bg)
+    }
+
+    private func generateBG() {
+        guard let c = carousel else { return }
+        bgBusy = true; bgError = nil
+        let ratio = c.shape.ratio, prompt = bgPrompt
+        let i = selected, list = isPosts
+        Task {
+            do {
+                let path = try await GraphicsAI.generate(prompt: prompt, ratio: ratio)
+                // The same item, even if the user moved on while it painted
+                guard var cur = carousel else { return }
+                if list { if cur.postList.indices.contains(i) { cur.postList[i].bgPath = path } }
+                else if cur.slides.indices.contains(i) { cur.slides[i].bgPath = path }
+                carousel = cur
+                showBG = false
+            } catch { bgError = error.localizedDescription }
+            bgBusy = false
+        }
+    }
+
+    private func choosePhoto() {
+        let panel = NSOpenPanel()
+        panel.title = "Choose a photo for this \(noun)"
+        panel.allowedContentTypes = [.image]
+        guard panel.runModal() == .OK, let url = panel.url, let path = GraphicsAI.importPhoto(url) else { return }
+        setBG(path)
+    }
+
+    private func setBG(_ path: String?) {
+        let i = selected
+        update { list in if list.indices.contains(i) { list[i].bgPath = path } }
+    }
+
+    private func bgOnAll(_ path: String) {
+        update { list in for j in list.indices { list[j].bgPath = path } }
+    }
+
+    private func rewrite(_ how: GraphicsAI.Rewrite) {
+        guard let c = carousel, items(c).indices.contains(selected) else { return }
+        let i = selected, s = items(c)[i], title = record?.title ?? c.title
+        rewriting = true; error = nil
+        Task {
+            do {
+                let new = try await GraphicsAI.rewrite(s, how: how, title: title)
+                update { list in if list.indices.contains(i) && list[i].id == s.id { list[i] = new } }
+            } catch { self.error = error.localizedDescription }
+            rewriting = false
+        }
     }
 
     private func applyLookToAllPosts() {

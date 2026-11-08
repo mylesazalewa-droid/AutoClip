@@ -68,7 +68,53 @@ struct SermonCarousel: Codable, Equatable {
         var accentHex: String?
         var font: TypeChoice?
         var caption: String?
+        // 3.16: a picture behind the slide (AI-made or your own) and stickers on top
+        var bgPath: String?
+        var layers: [Layer]?
+        var layerList: [Layer] {
+            get { layers ?? [] }
+            set { layers = newValue.isEmpty ? nil : newValue }
+        }
     }
+
+    /// A sticker or drawing placed on a slide. Position and size are fractions of the slide.
+    struct Layer: Codable, Equatable, Identifiable {
+        enum Kind: String, Codable { case symbol, doodle }
+        var id = UUID()
+        var kind: Kind
+        /// SF Symbol name, or a doodle from `Doodle`
+        var name: String
+        var x: Double = 0.78
+        var y: Double = 0.2
+        var size: Double = 0.16
+        var rotation: Double = 0
+        /// nil = the slide's accent; "ink" = the text colour; otherwise a hex colour
+        var colour: String?
+        /// Words around a badge
+        var text: String?
+    }
+
+    enum Doodle: String, CaseIterable {
+        case arrow, underline, circle, squiggle, burst, badge, star4, heart, rays
+        var label: String {
+            switch self {
+            case .arrow: return "Arrow"
+            case .underline: return "Underline"
+            case .circle: return "Circle"
+            case .squiggle: return "Squiggle"
+            case .burst: return "Burst"
+            case .badge: return "Badge"
+            case .star4: return "Twinkle"
+            case .heart: return "Heart"
+            case .rays: return "Rays"
+            }
+        }
+    }
+
+    static let stickerSymbols = ["sparkle", "sparkles", "star.fill", "heart.fill", "music.note", "music.quarternote.3", "bell.fill",
+                                 "sun.max.fill", "moon.stars.fill", "cross.fill", "hands.sparkles.fill", "flame.fill", "leaf.fill",
+                                 "cloud.fill", "bolt.fill", "book.closed.fill", "gift.fill", "face.smiling.inverse", "hand.wave.fill",
+                                 "bird.fill", "drop.fill", "camera.fill", "mic.fill", "arrow.down.right"]
 
     enum Style: String, Codable, CaseIterable, Identifiable {
         case bold, poster, editorial, photo, color, minimal, gradient, split, film
@@ -135,10 +181,18 @@ struct SermonCarousel: Codable, Equatable {
     }
 
     enum Shape: String, Codable, CaseIterable, Identifiable {
-        case portrait, square
+        case portrait, square, story
         var id: String { rawValue }
-        var label: String { self == .portrait ? "4:5" : "Square" }
-        var size: CGSize { self == .portrait ? CGSize(width: 1080, height: 1350) : CGSize(width: 1080, height: 1080) }
+        var label: String { self == .portrait ? "4:5" : self == .square ? "Square" : "Story" }
+        var size: CGSize {
+            switch self {
+            case .portrait: return CGSize(width: 1080, height: 1350)
+            case .square: return CGSize(width: 1080, height: 1080)
+            case .story: return CGSize(width: 1080, height: 1920)
+            }
+        }
+        /// For image generation
+        var ratio: String { self == .portrait ? "4:5" : self == .square ? "1:1" : "9:16" }
     }
 
     var title: String

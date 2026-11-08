@@ -11,6 +11,8 @@ struct SocialGraphicsTab: View {
     @State private var carousels: [UUID: SermonCarousel] = [:]
     @State private var graphicsFor: AutoReelRecord?
     @State private var confirmMake: AutoReelRecord?
+    @State private var hoveredPost: UUID?
+    @State private var copiedDay: String?
 
     private var sermons: [AutoReelRecord] { reels.reels.filter { ReelGenerator.sourceVideoPath(for: $0) != nil } }
     private var working: [AutoReelRecord] { sermons.filter { jobs.running($0.id) } }
@@ -32,6 +34,7 @@ struct SocialGraphicsTab: View {
                             grid { ForEach(working) { workingCard($0) } }
                         }
                     }
+                    weekPlan
                     if !allPosts.isEmpty {
                         group("Posts", count: allPosts.count) {
                             LazyVGrid(columns: [GridItem(.adaptive(minimum: 190, maximum: 240), spacing: 14, alignment: .top)],
@@ -95,6 +98,78 @@ struct SocialGraphicsTab: View {
         .contentShape(Rectangle())
         .onTapGesture { open(rec, posts: true, index: i) }
         .help("Open and edit this post")
+        .overlay(alignment: .topTrailing) {
+            if hoveredPost == c.postList[i].id {
+                Button { deletePost(rec, c.postList[i].id) } label: {
+                    Image(systemName: "trash").font(.system(size: 11, weight: .semibold)).foregroundColor(.white)
+                        .frame(width: 26, height: 26).background(Circle().fill(Color.black.opacity(0.7)))
+                }
+                .buttonStyle(.plain).padding(6).help("Delete this post")
+            }
+        }
+        .onHover { h in hoveredPost = h ? c.postList[i].id : (hoveredPost == c.postList[i].id ? nil : hoveredPost) }
+        .contextMenu {
+            Button("Edit") { open(rec, posts: true, index: i) }
+            Button("Copy caption") { copy(c.postList[i].caption ?? "") }
+            Divider()
+            Button("Delete post", role: .destructive) { deletePost(rec, c.postList[i].id) }
+        }
+    }
+
+    private func deletePost(_ rec: AutoReelRecord, _ id: UUID) {
+        guard var c = CarouselStore.load(rec.id) else { return }
+        c.postList.removeAll { $0.id == id }
+        CarouselStore.save(c, for: rec.id)
+    }
+
+    private func copy(_ s: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(s, forType: .string)
+    }
+
+    // MARK: This week's plan
+
+    /// A simple week for the newest sermon: a post most days, the carousel mid-week, the invite on Saturday.
+    private var plan: (rec: AutoReelRecord, c: SermonCarousel, days: [(day: String, post: Int?)])? {
+        guard let rec = made.first(where: { !(carousels[$0.id]?.postList.isEmpty ?? true) }), let c = carousels[rec.id] else { return nil }
+        var rest = Array(c.postList.indices)
+        let invite = c.postList.firstIndex { $0.kind == .invite }
+        if let invite { rest.removeAll { $0 == invite } }
+        func next() -> Int? { rest.isEmpty ? nil : rest.removeFirst() }
+        let days: [(String, Int?)] = [("Monday", next()), ("Tuesday", next()), ("Wednesday", -1), ("Thursday", next()),
+                                      ("Friday", next()), ("Saturday", invite ?? next())]
+        return (rec, c, days.filter { $0.1 != nil }.map { (day: $0.0, post: $0.1) })
+    }
+
+    @ViewBuilder private var weekPlan: some View {
+        if let p = plan {
+            group("This week's plan", count: p.days.count) {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .top, spacing: 14) {
+                        ForEach(p.days, id: \.day) { d in
+                            let isCarousel = d.post == -1
+                            let pc: SermonCarousel = isCarousel ? p.c : p.c.post(d.post!)
+                            let caption = isCarousel ? p.c.captionWithTags : (p.c.postList[d.post!].caption ?? "")
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(d.day).font(.system(size: 12, weight: .semibold)).foregroundColor(Theme.sand)
+                                ScaledSlide(carousel: pc, index: 0, images: photos.images(pc.slides[0], pc), scale: 150 / pc.shape.size.width)
+                                    .drawingGroup().clipShape(RoundedRectangle(cornerRadius: 6))
+                                    .onTapGesture { open(p.rec, posts: !isCarousel, index: isCarousel ? 0 : d.post!) }
+                                Text(isCarousel ? "Carousel" : p.c.postList[d.post!].kind.label).font(.system(size: 11)).foregroundColor(Theme.muted)
+                                Button { copy(caption); copiedDay = d.day } label: {
+                                    Label(copiedDay == d.day ? "Copied" : "Copy caption", systemImage: copiedDay == d.day ? "checkmark" : "doc.on.doc")
+                                        .lineLimit(1).fixedSize()
+                                }
+                                .buttonStyle(.link).font(.system(size: 11.5))
+                            }
+                            .frame(width: 150)
+                        }
+                    }
+                }
+                Text("From \(p.rec.title). Tap a day to edit it, copy its caption, then post.")
+                    .font(.system(size: 11.5)).foregroundColor(Theme.faint)
+            }
+        }
     }
 
     private func reload() {

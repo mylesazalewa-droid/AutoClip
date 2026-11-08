@@ -59,6 +59,19 @@ struct SlideImages {
     var art: CGImage?
     /// The series graphic untouched, for the cover
     var rawArt: CGImage?
+    /// The slide's own picture (AI-made or chosen), filling the slide or Split's block
+    var bg: CGImage?
+}
+
+/// What the editor needs from a slide it's showing: clicks on words and stickers, and dragging.
+struct SlideInteraction {
+    enum Field: Hashable { case eyebrow, headline, body, reference }
+    var editing: Field?
+    var selectedLayer: UUID?
+    var tapField: (Field) -> Void
+    var tapLayer: (UUID) -> Void
+    var moveLayer: (UUID, CGSize) -> Void
+    var tapEmpty: () -> Void
 }
 
 /// One slide at full size (1080 wide). Used for the live preview (scaled) and for export.
@@ -67,6 +80,7 @@ struct SlideCanvas: View {
     let slide: SermonCarousel.Slide
     let index: Int
     let images: SlideImages
+    var interaction: SlideInteraction? = nil
 
     private var pal: CarouselPalette { CarouselPalette(carousel) }
     private var W: CGFloat { carousel.shape.size.width }
@@ -80,6 +94,8 @@ struct SlideCanvas: View {
     private var count: Int { carousel.slides.count }
     private var photo: CGImage? { images.photo }
     private var blockH: CGFloat { (H * 0.4).rounded() }
+    private var story: Bool { carousel.shape == .story }
+    private var hasBG: Bool { images.bg != nil }
 
     /// The crop each slide's photo needs (width / height).
     static func photoAspect(_ s: SermonCarousel.Slide, in c: SermonCarousel) -> CGFloat {
@@ -94,13 +110,13 @@ struct SlideCanvas: View {
     }
 
     static func needsPhoto(_ s: SermonCarousel.Slide, in c: SermonCarousel) -> Bool {
-        if showsArt(s, in: c) && (c.style == .photo || c.style == .split) { return false }
+        if (showsArt(s, in: c) || s.bgPath != nil) && (c.style == .photo || c.style == .split) { return false }
         return c.style == .photo || s.photo
     }
 
     /// Whether the treated series graphic sits behind this slide.
     static func showsArt(_ s: SermonCarousel.Slide, in c: SermonCarousel) -> Bool {
-        guard c.hasArt else { return false }
+        guard c.hasArt, s.bgPath == nil else { return false }
         if s.kind == .cover && c.artCover == true && c.style != .split { return false }
         return c.artOnAll == true || s.kind == .cover || s.kind == .cta
     }
@@ -118,6 +134,7 @@ struct SlideCanvas: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             backdrop
+                .modifier(TapIf(action: interaction.map { it in { it.tapEmpty() } }))
             VStack(alignment: .leading, spacing: 0) {
                 topBar
                 content
@@ -126,16 +143,24 @@ struct SlideCanvas: View {
                     .padding(.bottom, bottomRoom)
                 bottomBar
             }
-            .padding(.horizontal, 90).padding(.top, 72).padding(.bottom, 64)
+            .padding(.horizontal, 90).padding(.top, story ? 220 : 72).padding(.bottom, story ? 260 : 64)
             .frame(width: W, height: H, alignment: .topLeading)
+            ForEach(slide.layerList) { l in
+                LayerView(layer: l, pal: pal, W: W, H: H, interaction: interaction)
+            }
         }
         .frame(width: W, height: H)
         .clipped()
     }
 
+    /// Lets the editor click this bit of text to change it.
+    private func editable<V: View>(_ v: V, _ f: SlideInteraction.Field) -> some View {
+        v.modifier(EditableText(field: f, interaction: interaction, colour: pal.accent))
+    }
+
     private var hasRibbon: Bool { [.bold, .editorial, .color, .film].contains(style) }
     private var contentAlignment: Alignment {
-        style == .photo || (artBehind && artStrong && !style.light) ? .bottomLeading : .leading
+        style == .photo || ((artBehind && artStrong) || hasBG) && !style.light && style != .split ? .bottomLeading : .leading
     }
     private var bottomRoom: CGFloat {
         if style == .split { return 40 }
@@ -150,6 +175,14 @@ struct SlideCanvas: View {
         if style == .gradient { glow }
         if style == .split {
             splitBlock
+        } else if let bg = images.bg {
+            Image(decorative: bg, scale: 1).resizable().scaledToFill().frame(width: W, height: H).clipped()
+            if style.light {
+                pal.ground.opacity(0.42)
+                LinearGradient(colors: [pal.ground.opacity(0), pal.ground.opacity(0.75)], startPoint: .center, endPoint: .bottom)
+            } else {
+                darkFade(0.0)
+            }
         } else if artBehind, let art = images.art {
             Image(decorative: art, scale: 1).resizable().frame(width: W, height: H)
             artVeil
@@ -253,7 +286,9 @@ struct SlideCanvas: View {
     @ViewBuilder private var splitBlock: some View {
         ZStack {
             pal.block
-            if artBehind, let art = images.art {
+            if let bg = images.bg {
+                Image(decorative: bg, scale: 1).resizable().scaledToFill()
+            } else if artBehind, let art = images.art {
                 Image(decorative: art, scale: 1).resizable().scaledToFill()
             } else if let photo {
                 Image(decorative: photo, scale: 1).resizable().scaledToFill()
@@ -295,14 +330,14 @@ struct SlideCanvas: View {
         return HStack(alignment: .firstTextBaseline) {
             let eyebrow = slide.kind == .point && slide.eyebrow.isEmpty ? "Point \(carousel.pointNumber(of: slide))" : slide.eyebrow
             if !eyebrow.isEmpty {
-                Text(eyebrow.uppercased())
+                editable(Text(eyebrow.uppercased())
                     .font(.system(size: 26, weight: .bold)).tracking(4)
                     .foregroundColor(onBlock || sticker ? pal.onBlock : style == .color ? pal.ink : pal.accent)
                     .lineLimit(1)
                     .padding(.horizontal, onBlock || sticker ? 16 : 0).padding(.vertical, onBlock || sticker ? 8 : 0)
                     .background(onBlock ? AnyView(Capsule().fill(pal.block.opacity(0.85)))
                                 : sticker ? AnyView(RoundedRectangle(cornerRadius: 6).fill(pal.block)) : AnyView(EmptyView()))
-                    .rotationEffect(.degrees(sticker ? -3 : 0))
+                    .rotationEffect(.degrees(sticker ? -3 : 0)), .eyebrow)
             }
             Spacer(minLength: 20)
             if !single {
@@ -381,8 +416,8 @@ struct SlideCanvas: View {
                 Text("“").font(.system(size: 260, weight: .bold, design: .serif)).foregroundColor(pal.accent)
                     .frame(height: 150, alignment: .top).padding(.bottom, -10)
                 spoken(base: 84)
-                Text(slide.reference.uppercased()).font(.system(size: 32, weight: .bold)).tracking(4)
-                    .foregroundColor(pal.accent)
+                editable(Text(slide.reference.uppercased()).font(.system(size: 32, weight: .bold)).tracking(4)
+                    .foregroundColor(pal.accent), .reference)
             }
         case .quote:
             VStack(alignment: .leading, spacing: 36) {
@@ -405,7 +440,7 @@ struct SlideCanvas: View {
                 spoken(base: 86)
                 let who = slide.reference.isEmpty ? carousel.handle : slide.reference
                 if !who.isEmpty {
-                    Text("— " + who).font(.system(size: 32, weight: .semibold)).foregroundColor(pal.soft)
+                    editable(Text("— " + who).font(.system(size: 32, weight: .semibold)).foregroundColor(pal.soft), .reference)
                 }
             }
         case .question:
@@ -521,6 +556,10 @@ struct SlideCanvas: View {
     }
 
     private func headline(base: CGFloat, ref: Int, lines: Int) -> some View {
+        editable(rawHeadline(base: base, ref: ref, lines: lines), .headline)
+    }
+
+    private func rawHeadline(base: CGFloat, ref: Int, lines: Int) -> some View {
         let s = size(base, ref: ref, text: slide.headline)
         return Text(styled(slide.headline, size: s))
             .font(headFont(s))
@@ -531,6 +570,10 @@ struct SlideCanvas: View {
 
     /// Spoken words (a verse or a quote) stay in sentence case so they read naturally.
     private func spoken(base: CGFloat) -> some View {
+        editable(rawSpoken(base: base), .headline)
+    }
+
+    private func rawSpoken(base: CGFloat) -> some View {
         let s = size(base, ref: 70, text: slide.headline)
         var a = AttributedString(slide.headline)
         a.foregroundColor = pal.ink
@@ -550,6 +593,14 @@ struct SlideCanvas: View {
     }
 
     @ViewBuilder private func bodyText(_ text: String) -> some View {
+        if !text.isEmpty {
+            editable(rawBody(text), .body)
+        } else if interaction != nil && [.tension, .point, .question, .cta, .invite].contains(slide.kind) {
+            editable(Text("Add text").font(.system(size: 34, weight: .medium)).foregroundColor(pal.soft.opacity(0.5)), .body)
+        }
+    }
+
+    @ViewBuilder private func rawBody(_ text: String) -> some View {
         if !text.isEmpty {
             let sz: CGFloat = square ? 36 : 40
             Text(text)
@@ -614,16 +665,196 @@ struct SlideCanvas: View {
     }
 }
 
+/// Words on a slide the editor can click: a dashed outline on hover and while editing.
+struct EditableText: ViewModifier {
+    let field: SlideInteraction.Field
+    let interaction: SlideInteraction?
+    let colour: Color
+    @State private var hover = false
+
+    func body(content: Content) -> some View {
+        if let it = interaction {
+            content
+                .contentShape(Rectangle())
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(colour, style: StrokeStyle(lineWidth: 5, dash: [16, 10]))
+                        .padding(-14)
+                        .opacity(it.editing == field ? 1 : hover ? 0.6 : 0)
+                        .allowsHitTesting(false))
+                .onHover { hover = $0 }
+                .onTapGesture { it.tapField(field) }
+        } else {
+            content
+        }
+    }
+}
+
+/// A sticker or drawing on a slide. Drag it in the editor to move it.
+struct LayerView: View {
+    let layer: SermonCarousel.Layer
+    let pal: CarouselPalette
+    let W: CGFloat
+    let H: CGFloat
+    let interaction: SlideInteraction?
+    @GestureState private var drag: CGSize = .zero
+
+    private var colour: Color {
+        switch layer.colour {
+        case nil: return pal.accent
+        case "ink": return pal.ink
+        case "white": return .white
+        case let h?: return Color(nsColor: NSColor(hexString: h))
+        }
+    }
+
+    private var aspect: CGFloat {
+        switch SermonCarousel.Doodle(rawValue: layer.name) {
+        case .arrow?, .circle?: return 0.62
+        case .underline?, .squiggle?: return 0.26
+        default: return 1
+        }
+    }
+
+    var body: some View {
+        let w = CGFloat(layer.size) * W
+        let selected = interaction?.selectedLayer == layer.id
+        drawing(w: w)
+            .frame(width: w, height: w * aspect)
+            .rotationEffect(.degrees(layer.rotation))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8).stroke(Color.white, style: StrokeStyle(lineWidth: 4, dash: [12, 8]))
+                    .shadow(color: .black.opacity(0.6), radius: 2)
+                    .padding(-14).opacity(selected ? 1 : 0).allowsHitTesting(false))
+            .contentShape(Rectangle())
+            // Clicks and drags belong to the sticker itself, set before it's positioned on the slide
+            .gesture(interaction == nil ? nil :
+                DragGesture(minimumDistance: 2)
+                    // Drag distances arrive in the slide's own (full-size) units, so they follow the pointer as is
+                    .updating($drag) { v, s, _ in s = v.translation }
+                    .onEnded { v in interaction?.moveLayer(layer.id, CGSize(width: v.translation.width / W, height: v.translation.height / H)) })
+            .modifier(TapIf(action: interaction.map { it in { it.tapLayer(layer.id) } }))
+            .allowsHitTesting(interaction != nil)
+            .position(x: CGFloat(layer.x) * W + drag.width, y: CGFloat(layer.y) * H + drag.height)
+    }
+
+    @ViewBuilder private func drawing(w: CGFloat) -> some View {
+        if layer.kind == .symbol {
+            Image(systemName: layer.name).resizable().scaledToFit().foregroundColor(colour)
+        } else {
+            switch SermonCarousel.Doodle(rawValue: layer.name) ?? .arrow {
+            case .burst:
+                Burst(points: 14, inner: 0.62).fill(colour)
+            case .star4:
+                Burst(points: 4, inner: 0.22).fill(colour)
+            case .heart:
+                Image(systemName: "heart").resizable().scaledToFit().fontWeight(.bold).foregroundColor(colour)
+            case .badge:
+                Badge(text: layer.text ?? "See you Sunday • ", colour: colour, ink: pal.onAccent, w: w)
+            default:
+                Doodle(kind: SermonCarousel.Doodle(rawValue: layer.name) ?? .arrow)
+                    .stroke(colour, style: StrokeStyle(lineWidth: max(6, w * 0.05), lineCap: .round, lineJoin: .round))
+            }
+        }
+    }
+}
+
+/// A click handler only in the editor, so slides elsewhere pass clicks through to their card.
+struct TapIf: ViewModifier {
+    let action: (() -> Void)?
+    func body(content: Content) -> some View {
+        if let action { content.contentShape(Rectangle()).onTapGesture(perform: action) } else { content }
+    }
+}
+
+/// A star or starburst.
+struct Burst: Shape {
+    let points: Int
+    let inner: CGFloat
+    func path(in r: CGRect) -> Path {
+        var p = Path()
+        let c = CGPoint(x: r.midX, y: r.midY), R = min(r.width, r.height) / 2
+        for i in 0..<(points * 2) {
+            let a = Double(i) / Double(points * 2) * 2 * .pi - .pi / 2
+            let rad = i.isMultiple(of: 2) ? R : R * inner
+            let pt = CGPoint(x: c.x + CGFloat(cos(a)) * rad, y: c.y + CGFloat(sin(a)) * rad)
+            if i == 0 { p.move(to: pt) } else { p.addLine(to: pt) }
+        }
+        p.closeSubpath()
+        return p
+    }
+}
+
+/// Hand-drawn marks: arrows, underlines, circles, squiggles, rays.
+struct Doodle: Shape {
+    let kind: SermonCarousel.Doodle
+    func path(in r: CGRect) -> Path {
+        var p = Path()
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: r.minX + x * r.width, y: r.minY + y * r.height) }
+        switch kind {
+        case .arrow:
+            p.move(to: pt(0.04, 0.85))
+            p.addCurve(to: pt(0.9, 0.22), control1: pt(0.25, 0.1), control2: pt(0.6, 0.05))
+            p.move(to: pt(0.72, 0.1)); p.addLine(to: pt(0.92, 0.2)); p.addLine(to: pt(0.8, 0.42))
+        case .underline:
+            p.move(to: pt(0.02, 0.6))
+            p.addCurve(to: pt(0.98, 0.4), control1: pt(0.35, 0.2), control2: pt(0.65, 0.85))
+            p.move(to: pt(0.12, 0.85)); p.addQuadCurve(to: pt(0.86, 0.72), control: pt(0.5, 0.6))
+        case .circle:
+            p.addEllipse(in: CGRect(x: r.minX + r.width * 0.04, y: r.minY + r.height * 0.08, width: r.width * 0.9, height: r.height * 0.82))
+            p.move(to: pt(0.78, 0.1)); p.addQuadCurve(to: pt(0.98, 0.32), control: pt(0.95, 0.12))
+        case .squiggle:
+            p.move(to: pt(0, 0.5))
+            for i in 0..<6 {
+                let x0 = CGFloat(i) / 6, x1 = CGFloat(i + 1) / 6
+                p.addQuadCurve(to: pt(x1, 0.5), control: pt((x0 + x1) / 2, i.isMultiple(of: 2) ? 0.0 : 1.0))
+            }
+        case .rays:
+            for (a, b) in [(CGPoint(x: 0.15, y: 0.55), CGPoint(x: 0.02, y: 0.3)), (CGPoint(x: 0.42, y: 0.4), CGPoint(x: 0.42, y: 0.05)),
+                           (CGPoint(x: 0.68, y: 0.55), CGPoint(x: 0.85, y: 0.3))] {
+                p.move(to: pt(a.x, a.y)); p.addLine(to: pt(b.x, b.y))
+            }
+        default:
+            break
+        }
+        return p
+    }
+}
+
+/// A round badge with words running around its edge and a smile in the middle.
+struct Badge: View {
+    let text: String
+    let colour: Color
+    let ink: Color
+    let w: CGFloat
+    var body: some View {
+        let chars = Array(text.uppercased())
+        let n = max(1, chars.count)
+        ZStack {
+            Circle().fill(colour)
+            Circle().stroke(ink.opacity(0.5), lineWidth: w * 0.01).padding(w * 0.2)
+            Image(systemName: "face.smiling").resizable().scaledToFit().fontWeight(.semibold).foregroundColor(ink).padding(w * 0.3)
+            ForEach(0..<n, id: \.self) { i in
+                Text(String(chars[i])).font(.system(size: w * 0.085, weight: .black)).foregroundColor(ink)
+                    .offset(y: -w * 0.39)
+                    .rotationEffect(.degrees(Double(i) / Double(n) * 360))
+            }
+        }
+    }
+}
+
 /// A slide drawn at any size for the editor.
 struct ScaledSlide: View {
     let carousel: SermonCarousel
     let index: Int
     let images: SlideImages
     let scale: CGFloat
+    var interaction: SlideInteraction? = nil
 
     var body: some View {
         let size = carousel.shape.size
-        SlideCanvas(carousel: carousel, slide: carousel.slides[index], index: index, images: images)
+        SlideCanvas(carousel: carousel, slide: carousel.slides[index], index: index, images: images,
+                    interaction: interaction)
             .scaleEffect(scale, anchor: .topLeading)
             .frame(width: size.width * scale, height: size.height * scale, alignment: .topLeading)
             .clipped()
@@ -654,14 +885,20 @@ final class CarouselPhotoCache: ObservableObject {
         return "r|\(p)"
     }
 
+    func bgKey(_ s: SermonCarousel.Slide, _ c: SermonCarousel) -> String? {
+        guard let p = s.bgPath, FileManager.default.fileExists(atPath: p) else { return nil }
+        return "b|\(p)|\(c.shape.rawValue)|\(c.style == .split)"
+    }
+
     func keys(_ c: SermonCarousel) -> [String] {
-        c.slides.flatMap { [photoKey($0, c), artKey($0, c), rawKey($0, c)].compactMap { $0 } }
+        c.slides.flatMap { [photoKey($0, c), artKey($0, c), rawKey($0, c), bgKey($0, c)].compactMap { $0 } }
     }
 
     func images(_ s: SermonCarousel.Slide, _ c: SermonCarousel) -> SlideImages {
         SlideImages(photo: photoKey(s, c).flatMap { images[$0] },
                     art: artKey(s, c).flatMap { images[$0] },
-                    rawArt: rawKey(s, c).flatMap { images[$0] })
+                    rawArt: rawKey(s, c).flatMap { images[$0] },
+                    bg: bgKey(s, c).flatMap { images[$0] })
     }
 
     /// Loads (once) the pictures a slide needs.
@@ -672,6 +909,16 @@ final class CarouselPhotoCache: ObservableObject {
             let framing: CarouselPhotos.Framing = c.style == .photo || c.style == .split ? .body : s.kind == .quote ? .face : .wide
             let img = await CarouselPhotos.photo(source: c.source, time: s.time, aspect: SlideCanvas.photoAspect(s, in: c),
                                                  framing: framing, tint: c.style == .photo ? NSColor(hexString: c.accentHex) : nil)
+            loading.remove(k)
+            if let img { images[k] = img }
+        }
+        if let k = bgKey(s, c), images[k] == nil, !loading.contains(k), let p = s.bgPath {
+            loading.insert(k)
+            let size = SlideCanvas.artSize(c)
+            let img = await Task.detached(priority: .userInitiated) { () -> CGImage? in
+                guard let src = CarouselArt.load(p) else { return nil }
+                return CarouselPhotos.crop(src, aspect: size.width / size.height, face: nil, framing: .wide)
+            }.value
             loading.remove(k)
             if let img { images[k] = img }
         }
