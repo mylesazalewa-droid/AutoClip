@@ -117,7 +117,7 @@ struct ThisWeekCard: View {
                 Button { HomeNav.shared.open(.results) } label: { Text("Add results") }.buttonStyle(SecondaryButtonStyle())
             }
             Button { openWindow(id: "carousel-window", value: rec.id) } label: {
-                Label(CarouselStore.exists(rec.id) ? "Open the carousel" : "Make a carousel", systemImage: "rectangle.split.3x1")
+                Label(CarouselStore.exists(rec.id) ? "Open social graphics" : "Make social graphics", systemImage: "rectangle.split.3x1")
             }
             .buttonStyle(SecondaryButtonStyle())
             .help("The whole message as an Instagram carousel")

@@ -9,6 +9,8 @@ struct SermonSeries: Codable, Identifiable, Equatable {
     var analysis: SeriesAnalysis?
     /// Captions, hook, movement and label shared by the series' clips
     var look: SeriesLook?
+    /// The series graphic, used behind its sermon carousels
+    var art: String?
 }
 
 struct SeriesAnalysis: Codable, Equatable {

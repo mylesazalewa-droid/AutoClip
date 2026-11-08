@@ -932,8 +932,8 @@ Respond with ONLY valid JSON, no markdown:
     /// The raw AI answer for a whole-message carousel (parsed by SermonCarousel). Runs on the
     /// cloud model when there's a key, otherwise on on-device AI.
     func composeCarousel(sentences: [(start: Double, end: Double, text: String)], title: String,
-                         kind: ContentKind, provider: AIProvider, apiKey: String) async throws -> String {
-        let prompt = SermonCarousel.prompt(sentences: numbered(sentences), title: title, kind: kind)
+                         kind: ContentKind, provider: AIProvider, apiKey: String, carousel: Bool = true) async throws -> String {
+        let prompt = SermonCarousel.prompt(sentences: numbered(sentences), title: title, kind: kind, carousel: carousel)
         if apiKey.isEmpty { return try await LocalAI.generate(prompt) }
         return try await ask(prompt, provider: provider, apiKey: apiKey)
     }

@@ -248,6 +248,7 @@ struct AppSidebar: View {
             } else {
                 group("Create")
                 row("Clips", "play.rectangle.on.rectangle", .autoReels)
+                row("Social Graphics", "rectangle.split.3x1", .social)
                 row("Improve a Clip", "wand.and.stars", .improve)
                 row("Podcast", "mic", .podcast)
                 group("Review")
