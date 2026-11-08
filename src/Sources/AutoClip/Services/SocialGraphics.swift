@@ -60,6 +60,8 @@ enum SocialGraphics {
 
     /// A full-resolution still from the source video.
     static func frame(at time: Double, source: String) async -> CGImage? {
+        // An audio sermon's video is only a waveform, not a picture worth putting on a graphic
+        if AudioSource.isCompanion(source) { return nil }
         let gen = AVAssetImageGenerator(asset: AVURLAsset(url: URL(fileURLWithPath: source)))
         gen.appliesPreferredTrackTransform = true
         gen.requestedTimeToleranceBefore = CMTime(seconds: 0.2, preferredTimescale: 600)

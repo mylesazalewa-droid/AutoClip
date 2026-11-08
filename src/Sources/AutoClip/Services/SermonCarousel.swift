@@ -435,6 +435,10 @@ Respond with ONLY valid JSON, no markdown:
            FileManager.default.fileExists(atPath: art) {
             out.artPath = art
         }
+        // Audio only: no speaker photos, so use a look that doesn't depend on one
+        if AudioSource.isCompanion(c.source), !out.hasArt, out.style == .photo || out.style == .split {
+            out.style = .gradient
+        }
         return out
     }
 
@@ -555,6 +559,12 @@ enum CarouselStore {
     }
 
     static func exists(_ id: UUID) -> Bool { FileManager.default.fileExists(atPath: url(id).path) }
+
+    /// Removes a sermon's carousel and its posts (to the Trash, so it can be put back).
+    static func delete(_ id: UUID) {
+        try? FileManager.default.trashItem(at: url(id), resultingItemURL: nil)
+        NotificationCenter.default.post(name: changed, object: id)
+    }
 
     /// The church's default design for new carousels.
     static func saveDefault(_ c: SermonCarousel) {

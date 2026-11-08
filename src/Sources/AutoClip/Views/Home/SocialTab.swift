@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 
 /// Every sermon's carousel, quote cards and thumbnail in one place, including ones the AI is
 /// still writing. Click any of them to edit.
@@ -13,6 +14,11 @@ struct SocialGraphicsTab: View {
     @State private var confirmMake: AutoReelRecord?
     @State private var hoveredPost: UUID?
     @State private var copiedDay: String?
+    @State private var dropping = false
+    @State private var confirmDelete: AutoReelRecord?
+    @AppStorage("social_hidden") private var hiddenRaw = ""
+    private var hidden: Set<String> { Set(hiddenRaw.split(separator: ",").map(String.init)) }
+    private var preparing: [AutoReelJob] { reels.activeJobs.filter { !$0.isFinished } }
 
     private var sermons: [AutoReelRecord] { reels.reels.filter { ReelGenerator.sourceVideoPath(for: $0) != nil } }
     private var working: [AutoReelRecord] { sermons.filter { jobs.running($0.id) } }
@@ -20,15 +26,26 @@ struct SocialGraphicsTab: View {
         sermons.filter { carousels[$0.id] != nil && !jobs.running($0.id) }
             .sorted { (carousels[$0.id]?.made ?? .distantPast) > (carousels[$1.id]?.made ?? .distantPast) }
     }
-    private var notYet: [AutoReelRecord] { sermons.filter { carousels[$0.id] == nil && !jobs.running($0.id) } }
+    private var notYet: [AutoReelRecord] {
+        sermons.filter { carousels[$0.id] == nil && !jobs.running($0.id) && !hidden.contains($0.id.uuidString) }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             PageHeader(eyebrow: "Create", title: "Social Graphics",
-                       subtitle: "Carousels and a week of posts from every sermon. Click any one to edit it.")
+                       subtitle: "Carousels and a week of posts from every sermon. Click any one to edit it.") {
+                Button(action: addSermon) { Label("Add a sermon", systemImage: "plus") }
+                    .buttonStyle(PrimaryButtonStyle(compact: true))
+                    .help("Choose a sermon video, or just the audio if there's no video")
+            }
             ScrollView {
                 VStack(alignment: .leading, spacing: 30) {
-                    if sermons.isEmpty { empty }
+                    if sermons.isEmpty && preparing.isEmpty { empty }
+                    if !preparing.isEmpty {
+                        group("Getting the sermon ready", count: preparing.count) {
+                            VStack(spacing: 8) { ForEach(preparing) { preparingRow($0) } }
+                        }
+                    }
                     if !working.isEmpty {
                         group("Being made", count: working.count) {
                             grid { ForEach(working) { workingCard($0) } }
@@ -57,6 +74,24 @@ struct SocialGraphicsTab: View {
                 .padding(.horizontal, 32).padding(.bottom, 40)
             }
         }
+        .overlay {
+            if dropping {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(Theme.sand, style: StrokeStyle(lineWidth: 2, dash: [8, 6]))
+                    .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Theme.sand.opacity(0.06)))
+                    .overlay(Label("Drop a sermon video or audio file", systemImage: "waveform").font(.system(size: 15, weight: .semibold)).foregroundColor(Theme.sand))
+                    .padding(16).allowsHitTesting(false)
+            }
+        }
+        .onDrop(of: [.fileURL], isTargeted: $dropping) { providers in
+            for p in providers {
+                _ = p.loadObject(ofClass: URL.self) { url, _ in
+                    guard let url else { return }
+                    DispatchQueue.main.async { start(url) }
+                }
+            }
+            return true
+        }
         .onAppear(perform: reload)
         .onReceive(NotificationCenter.default.publisher(for: CarouselStore.changed)) { n in
             if let id = n.object as? UUID { carousels[id] = CarouselStore.load(id) }
@@ -64,6 +99,12 @@ struct SocialGraphicsTab: View {
         .onChange(of: jobs.finished) { _, _ in reload() }
         .task(id: previewKeys) { await loadPreviews() }
         .sheet(item: $graphicsFor) { SocialGraphicsView(record: $0, gold: Theme.sand) }
+        .alert("Delete this carousel and its posts?", isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } })) {
+            Button("Delete", role: .destructive) { if let r = confirmDelete { CarouselStore.delete(r.id) }; confirmDelete = nil }
+            Button("Cancel", role: .cancel) { confirmDelete = nil }
+        } message: {
+            Text("The sermon and its clips stay. Its carousel and posts go to the Trash, and you can make new ones any time.")
+        }
         .alert("Make this sermon's graphics?", isPresented: Binding(get: { confirmMake != nil }, set: { if !$0 { confirmMake = nil } })) {
             Button("Make it") { if let r = confirmMake { jobs.make(r) }; confirmMake = nil }
             Button("Cancel", role: .cancel) { confirmMake = nil }
@@ -99,13 +140,12 @@ struct SocialGraphicsTab: View {
         .onTapGesture { open(rec, posts: true, index: i) }
         .help("Open and edit this post")
         .overlay(alignment: .topTrailing) {
-            if hoveredPost == c.postList[i].id {
-                Button { deletePost(rec, c.postList[i].id) } label: {
-                    Image(systemName: "trash").font(.system(size: 11, weight: .semibold)).foregroundColor(.white)
-                        .frame(width: 26, height: 26).background(Circle().fill(Color.black.opacity(0.7)))
-                }
-                .buttonStyle(.plain).padding(6).help("Delete this post")
+            Button { deletePost(rec, c.postList[i].id) } label: {
+                Image(systemName: "trash").font(.system(size: 11, weight: .semibold)).foregroundColor(.white)
+                    .frame(width: 26, height: 26)
+                    .background(Circle().fill(hoveredPost == c.postList[i].id ? Theme.danger : Color.black.opacity(0.55)))
             }
+            .buttonStyle(.plain).padding(6).help("Delete this post")
         }
         .onHover { h in hoveredPost = h ? c.postList[i].id : (hoveredPost == c.postList[i].id ? nil : hoveredPost) }
         .contextMenu {
@@ -120,6 +160,10 @@ struct SocialGraphicsTab: View {
         guard var c = CarouselStore.load(rec.id) else { return }
         c.postList.removeAll { $0.id == id }
         CarouselStore.save(c, for: rec.id)
+    }
+
+    private func hide(_ rec: AutoReelRecord) {
+        hiddenRaw = (hidden.union([rec.id.uuidString])).sorted().joined(separator: ",")
     }
 
     private func copy(_ s: String) {
@@ -161,6 +205,11 @@ struct SocialGraphicsTab: View {
                                         .lineLimit(1).fixedSize()
                                 }
                                 .buttonStyle(.link).font(.system(size: 11.5))
+                                if let i = d.post, i >= 0 {
+                                    Button { deletePost(p.rec, p.c.postList[i].id) } label: { Label("Delete", systemImage: "trash").lineLimit(1).fixedSize() }
+                                        .buttonStyle(.link).font(.system(size: 11.5)).foregroundColor(Theme.danger)
+                                        .help("Delete this post")
+                                }
                             }
                             .frame(width: 150)
                         }
@@ -220,12 +269,55 @@ struct SocialGraphicsTab: View {
         VStack(spacing: 12) {
             Image(systemName: "rectangle.split.3x1").font(.system(size: 34)).foregroundColor(Theme.sand)
             Text("Add a sermon first").font(Theme.display(22, weight: .medium)).foregroundColor(Theme.cream)
-            Text("Once a sermon is in AutoClip, you can make a carousel, quote cards and a thumbnail from it here.")
-                .font(.system(size: 13)).foregroundColor(Theme.muted)
-            Button { reels.requestNewReel = true; HomeNav.shared.open(.autoReels) } label: { Label("Choose a sermon", systemImage: "plus") }
+            Text("Choose the sermon video, or just the audio if there's no video (MP3, M4A, WAV). You can also drop it here.")
+                .font(.system(size: 13)).foregroundColor(Theme.muted).multilineTextAlignment(.center)
+            Button(action: addSermon) { Label("Choose a video or audio file", systemImage: "plus") }
                 .buttonStyle(PrimaryButtonStyle())
         }
         .frame(maxWidth: .infinity).padding(.vertical, 60)
+    }
+
+    // MARK: Adding a sermon
+
+    private static let mediaTypes: Set<String> = Set(["mp4", "mov", "m4v", "mkv", "avi", "webm"]).union(AudioSource.types)
+
+    private func addSermon() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.audiovisualContent, .audio]
+        panel.allowsOtherFileTypes = true
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.message = "Choose the sermon video, or the audio if there's no video"
+        panel.prompt = "Add"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        start(url)
+    }
+
+    /// Transcribes the sermon (an audio file gets a simple waveform video first) and makes its clips.
+    /// It then appears below, ready for graphics, or they're made by themselves with One-click Sunday.
+    private func start(_ url: URL) {
+        guard Self.mediaTypes.contains(url.pathExtension.lowercased()) else { return }
+        Task { await AutoImport.shared.makeReelsNow(from: url) }
+    }
+
+    private func preparingRow(_ job: AutoReelJob) -> some View {
+        HStack(spacing: 14) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 6).fill(Theme.sand.opacity(0.12))
+                Image(systemName: job.sourceVideoPath.map { AudioSource.isAudioFile(URL(fileURLWithPath: $0)) || AudioSource.isCompanion($0) } == true ? "waveform" : "video.fill")
+                    .foregroundColor(Theme.sand)
+            }
+            .frame(width: 96, height: 54)
+            VStack(alignment: .leading, spacing: 5) {
+                Text(job.title).font(.system(size: 13.5, weight: .semibold)).foregroundColor(Theme.ink).lineLimit(1)
+                ProgressView(value: min(1, max(0, job.progress))).tint(Theme.sand)
+                Text(job.statusMsg).font(.system(size: 12)).foregroundColor(Theme.muted).lineLimit(1)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.surface))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Theme.line))
     }
 
     // MARK: Cards
@@ -249,6 +341,11 @@ struct SocialGraphicsTab: View {
             .contentShape(Rectangle())
             .onTapGesture { open(rec, posts: false, index: 0) }
             .help("Open and edit this carousel")
+            .contextMenu {
+                Button("Edit") { open(rec, posts: false, index: 0) }
+                Divider()
+                Button("Delete carousel and posts…", role: .destructive) { confirmDelete = rec }
+            }
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(rec.title).font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.ink).lineLimit(1)
@@ -266,6 +363,10 @@ struct SocialGraphicsTab: View {
                 Button { graphicsFor = rec } label: { Label("Thumbnail", systemImage: "photo").lineLimit(1).fixedSize() }
                     .buttonStyle(SecondaryButtonStyle(compact: true))
                     .help("Quote cards and a thumbnail for the full message video")
+                Spacer(minLength: 0)
+                Button { confirmDelete = rec } label: { Image(systemName: "trash") }
+                    .buttonStyle(SecondaryButtonStyle(compact: true))
+                    .help("Delete this carousel and its posts")
             }
         }
         .padding(16)
@@ -322,6 +423,9 @@ struct SocialGraphicsTab: View {
                 .buttonStyle(SecondaryButtonStyle(compact: true))
             Button { confirmMake = rec } label: { Label("Make graphics", systemImage: "sparkles") }
                 .buttonStyle(PrimaryButtonStyle(compact: true))
+            Button { hide(rec) } label: { Image(systemName: "xmark") }
+                .buttonStyle(SecondaryButtonStyle(compact: true))
+                .help("Remove from this page (the sermon and its clips stay in AutoClip)")
         }
         .padding(12)
         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.surface))

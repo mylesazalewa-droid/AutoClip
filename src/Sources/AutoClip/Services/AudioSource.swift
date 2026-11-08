@@ -21,6 +21,9 @@ enum AudioSource {
 
     static func isAudioFile(_ url: URL) -> Bool { types.contains(url.pathExtension.lowercased()) }
 
+    /// True for the waveform video AutoClip made from an audio file: it has no picture of the speaker.
+    static func isCompanion(_ path: String) -> Bool { path.hasPrefix(dir.path + "/") }
+
     /// True for audio files, and for movie files that only hold sound.
     static func needsVideo(_ url: URL) async -> Bool {
         if isAudioFile(url) { return true }
