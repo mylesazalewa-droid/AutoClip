@@ -22,7 +22,7 @@ enum PlanFeature {
     case volunteerMode, worship
     var label: String { self == .volunteerMode ? "Volunteer Mode" : "Worship review" }
     /// Who gets it. The trial includes everything so people can try it all.
-    func included(in plan: Plan) -> Bool { plan == .trial || plan == .church }
+    func included(in plan: Plan) -> Bool { plan == .trial || plan == .church || plan == .lifetime }
 }
 
 struct LicenseInfo: Codable, Equatable {
@@ -65,6 +65,11 @@ final class License: ObservableObject {
               pk.isValidSignature(sig, for: body) else { return nil }
         let d = JSONDecoder(); d.dateDecodingStrategy = .secondsSince1970
         return try? d.decode(LicenseInfo.self, from: body)
+    }
+
+    /// Whether a private key's public half is the one this app checks keys with.
+    nonisolated static func publicKeyMatches(_ raw: Data) -> Bool {
+        raw.base64EncodedString() == publicKey
     }
 
     /// For exports, which don't run on the main actor: true until a valid key has ever been added.

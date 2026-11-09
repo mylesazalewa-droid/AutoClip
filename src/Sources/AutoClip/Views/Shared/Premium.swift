@@ -262,6 +262,7 @@ struct AppSidebar: View {
                 group("Manage")
                 row("Brand kit", "paintpalette", .brand)
                 row("Storage", "internaldrive", .storage)
+                if LicenseIssuer.isOwnerMac { row("Licences", "key", .licenses) }
             }
 
             Spacer()

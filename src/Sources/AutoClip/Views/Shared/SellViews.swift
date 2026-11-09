@@ -100,7 +100,7 @@ struct PlanGate<Content: View>: View {
 
     var body: some View {
         if license.has(feature) { content } else {
-            EmptyState(icon: "lock", title: "\(feature.label) is on the Church plan",
+            EmptyState(icon: "lock", title: "\(feature.label) is on the Church and Lifetime plans",
                        message: "Upgrade to use it. Everything you've made is still here.") {
                 Button("Enter a key") { show = true }.buttonStyle(PrimaryButtonStyle())
                 if license.canBuy { Button("See plans") { license.openPurchasePage() }.buttonStyle(SecondaryButtonStyle()) }

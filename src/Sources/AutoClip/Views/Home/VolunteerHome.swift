@@ -185,7 +185,7 @@ private struct VolunteerSettings: View {
             }
             if let note { Text(note).font(.system(size: 12)).foregroundColor(Theme.good).fixedSize(horizontal: false, vertical: true) }
             if !License.shared.has(.volunteerMode) {
-                Text("Volunteer Mode is on the Church plan.").font(.system(size: 12)).foregroundColor(Theme.warn)
+                Text("Volunteer Mode is on the Church and Lifetime plans.").font(.system(size: 12)).foregroundColor(Theme.warn)
             }
             Button {
                 if !pin.isEmpty { mode.setPIN(pin) }

@@ -118,6 +118,7 @@ final class CommandBar: ObservableObject {
             page("Storage", "internaldrive", .storage, "disk space clean")
             page("Brand kit", "paintpalette", .brand, "logo colours colors fonts church name handle")
             page("Approvals", "checkmark.seal", .approvals, "review approve pastor volunteer phone")
+            if LicenseIssuer.isOwnerMac { page("Licences", "key", .licenses, "license keys activate church customer renew") }
             out.append(Item(id: "new", title: "Make clips from a sermon", detail: "Choose a video", icon: "plus", keywords: "new add import") {
                 AutoReelsStore.shared.requestNewReel = true
                 HomeNav.shared.open(.autoReels)
