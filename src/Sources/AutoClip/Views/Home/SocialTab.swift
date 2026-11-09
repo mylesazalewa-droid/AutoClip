@@ -370,29 +370,47 @@ struct SocialGraphicsTab: View {
                 Text("\(c.slides.count) slides · \(c.postList.count) posts · \(c.style.label)")
                     .font(.system(size: 12)).foregroundColor(Theme.muted)
             }
-            HStack(spacing: 8) {
-                Button { open(rec, posts: false, index: 0) } label: { Label("Edit", systemImage: "pencil").lineLimit(1).fixedSize() }
-                    .buttonStyle(PrimaryButtonStyle(compact: true))
-                if c.postList.isEmpty {
-                    Button { jobs.makePosts(rec) } label: { Label("Write posts", systemImage: "sparkles").lineLimit(1).fixedSize() }
-                        .buttonStyle(SecondaryButtonStyle(compact: true))
-                        .help("A week of single posts from this sermon (one AI request)")
-                }
-                Button { graphicsFor = rec } label: { Label("Thumbnail", systemImage: "photo").lineLimit(1).fixedSize() }
-                    .buttonStyle(SecondaryButtonStyle(compact: true))
-                    .help("Quote cards and a thumbnail for the full message video")
-                Spacer(minLength: 0)
-                Button { reviewFor = rec } label: { Image(systemName: "checkmark.seal") }
-                    .buttonStyle(SecondaryButtonStyle(compact: true))
-                    .help("Send for review: a link someone can open on their phone to approve these")
-                Button { confirmDelete = rec } label: { Image(systemName: "trash") }
-                    .buttonStyle(SecondaryButtonStyle(compact: true))
-                    .help("Delete this carousel and its posts")
+            ViewThatFits(in: .horizontal) {
+                cardButtons(rec, c, labels: true)
+                cardButtons(rec, c, labels: false)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(16)
         .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.surface))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Theme.line))
+    }
+
+    /// The buttons under a carousel. Without labels when the card is too narrow, so they never spill onto the next card.
+    @ViewBuilder
+    private func cardButtons(_ rec: AutoReelRecord, _ c: SermonCarousel, labels: Bool) -> some View {
+        HStack(spacing: 8) {
+            Button { open(rec, posts: false, index: 0) } label: {
+                Label("Edit", systemImage: "pencil").lineLimit(1).fixedSize()
+            }
+            .buttonStyle(PrimaryButtonStyle(compact: true))
+            if c.postList.isEmpty {
+                Button { jobs.makePosts(rec) } label: { cardLabel("Write posts", "sparkles", labels) }
+                    .buttonStyle(SecondaryButtonStyle(compact: true))
+                    .help("Write posts: a week of single posts from this sermon (one AI request)")
+            }
+            Button { graphicsFor = rec } label: { cardLabel("Thumbnail", "photo", labels) }
+                .buttonStyle(SecondaryButtonStyle(compact: true))
+                .help("Thumbnail: quote cards and a thumbnail for the full message video")
+            Spacer(minLength: 0)
+            Button { reviewFor = rec } label: { Image(systemName: "checkmark.seal") }
+                .buttonStyle(SecondaryButtonStyle(compact: true))
+                .help("Send for review: a link someone can open on their phone to approve these")
+            Button { confirmDelete = rec } label: { Image(systemName: "trash") }
+                .buttonStyle(SecondaryButtonStyle(compact: true))
+                .help("Delete this carousel and its posts")
+        }
+    }
+
+    @ViewBuilder
+    private func cardLabel(_ title: String, _ icon: String, _ labels: Bool) -> some View {
+        if labels { Label(title, systemImage: icon).lineLimit(1).fixedSize() }
+        else { Image(systemName: icon) }
     }
 
     private func workingCard(_ rec: AutoReelRecord) -> some View {
