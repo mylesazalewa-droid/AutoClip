@@ -54,17 +54,13 @@ struct SocialGraphicsTab: View {
                         }
                     }
                     weekPlan
-                    if !allPosts.isEmpty {
-                        group("Posts", count: allPosts.count) {
-                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 190, maximum: 240), spacing: 14, alignment: .top)],
-                                      alignment: .leading, spacing: 14) {
-                                ForEach(allPosts, id: \.post.id) { item in postTile(item.rec, item.c, item.index) }
-                            }
-                        }
-                    }
                     if !made.isEmpty {
-                        group("Carousels", count: made.count) {
-                            grid { ForEach(made) { rec in if let c = carousels[rec.id] { carouselCard(rec, c) } } }
+                        group("By message", count: made.count) {
+                            VStack(alignment: .leading, spacing: 14) {
+                                ForEach(Array(made.enumerated()), id: \.element.id) { n, rec in
+                                    if let c = carousels[rec.id] { messageSection(rec, c, position: n) }
+                                }
+                            }
                         }
                     }
                     if !notYet.isEmpty {
@@ -138,14 +134,15 @@ struct SocialGraphicsTab: View {
     private func postTile(_ rec: AutoReelRecord, _ c: SermonCarousel, _ i: Int) -> some View {
         let p = c.post(i)
         let size = p.shape.size
-        let w: CGFloat = 200
+        let w: CGFloat = 170
         return VStack(alignment: .leading, spacing: 6) {
             ScaledSlide(carousel: p, index: 0, images: photos.images(p.slides[0], p), scale: w / size.width)
                 .drawingGroup()
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .shadow(color: .black.opacity(0.25), radius: 8, y: 4)
-            Text(rec.title).font(.system(size: 11.5)).foregroundColor(Theme.muted).lineLimit(1)
+            Text("\(i + 1). " + c.postList[i].kind.label).font(.system(size: 11.5)).foregroundColor(Theme.muted).lineLimit(1)
         }
+        .frame(width: w)
         .overlay(alignment: .topLeading) {
             if let r = reviews.latest(c.postList[i].id, kind: .post) { ReviewBadge(item: r).padding(6) }
         }
@@ -183,6 +180,70 @@ struct SocialGraphicsTab: View {
     private func copy(_ s: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(s, forType: .string)
+    }
+
+    // MARK: By message
+
+    @AppStorage("social_open") private var openRaw = ""
+    @AppStorage("social_closed") private var closedRaw = ""
+
+    /// The two newest messages start open; the rest fold away until clicked.
+    private func isOpen(_ rec: AutoReelRecord, position: Int) -> Bool {
+        let id = rec.id.uuidString
+        if openRaw.contains(id) { return true }
+        if closedRaw.contains(id) { return false }
+        return position < 2
+    }
+
+    private func setOpen(_ rec: AutoReelRecord, _ on: Bool) {
+        let id = rec.id.uuidString
+        var open = Set(openRaw.split(separator: ",").map(String.init)), closed = Set(closedRaw.split(separator: ",").map(String.init))
+        if on { open.insert(id); closed.remove(id) } else { closed.insert(id); open.remove(id) }
+        openRaw = open.sorted().joined(separator: ","); closedRaw = closed.sorted().joined(separator: ",")
+    }
+
+    private func messageSection(_ rec: AutoReelRecord, _ c: SermonCarousel, position: Int) -> some View {
+        let open = isOpen(rec, position: position)
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 12) {
+                Button { withAnimation(.easeInOut(duration: 0.2)) { setOpen(rec, !open) } } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundColor(Theme.sand)
+                            .rotationEffect(.degrees(open ? 90 : 0))
+                        if !open, let first = c.slides.first {
+                            ScaledSlide(carousel: c, index: 0, images: photos.images(first, c), scale: 44 / c.shape.size.height)
+                                .drawingGroup().clipShape(RoundedRectangle(cornerRadius: 4))
+                        }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(rec.title).font(Theme.display(18, weight: .medium)).foregroundColor(Theme.cream).lineLimit(1)
+                            Text("\(Date(timeIntervalSince1970: rec.dateCreated).formatted(date: .abbreviated, time: .omitted)) · \(rec.drafts?.count ?? 0) clips · \(c.slides.count) slides · \(c.postList.count) posts")
+                                .font(.system(size: 12)).foregroundColor(Theme.muted)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                if let r = reviews.latest(rec.id, kind: .carousel) { ReviewBadge(item: r) }
+                Spacer(minLength: 8)
+                Button { openWindow(id: "reel-window", value: rec.id) } label: {
+                    Label("Open message", systemImage: "rectangle.stack").lineLimit(1).fixedSize()
+                }
+                .buttonStyle(SecondaryButtonStyle(compact: true))
+                .help("This message's clips, graphics and captions together")
+            }
+            if open {
+                ScrollView(.horizontal, showsIndicators: true) {
+                    HStack(alignment: .top, spacing: 14) {
+                        carouselCard(rec, c).frame(width: 340)
+                        ForEach(Array(c.postList.indices), id: \.self) { i in postTile(rec, c, i) }
+                    }
+                    .padding(.bottom, 8)
+                }
+            }
+        }
+        .padding(16)
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.surface.opacity(open ? 1 : 0.6)))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Theme.line))
     }
 
     // MARK: This week's plan

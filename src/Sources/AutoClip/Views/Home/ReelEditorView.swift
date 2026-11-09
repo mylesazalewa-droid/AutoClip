@@ -34,6 +34,7 @@ struct ReelDraftsView: View {
     @State private var showReview = false
     @State private var showCleanup = false
     @State private var showAudio = false
+    @AppStorage("message_pane") private var pane: MessagePane = .clips
     @State private var confirmDelete = false
     @State private var celebrating: Set<UUID> = []
 
@@ -43,17 +44,31 @@ struct ReelDraftsView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            TipView(QuickReviewTip()).padding(.horizontal, 16).padding(.bottom, 8)
-            if !volunteer.enabled { generateBar }
-            Divider().background(Theme.ink.opacity(0.08))
-            ScrollView {
-                VStack(spacing: 8) {
-                    ForEach(Array(drafts.enumerated()), id: \.element.id) { i, d in row(i, d) }
-                }
-                .padding(16)
+            if !volunteer.enabled {
+                PillTabs(selection: $pane, items: MessagePane.allCases.map { ($0, $0.rawValue) }, compact: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16).padding(.bottom, 10)
             }
-            Divider().background(Theme.ink.opacity(0.08))
-            footer
+            switch volunteer.enabled ? .clips : pane {
+            case .clips:
+                TipView(QuickReviewTip()).padding(.horizontal, 16).padding(.bottom, 8)
+                if !volunteer.enabled { generateBar }
+                Divider().background(Theme.ink.opacity(0.08))
+                ScrollView {
+                    VStack(spacing: 8) {
+                        ForEach(Array(drafts.enumerated()), id: \.element.id) { i, d in row(i, d) }
+                    }
+                    .padding(16)
+                }
+                Divider().background(Theme.ink.opacity(0.08))
+                footer
+            case .graphics:
+                Divider().background(Theme.ink.opacity(0.08))
+                MessageGraphicsPane(recordID: recordID)
+            case .captions:
+                Divider().background(Theme.ink.opacity(0.08))
+                MessageCaptionsPane(recordID: recordID)
+            }
         }
         .frame(minWidth: 560, minHeight: 520)
         .background(Theme.bg)
@@ -69,7 +84,7 @@ struct ReelDraftsView: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text(record?.title ?? "Clips").font(.system(size: 15, weight: .semibold)).foregroundColor(Theme.ink)
-                Text("\(drafts.count) clip\(drafts.count == 1 ? "" : "s") · pick which to export, or open one to edit")
+                Text(pane == .clips || volunteer.enabled ? "\(drafts.count) clip\(drafts.count == 1 ? "" : "s") · pick which to export, or open one to edit" : "Everything made from this message")
                     .font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.55))
             }
             Spacer()

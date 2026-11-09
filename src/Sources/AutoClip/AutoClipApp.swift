@@ -41,7 +41,7 @@ struct AutoClipApp: App {
         }
 
         // Auto Reels: one window per video's reels, with a large preview
-        WindowGroup("Clips", id: "reel-window", for: UUID.self) { $id in
+        WindowGroup("Message", id: "reel-window", for: UUID.self) { $id in
             if let id { ReelWindowView(recordID: id).tint(Theme.action).appLook() }
         }
         .defaultSize(width: 1280, height: 820)
