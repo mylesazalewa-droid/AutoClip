@@ -746,6 +746,14 @@ struct AutoReelsTab: View {
                                     .cornerRadius(8)
                                 }
                                 .buttonStyle(.plain)
+                                LibraryMenu(onPick: { pickedVideoURL = URL(fileURLWithPath: $0.path) }) {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "tray.full").font(.system(size: 13))
+                                        Text("Use a recording already in AutoClip").font(.system(size: 13, weight: .medium))
+                                    }
+                                    .foregroundColor(Theme.ink.opacity(0.75))
+                                }
+                                .buttonStyle(.plain)
                             } else {
                                 HStack(spacing: 8) {
                                     Image(systemName: "link")

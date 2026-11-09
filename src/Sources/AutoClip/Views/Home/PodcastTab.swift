@@ -185,6 +185,10 @@ struct NewEpisodeSheet: View {
             }
             HStack {
                 Button { choose() } label: { Label("Add files…", systemImage: "plus") }
+                LibraryMenu(exclude: Set(files), onPick: { m in
+                    files.append(m.path)
+                    if title.isEmpty { title = m.title }
+                }) { Label("Already in AutoClip", systemImage: "tray.full") }
                 Spacer()
             }
             HStack(spacing: 6) {

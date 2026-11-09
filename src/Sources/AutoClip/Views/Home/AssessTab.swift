@@ -282,6 +282,10 @@ struct AssessTab: View {
                         .buttonStyle(SecondaryButtonStyle())
                 }
                 IconPillButton(icon: "mic.fill", help: "Record a practice run") { showPractice = true }
+                LibraryMenu(exclude: Set(allVideos), onPick: { use($0.path) }) {
+                    Label("Already in AutoClip", systemImage: "tray.full")
+                }
+                .buttonStyle(SecondaryButtonStyle())
                 Button { chooseVideo() } label: { Label("Add video", systemImage: "plus") }
                     .buttonStyle(PrimaryButtonStyle())
             }
@@ -420,6 +424,12 @@ struct AssessTab: View {
         panel.allowedContentTypes = [.movie, .video, .mpeg4Movie, .quickTimeMovie, .audio]
         panel.canChooseDirectories = false
         guard panel.runModal() == .OK, let url = panel.url else { return }
+        use(url.path)
+    }
+
+    /// Adds a recording to this page (if it isn't already) and opens it.
+    private func use(_ path: String) {
+        let url = URL(fileURLWithPath: path)
         if !extraVideos.contains(url.path) { extraRaw = ([url.path] + extraVideos).joined(separator: "\n") }
         hiddenRaw = hiddenVideos.subtracting([url.path]).joined(separator: "\n")
         claim(url.path)

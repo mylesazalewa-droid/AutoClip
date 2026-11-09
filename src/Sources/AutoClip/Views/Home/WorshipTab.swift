@@ -83,6 +83,10 @@ struct WorshipTab: View {
                 }
                 HStack(spacing: 10) {
                     Button { chooseFile() } label: { Label("Add a recording", systemImage: "plus") }.buttonStyle(PrimaryButtonStyle(compact: true))
+                    LibraryMenu(onPick: { m in start { _ in URL(fileURLWithPath: m.path) } }) {
+                        Label("Already in AutoClip", systemImage: "tray.full")
+                    }
+                    .buttonStyle(SecondaryButtonStyle(compact: true))
                     TextField("Or paste a YouTube link", text: $link).textFieldStyle(.roundedBorder).font(.system(size: 13)).frame(maxWidth: 340)
                         .onSubmit { addLink() }
                     Button("Get it") { addLink() }.buttonStyle(SecondaryButtonStyle(compact: true))

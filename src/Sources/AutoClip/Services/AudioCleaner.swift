@@ -89,13 +89,13 @@ enum AudioCleaner {
 
     // MARK: Effects chain
 
-    private static func effect(_ subtype: OSType) -> AVAudioUnitEffect {
+    static func effect(_ subtype: OSType) -> AVAudioUnitEffect {
         AVAudioUnitEffect(audioComponentDescription: AudioComponentDescription(
             componentType: kAudioUnitType_Effect, componentSubType: subtype,
             componentManufacturer: kAudioUnitManufacturer_Apple, componentFlags: 0, componentFlagsMask: 0))
     }
 
-    private static func set(_ unit: AVAudioUnitEffect, _ id: AudioUnitParameterID, _ value: Float) {
+    static func set(_ unit: AVAudioUnitEffect, _ id: AudioUnitParameterID, _ value: Float) {
         AudioUnitSetParameter(unit.audioUnit, id, kAudioUnitScope_Global, 0, value, 0)
     }
 

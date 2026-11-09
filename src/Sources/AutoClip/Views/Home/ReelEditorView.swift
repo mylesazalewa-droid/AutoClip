@@ -33,6 +33,7 @@ struct ReelDraftsView: View {
     @State private var showKit = false
     @State private var showReview = false
     @State private var showCleanup = false
+    @State private var showAudio = false
     @State private var confirmDelete = false
     @State private var celebrating: Set<UUID> = []
 
@@ -104,6 +105,66 @@ struct ReelDraftsView: View {
         .padding(16)
     }
 
+    // MARK: From the full message
+
+    private func fullMessageButtons(labels: Bool) -> some View {
+        HStack(spacing: 8) {
+            messageButton("Graphics", "photo.on.rectangle.angled", labels, help: "Quote cards and a thumbnail for the full message") { showGraphics = true }
+            messageButton("Carousel", "rectangle.split.3x1", labels,
+                          help: "The whole message as an Instagram carousel: big idea, main points, Scripture and a question for the week") {
+                openWindow(id: "carousel-window", value: recordID)
+            }
+            messageButton("Content kit", "shippingbox", labels, filled: true,
+                          help: "Every clip, captions and hashtags, notes, graphics and a posting plan — in one folder") { showKit = true }
+            messageButton("Clean up", "scissors", labels, help: "Save a tighter copy of the full video: fillers, false starts and long pauses cut") { showCleanup = true }
+            messageButton("Audio", "waveform", labels,
+                          help: "Export clean, levelled audio for podcast sites. Pick the start and end on the waveform") { showAudio = true }
+            Menu {
+                Button { makePodcast() } label: { Label("Make a podcast episode", systemImage: "mic") }
+                Button { if let p = sourcePath { HomeNav.shared.openAssess(p); dismiss() } } label: { Label("Assess the delivery", systemImage: "waveform.badge.magnifyingglass") }
+            } label: {
+                Group {
+                    if labels { Label("Use for", systemImage: "arrow.triangle.branch") } else { Image(systemName: "arrow.triangle.branch") }
+                }
+                .font(.system(size: 13, weight: .semibold)).lineLimit(1).fixedSize()
+                .padding(.horizontal, 10).padding(.vertical, 6)
+                .background(Theme.ink.opacity(0.08)).cornerRadius(7)
+            }
+            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+            .foregroundColor(Theme.ink)
+            .help("Use this sermon somewhere else in AutoClip without adding it again")
+            .disabled(sourcePath == nil)
+        }
+    }
+
+    private func messageButton(_ title: String, _ icon: String, _ labels: Bool, filled: Bool = false, help: String,
+                               _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Group {
+                if labels { Label(title, systemImage: icon) } else { Image(systemName: icon) }
+            }
+            .font(.system(size: 13, weight: .semibold)).lineLimit(1).fixedSize()
+            .padding(.horizontal, 10).padding(.vertical, 6)
+            .background(filled ? Theme.terracotta : Theme.ink.opacity(0.08)).cornerRadius(7)
+        }
+        .buttonStyle(.plain).foregroundColor(filled ? Theme.onColor : Theme.ink)
+        .help(labels ? help : title + ": " + help)
+    }
+
+    private var sourcePath: String? {
+        guard let rec = record, let p = ReelGenerator.sourceVideoPath(for: rec), FileManager.default.fileExists(atPath: p) else { return nil }
+        return p
+    }
+
+    /// Starts a podcast episode from this sermon's recording (or opens the one already made from it).
+    private func makePodcast() {
+        guard let p = sourcePath, let rec = record else { return }
+        let id = PodcastStore.shared.episodes.first { $0.angles.first?.path == p }?.id
+            ?? PodcastStore.shared.create(title: rec.title, paths: [p])
+        HomeNav.shared.openPodcast(id)
+        dismiss()
+    }
+
     // MARK: Generate
 
     private var generateBar: some View {
@@ -126,41 +187,20 @@ struct ReelDraftsView: View {
                 .buttonStyle(.plain).foregroundColor(Theme.onColor).disabled(genStatus != nil)
                 .help("One teaser clip with a title, description and hashtags, built to end on a cliffhanger")
             }
-            // Things made from the whole message, on their own row so labels never wrap
+            // Things made from the whole message. Labels drop to icons when the window is narrow.
             HStack(spacing: 8) {
                 Text("From the full message").font(.system(size: 12)).foregroundColor(Theme.muted).lineLimit(1)
                 Spacer(minLength: 6)
-                Button { showGraphics = true } label: {
-                    Label("Graphics", systemImage: "photo.on.rectangle.angled").font(.system(size: 13, weight: .semibold)).lineLimit(1).fixedSize()
-                        .padding(.horizontal, 10).padding(.vertical, 6)
-                        .background(Theme.ink.opacity(0.08)).cornerRadius(7)
+                ViewThatFits(in: .horizontal) {
+                    fullMessageButtons(labels: true)
+                    fullMessageButtons(labels: false)
                 }
-                .buttonStyle(.plain).foregroundColor(Theme.ink)
-                .help("Quote cards and a thumbnail for the full message")
-                Button { openWindow(id: "carousel-window", value: recordID) } label: {
-                    Label("Carousel", systemImage: "rectangle.split.3x1").font(.system(size: 13, weight: .semibold)).lineLimit(1).fixedSize()
-                        .padding(.horizontal, 10).padding(.vertical, 6)
-                        .background(Theme.ink.opacity(0.08)).cornerRadius(7)
-                }
-                .buttonStyle(.plain).foregroundColor(Theme.ink)
-                .help("The whole message as an Instagram carousel: big idea, main points, Scripture and a question for the week")
-                Button { showKit = true } label: {
-                    Label("Content kit", systemImage: "shippingbox").font(.system(size: 13, weight: .semibold)).lineLimit(1).fixedSize()
-                        .padding(.horizontal, 10).padding(.vertical, 6)
-                        .background(Theme.terracotta).cornerRadius(7)
-                }
-                .buttonStyle(.plain).foregroundColor(Theme.onColor)
-                .help("Every clip, captions and hashtags, notes, graphics and a posting plan — in one folder")
-                Button { showCleanup = true } label: {
-                    Label("Clean up", systemImage: "scissors").font(.system(size: 13, weight: .semibold)).lineLimit(1).fixedSize()
-                        .padding(.horizontal, 10).padding(.vertical, 6)
-                        .background(Theme.ink.opacity(0.08)).cornerRadius(7)
-                }
-                .buttonStyle(.plain).foregroundColor(Theme.ink)
-                .help("Save a tighter copy of the full video: fillers, false starts and long pauses cut")
             }
             .sheet(isPresented: $showKit) { ContentKitSheet(recordID: recordID) }
             .sheet(isPresented: $showCleanup) { CleanupSheet(recordID: recordID) }
+            .sheet(isPresented: $showAudio) {
+                if let rec = record, let src = ReelGenerator.sourceVideoPath(for: rec) { CleanAudioSheet(path: src, title: rec.title) }
+            }
             .sheet(isPresented: $showGraphics) {
                 if let rec = record { SocialGraphicsView(record: rec, gold: gold) }
             }
