@@ -107,6 +107,7 @@ final class CommandBar: ObservableObject {
         page("Home", "house", .projects, "start main")
         page("Results", "chart.line.uptrend.xyaxis", .results, "analytics views posted")
         if !volunteer {
+            page("Messages", "rectangle.stack", .messages, "sermons checklist progress next step everything")
             page("Clips", "play.rectangle.on.rectangle", .autoReels, "shorts clips")
             page("Social Graphics", "rectangle.split.3x1", .social, "carousel instagram quote cards thumbnail posts")
             page("Improve a Clip", "wand.and.stars", .improve, "fix doctor")

@@ -11,6 +11,8 @@ final class CleanAudioJobs: ObservableObject {
     private var tasks: [String: Task<Void, Never>] = [:]
 
     func state(_ path: String) -> State { states[path] ?? State() }
+    /// Where the last clean audio for a recording was saved (for the Messages checklist)
+    nonisolated static func doneKey(_ path: String) -> String { "clean_audio_done|" + path }
     func running(_ path: String) -> Bool { states[path]?.status != nil }
 
     func start(path: String, start: Double, end: Double, options: CleanAudioExport.Options, to url: URL) {
@@ -24,6 +26,7 @@ final class CleanAudioJobs: ObservableObject {
                     }
                 }
                 states[path] = State(saved: url)
+                UserDefaults.standard.set(url.path, forKey: Self.doneKey(path))
             } catch is CancellationError {
                 try? FileManager.default.removeItem(at: url)
                 states[path] = State()

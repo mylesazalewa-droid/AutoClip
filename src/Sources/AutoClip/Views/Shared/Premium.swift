@@ -246,6 +246,7 @@ struct AppSidebar: View {
             if volunteer.enabled {
                 row("Results", "chart.line.uptrend.xyaxis", .results)
             } else {
+                row("Messages", "rectangle.stack", .messages)
                 group("Create")
                 row("Clips", "play.rectangle.on.rectangle", .autoReels)
                 row("Social Graphics", "rectangle.split.3x1", .social)
