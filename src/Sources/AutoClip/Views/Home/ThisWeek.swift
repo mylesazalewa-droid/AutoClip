@@ -32,7 +32,7 @@ struct ThisWeekCard: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text("This week").font(Theme.display(30, weight: .medium)).foregroundColor(Theme.cream)
-                Text(weekLabel).font(.system(size: 13)).foregroundColor(Theme.muted)
+                Text(weekLabel).font(.ui(size: 13)).foregroundColor(Theme.muted)
                 Spacer()
             }
             if let rec = latest { sermon(rec) } else { start }
@@ -46,7 +46,7 @@ struct ThisWeekCard: View {
             Button("Make them") { if let r = latest { jobs.make(r) } }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("AI writes a carousel and a week of posts, and the posting plan is set. Uses one AI request. You can keep working while it's made.")
+            Text("AI writes a carousel and a week of posts, and the posting plan is set. Uses \(AICost.phrase()). You can keep working while it's made.")
         }
         .task(id: drafts.map(\.id)) {
             let ds = drafts
@@ -59,7 +59,7 @@ struct ThisWeekCard: View {
             LogoMark(size: 64)
             VStack(alignment: .leading, spacing: 6) {
                 Text("Add this week's sermon").font(Theme.display(22, weight: .medium)).foregroundColor(Theme.cream)
-                Text("AutoClip finds the moments worth sharing and has clips ready to review.").font(.system(size: 13)).foregroundColor(Theme.muted)
+                Text("AutoClip finds the moments worth sharing and has clips ready to review.").font(.ui(size: 13)).foregroundColor(Theme.muted)
             }
             Spacer()
             Button { reels.requestNewReel = true; HomeNav.shared.open(.autoReels) } label: { Label("Choose a sermon", systemImage: "plus") }
@@ -80,7 +80,7 @@ struct ThisWeekCard: View {
             VStack(alignment: .leading, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(rec.title).font(Theme.display(24, weight: .medium)).foregroundColor(Theme.cream).lineLimit(2)
-                    Text("Added \(Date(timeIntervalSince1970: rec.dateCreated).formatted(.relative(presentation: .named)))").font(.system(size: 12)).foregroundColor(Theme.muted)
+                    Text("Added \(Date(timeIntervalSince1970: rec.dateCreated).formatted(.relative(presentation: .named)))").font(.ui(size: 12)).foregroundColor(Theme.muted)
                 }
                 HStack(spacing: 8) {
                     chip("\(drafts.count) clip\(drafts.count == 1 ? "" : "s")", icon: "film", color: Theme.sand)
@@ -94,7 +94,7 @@ struct ThisWeekCard: View {
                 if let p = nextToPost, let path = p.exportedPath {
                     HStack(spacing: 10) {
                         Image(systemName: "paperplane").foregroundColor(Theme.sand)
-                        Text("Ready to post: \(p.title)").font(.system(size: 13)).foregroundColor(Theme.text).lineLimit(1)
+                        Text("Ready to post: \(p.title)").font(.ui(size: 13)).foregroundColor(Theme.text).lineLimit(1)
                         Spacer(minLength: 8)
                         if ShareOut.canAirDrop {
                             Button { ShareOut.airDrop(path) } label: { Label("Send to iPhone", systemImage: "iphone.and.arrow.forward") }.controlSize(.small)
@@ -118,14 +118,14 @@ struct ThisWeekCard: View {
             if !reviewed && exported.isEmpty {
                 Button { reels.reviewOnOpen = rec.id; openWindow(id: "reel-window", value: rec.id) } label: { Label("Review the clips", systemImage: "rectangle.stack") }
                     .buttonStyle(PrimaryButtonStyle())
-                Text("Keep or toss each one with the arrow keys.").font(.system(size: 12)).foregroundColor(Theme.muted)
+                Text("Keep or toss each one with the arrow keys.").font(.ui(size: 12)).foregroundColor(Theme.muted)
             } else if exported.isEmpty {
                 Button { openWindow(id: "reel-window", value: rec.id) } label: { Label("Polish and export", systemImage: "square.and.arrow.up") }
                     .buttonStyle(PrimaryButtonStyle())
             } else if nextToPost == nil && !exported.isEmpty {
                 Button { HomeNav.shared.open(.results) } label: { Label("Add how they did", systemImage: "chart.line.uptrend.xyaxis") }
                     .buttonStyle(PrimaryButtonStyle())
-                Text("AutoClip learns what works for your church.").font(.system(size: 12)).foregroundColor(Theme.muted)
+                Text("AutoClip learns what works for your church.").font(.ui(size: 12)).foregroundColor(Theme.muted)
             } else {
                 Button { openWindow(id: "reel-window", value: rec.id) } label: { Label("Open the clips", systemImage: "film") }
                     .buttonStyle(SecondaryButtonStyle())
@@ -155,13 +155,13 @@ struct ThisWeekCard: View {
                 }
             }
             if let e = jobs.errors[rec.id] {
-                Text(e).font(.system(size: 12)).foregroundColor(Theme.danger).lineLimit(2)
+                Text(e).font(.ui(size: 12)).foregroundColor(Theme.danger).lineLimit(2)
             }
             if !autoGraphics {
                 Button { autoGraphics = true } label: {
                     Label("Make these automatically for every sermon", systemImage: "wand.and.stars")
                 }
-                .buttonStyle(.link).font(.system(size: 12))
+                .buttonStyle(.link).font(.ui(size: 12))
                 .help("One-click Sunday: when a sermon's clips are ready, the carousel, posts and plan are made too (one more AI request per sermon). Turn off in Settings → Clips.")
             }
         }
@@ -180,16 +180,16 @@ struct ThisWeekCard: View {
                 case .todo: Image(systemName: "circle").foregroundColor(Theme.faint)
                 }
             }
-            .font(.system(size: 15)).frame(width: 18)
+            .font(.ui(size: 15)).frame(width: 18)
             VStack(alignment: .leading, spacing: 1) {
-                Text(title).font(.system(size: 12.5, weight: .semibold)).foregroundColor(Theme.ink)
-                Text(detail).font(.system(size: 11.5)).foregroundColor(Theme.muted).lineLimit(1)
+                Text(title).font(.ui(size: 12.5, weight: .semibold)).foregroundColor(Theme.ink)
+                Text(detail).font(.ui(size: 11.5)).foregroundColor(Theme.muted).lineLimit(1)
             }
         }
     }
 
     private func chip(_ text: String, icon: String, color: Color) -> some View {
-        Label(text, systemImage: icon).font(.system(size: 12, weight: .medium)).foregroundColor(color)
+        Label(text, systemImage: icon).font(.ui(size: 12, weight: .medium)).foregroundColor(color)
             .padding(.horizontal, 10).padding(.vertical, 5)
             .background(Capsule().fill(color.opacity(0.12)))
     }

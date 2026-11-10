@@ -33,13 +33,13 @@ struct PodcastTranscriptEditor: View {
             AssessCard(title: "Edit by text", subtitle: "Click a word, shift-click another to select everything between, then press Delete. Struck-out words are cut — click one to put it back.") {
                 HStack(spacing: 10) {
                     if let sel = selection, sel.upperBound < words.count {
-                        Text("\(sel.count) word\(sel.count == 1 ? "" : "s") selected").font(.system(size: 12, weight: .medium)).foregroundColor(Theme.terracottaLight)
+                        Text("\(sel.count) word\(sel.count == 1 ? "" : "s") selected").font(.ui(size: 12, weight: .medium)).foregroundColor(Theme.terracottaLight)
                         Button { cutSelection() } label: { Label("Cut", systemImage: "scissors") }.buttonStyle(PrimaryButtonStyle(compact: true))
                         Button { seek(e.editedTime(words[sel.lowerBound].startTime) - 0.5) } label: { Label("Play", systemImage: "play.fill") }
                             .buttonStyle(SecondaryButtonStyle(compact: true))
-                        Button("Clear") { selection = nil; anchor = nil }.buttonStyle(.plain).font(.system(size: 12)).foregroundColor(Theme.muted)
+                        Button("Clear") { selection = nil; anchor = nil }.buttonStyle(.plain).font(.ui(size: 12)).foregroundColor(Theme.muted)
                     } else {
-                        Text("\(cutBy.count) of \(words.count) words cut").font(.system(size: 12)).foregroundColor(Theme.muted)
+                        Text("\(cutBy.count) of \(words.count) words cut").font(.ui(size: 12)).foregroundColor(Theme.muted)
                     }
                     Spacer()
                     let manual = e.cuts.filter { $0.kind == .manual }
@@ -50,12 +50,12 @@ struct PodcastTranscriptEditor: View {
                         .buttonStyle(SecondaryButtonStyle(compact: true))
                     }
                     Toggle(isOn: $follow) { Label("Follow along", systemImage: "text.line.first.and.arrowtriangle.forward") }
-                        .toggleStyle(.switch).controlSize(.mini).font(.system(size: 12)).foregroundColor(Theme.muted)
+                        .toggleStyle(.switch).controlSize(.mini).font(.ui(size: 12)).foregroundColor(Theme.muted)
                         .help("Highlight the word being said and keep it in view while the episode plays")
                 }
                 .frame(minHeight: 26)
                 if words.isEmpty {
-                    Text("The transcript isn't ready yet.").font(.system(size: 13)).foregroundColor(Theme.muted)
+                    Text("The transcript isn't ready yet.").font(.ui(size: 13)).foregroundColor(Theme.muted)
                 } else {
                     TranscriptText(episode: e, words: words, paras: paras, cutBy: cutBy, clock: clock,
                                    selection: selection, follow: follow, seek: seek) { i, cutID in tap(i, cutID: cutID) }
@@ -175,10 +175,10 @@ private struct TranscriptText: View {
                             HStack(spacing: 6) {
                                 if let sp = p.speaker, let person = e.person(sp) {
                                     Circle().fill(PodcastStore.palette[person.id % PodcastStore.palette.count]).frame(width: 7, height: 7)
-                                    Text(person.name.uppercased()).font(.system(size: 11, weight: .semibold)).tracking(1).foregroundColor(Theme.muted)
+                                    Text(person.name.uppercased()).font(.ui(size: 11, weight: .semibold)).tracking(1).foregroundColor(Theme.muted)
                                 }
                                 Button(podcastTime(e.editedTime(p.start))) { seek(e.editedTime(p.start)) }
-                                    .buttonStyle(.plain).font(.system(size: 11.5, design: .monospaced)).foregroundColor(live ? Theme.sand : Theme.faint)
+                                    .buttonStyle(.plain).font(.ui(size: 11.5, design: .monospaced)).foregroundColor(live ? Theme.sand : Theme.faint)
                             }
                             PodcastFlow(spacing: 0, lineSpacing: 4) {
                                 ForEach(Array(p.range), id: \.self) { i in
@@ -209,7 +209,7 @@ private struct TranscriptText: View {
         let selected = selection?.contains(i) ?? false
         let color: Color = selected ? Theme.cream : current ? Theme.bg : cut ? Theme.ink.opacity(0.28) : spoken ? Theme.cream : Theme.text.opacity(0.78)
         return Text(w.word.trimmingCharacters(in: .whitespaces))
-            .font(.system(size: 14, weight: current ? .semibold : .regular))
+            .font(.ui(size: 14, weight: current ? .semibold : .regular))
             .strikethrough(cut, color: Theme.terracottaLight.opacity(0.9))
             .foregroundColor(color)
             .padding(.horizontal, 3).padding(.vertical, 1)
@@ -285,7 +285,7 @@ struct PodcastSpeakersCard: View {
                 }
                 if e.people.isEmpty && !e.separateTracks {
                     Text(e.speakerCount == 1 ? "One voice." : "Only one voice was found. If more people talk, choose how many above.")
-                        .font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.6))
+                        .font(.ui(size: 13)).foregroundColor(Theme.ink.opacity(0.6))
                 }
                 ForEach(e.people) { p in
                     HStack(spacing: 10) {
@@ -294,9 +294,9 @@ struct PodcastSpeakersCard: View {
                             store.update(id) { e in if let i = e.people.firstIndex(where: { $0.id == p.id }) { e.people[i].name = n } }
                         })).textFieldStyle(.roundedBorder).frame(width: 200)
                         let talk = e.turns.filter { $0.person == p.id }.reduce(0) { $0 + $1.end - $1.start }
-                        Text("talks \(Int(talk / max(1, e.duration) * 100))% of the time").font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.55))
+                        Text("talks \(Int(talk / max(1, e.duration) * 100))% of the time").font(.ui(size: 12)).foregroundColor(Theme.ink.opacity(0.55))
                         if let first = e.turns.first(where: { $0.person == p.id }) {
-                            Text("first at \(podcastTime(e.editedTime(first.start)))").font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
+                            Text("first at \(podcastTime(e.editedTime(first.start)))").font(.ui(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
                         }
                     }
                 }

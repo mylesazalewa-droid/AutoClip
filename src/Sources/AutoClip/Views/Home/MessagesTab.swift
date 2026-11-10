@@ -137,7 +137,7 @@ struct MessagesTab: View {
                     ForEach(reels.activeJobs.filter { !$0.isFinished }) { job in
                         HStack(spacing: 10) {
                             ProgressView().controlSize(.small)
-                            Text("\(job.title): \(job.statusMsg)").font(.system(size: 13)).foregroundColor(Theme.muted).lineLimit(1)
+                            Text("\(job.title): \(job.statusMsg)").font(.ui(size: 13)).foregroundColor(Theme.muted).lineLimit(1)
                         }
                         .padding(14).frame(maxWidth: .infinity, alignment: .leading)
                         .background(RoundedRectangle(cornerRadius: 14).fill(Theme.surface))
@@ -183,10 +183,10 @@ struct MessagesTab: View {
                     .onTapGesture { open(rec, .clips) }
                 VStack(alignment: .leading, spacing: 6) {
                     Text(rec.title).font(Theme.display(20, weight: .medium)).foregroundColor(Theme.cream).lineLimit(1)
-                    Text(meta(rec)).font(.system(size: 12)).foregroundColor(Theme.muted)
+                    Text(meta(rec)).font(.ui(size: 12)).foregroundColor(Theme.muted)
                     HStack(spacing: 8) {
                         ProgressView(value: Double(s.doneCount), total: Double(total)).tint(Theme.sand).frame(width: 140)
-                        Text("\(s.doneCount) of \(total) done").font(.system(size: 11.5, weight: .semibold)).foregroundColor(Theme.muted)
+                        Text("\(s.doneCount) of \(total) done").font(.ui(size: 11.5, weight: .semibold)).foregroundColor(Theme.muted)
                     }
                     if let n = s.next {
                         Button { act(rec, n) } label: {
@@ -196,7 +196,7 @@ struct MessagesTab: View {
                         .padding(.top, 2)
                     } else {
                         Label("Everything's made for this message", systemImage: "checkmark.circle.fill")
-                            .font(.system(size: 12.5, weight: .semibold)).foregroundColor(Theme.good)
+                            .font(.ui(size: 12.5, weight: .semibold)).foregroundColor(Theme.good)
                     }
                 }
                 Spacer(minLength: 8)
@@ -226,10 +226,10 @@ struct MessagesTab: View {
         }()
         return Button { act(rec, step) } label: {
             HStack(spacing: 8) {
-                Image(systemName: mark).font(.system(size: 13)).foregroundColor(colour)
+                Image(systemName: mark).font(.ui(size: 13)).foregroundColor(colour)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(step.title).font(.system(size: 12.5, weight: .semibold)).foregroundColor(Theme.ink).lineLimit(1)
-                    Text(s.details[step] ?? "").font(.system(size: 11)).foregroundColor(Theme.muted).lineLimit(1)
+                    Text(step.title).font(.ui(size: 12.5, weight: .semibold)).foregroundColor(Theme.ink).lineLimit(1)
+                    Text(s.details[step] ?? "").font(.ui(size: 11)).foregroundColor(Theme.muted).lineLimit(1)
                 }
                 Spacer(minLength: 0)
             }

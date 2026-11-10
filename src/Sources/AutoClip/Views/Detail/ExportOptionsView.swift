@@ -31,12 +31,12 @@ struct ExportOptionsView: View {
             // Header
             HStack {
                 Text("Export Clip")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.ui(size: 16, weight: .semibold))
                     .foregroundColor(Theme.ink)
                 Spacer()
                 Button(action: { dismiss() }) {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 18))
+                        .font(.ui(size: 18))
                         .foregroundColor(Theme.ink.opacity(0.55))
                 }
                 .buttonStyle(.plain)
@@ -65,10 +65,10 @@ struct ExportOptionsView: View {
                             Toggle(isOn: $burnCaptions) {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("Burn Captions Into Video")
-                                        .font(.system(size: 13, weight: .medium))
+                                        .font(.ui(size: 13, weight: .medium))
                                         .foregroundColor(Theme.ink)
                                     Text("Captions are permanently embedded in the exported file")
-                                        .font(.system(size: 12))
+                                        .font(.ui(size: 12))
                                         .foregroundColor(Theme.ink.opacity(0.55))
                                 }
                             }
@@ -78,7 +78,7 @@ struct ExportOptionsView: View {
                                 VStack(alignment: .leading, spacing: 10) {
                                     // Style picker
                                     Text("Caption Style")
-                                        .font(.system(size: 12, weight: .semibold))
+                                        .font(.ui(size: 12, weight: .semibold))
                                         .foregroundColor(Theme.ink.opacity(0.55))
 
                                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 6)], spacing: 6) {
@@ -121,7 +121,7 @@ struct ExportOptionsView: View {
                         ProgressView(value: exportProgress)
                             .accentColor(Theme.action)
                         Text(exportStatus)
-                            .font(.system(size: 13))
+                            .font(.ui(size: 13))
                             .foregroundColor(Theme.ink.opacity(0.55))
                     }
                 } else if exportDone {
@@ -129,13 +129,13 @@ struct ExportOptionsView: View {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundColor(Theme.good)
                         Text("Exported successfully!")
-                            .font(.system(size: 13))
+                            .font(.ui(size: 13))
                             .foregroundColor(Theme.good)
                     }
                 } else {
                     if let err = exportError {
                         Text(err)
-                            .font(.system(size: 12))
+                            .font(.ui(size: 12))
                             .foregroundColor(Theme.danger)
                             .multilineTextAlignment(.center)
                     }
@@ -143,9 +143,9 @@ struct ExportOptionsView: View {
                     Button(action: startExport) {
                         HStack(spacing: 8) {
                             Image(systemName: "arrow.down.to.line.compact")
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(.ui(size: 14, weight: .semibold))
                             Text("Export \(format.rawValue)")
-                                .font(.system(size: 15, weight: .bold))
+                                .font(.ui(size: 15, weight: .bold))
                         }
                         .foregroundColor(Theme.onSand)
                         .frame(maxWidth: .infinity)
@@ -171,7 +171,7 @@ struct ExportOptionsView: View {
     private func section<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
-                .font(.system(size: 11.5, weight: .semibold))
+                .font(.ui(size: 11.5, weight: .semibold))
                 .foregroundColor(Theme.ink.opacity(0.55))
                 .tracking(1)
             content()
@@ -187,22 +187,22 @@ struct ExportOptionsView: View {
                         .fill(selected ? gold.opacity(0.15) : Theme.ink.opacity(0.05))
                         .frame(width: 36, height: 36)
                     Image(systemName: fmt.icon)
-                        .font(.system(size: 16))
+                        .font(.ui(size: 16))
                         .foregroundColor(selected ? gold : Theme.ink.opacity(0.5))
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(fmt.rawValue)
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.ui(size: 13, weight: .medium))
                         .foregroundColor(selected ? .white : Theme.ink.opacity(0.7))
                     Text(fmt.description)
-                        .font(.system(size: 12))
+                        .font(.ui(size: 12))
                         .foregroundColor(Theme.ink.opacity(0.55))
                 }
                 Spacer()
                 if selected {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundColor(gold)
-                        .font(.system(size: 16))
+                        .font(.ui(size: 16))
                 }
             }
             .padding(.horizontal, 12)
@@ -224,7 +224,7 @@ struct ExportOptionsView: View {
             captionLook = CaptionLook(preset: style)
         }) {
             Text(style.name)
-                .font(.system(size: 12, weight: selected ? .semibold : .regular))
+                .font(.ui(size: 12, weight: selected ? .semibold : .regular))
                 .foregroundColor(selected ? .black : Theme.ink.opacity(0.6))
                 .padding(.horizontal, 8)
                 .padding(.vertical, 5)
@@ -238,10 +238,10 @@ struct ExportOptionsView: View {
     private func infoItem(label: String, value: String) -> some View {
         VStack(spacing: 3) {
             Text(value)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.ui(size: 15, weight: .semibold))
                 .foregroundColor(Theme.ink)
             Text(label)
-                .font(.system(size: 11.5))
+                .font(.ui(size: 11.5))
                 .foregroundColor(Theme.ink.opacity(0.55))
         }
         .frame(maxWidth: .infinity)

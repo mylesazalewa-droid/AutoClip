@@ -57,11 +57,11 @@ struct DeliveryOverviewCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             HStack(alignment: .top, spacing: 10) {
-                Image(systemName: "mic").font(.system(size: 15)).foregroundColor(Theme.sand).padding(.top, 4)
+                Image(systemName: "mic").font(.ui(size: 15)).foregroundColor(Theme.sand).padding(.top, 4)
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Delivery Analysis").font(Theme.display(22)).foregroundColor(Theme.cream)
                     Text("\(report.title) · Analyzed \(report.analyzedAt.formatted(.relative(presentation: .named)))")
-                        .font(.system(size: 12)).foregroundColor(Theme.muted).lineLimit(1)
+                        .font(.ui(size: 12)).foregroundColor(Theme.muted).lineLimit(1)
                 }
             }
 
@@ -76,20 +76,20 @@ struct DeliveryOverviewCard: View {
             } else {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
-                    Text(status ?? "Measuring your delivery…").font(.system(size: 13)).foregroundColor(Theme.muted)
+                    Text(status ?? "Measuring your delivery…").font(.ui(size: 13)).foregroundColor(Theme.muted)
                 }
             }
 
             Rectangle().fill(Theme.line).frame(height: 1)
 
             VStack(alignment: .leading, spacing: 10) {
-                Text("FILLER WORDS").font(.system(size: 11, weight: .semibold)).tracking(1.4).foregroundColor(Theme.muted)
+                Text("FILLER WORDS").font(.ui(size: 11, weight: .semibold)).tracking(1.4).foregroundColor(Theme.muted)
                 if rows.isEmpty {
-                    Text("None found.").font(.system(size: 13)).foregroundColor(Theme.good)
+                    Text("None found.").font(.ui(size: 13)).foregroundColor(Theme.good)
                 }
                 ForEach(rows.prefix(Self.maxRows), id: \.kind) { row in fillerRow(row.kind, row.marks) }
                 if rows.count > Self.maxRows {
-                    Text("+\(rows.count - Self.maxRows) more").font(.system(size: 11.5)).foregroundColor(Theme.faint)
+                    Text("+\(rows.count - Self.maxRows) more").font(.ui(size: 11.5)).foregroundColor(Theme.faint)
                 }
             }
         }
@@ -126,7 +126,7 @@ struct ScoreRing: View {
             VStack(alignment: .leading, spacing: 5) {
                 Text(title).font(Theme.display(15)).foregroundColor(Theme.cream).lineLimit(1)
                 Text(value == nil ? "Not readable" : strong ? "Strong" : (value ?? 0) >= 55 ? "Suggestions" : "Focus here")
-                    .font(.system(size: 11.5, weight: .medium)).foregroundColor(color)
+                    .font(.ui(size: 11.5, weight: .medium)).foregroundColor(color)
                     .padding(.horizontal, 8).padding(.vertical, 3)
                     .background(Capsule().fill(color.opacity(0.14)))
             }
@@ -146,7 +146,7 @@ struct TimelineDotRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Text("\(marks.count)").font(.system(size: 11.5, weight: .bold)).foregroundColor(marks.isEmpty ? Theme.muted : Theme.bg).monospacedDigit()
+            Text("\(marks.count)").font(.ui(size: 11.5, weight: .bold)).foregroundColor(marks.isEmpty ? Theme.muted : Theme.bg).monospacedDigit()
                 .frame(minWidth: 32).padding(.vertical, 3)
                 .background(Capsule().fill(marks.isEmpty ? Theme.raised2 : Theme.sandDeep))
             Text(label).font(italic ? Theme.display(13).italic() : Theme.display(13)).foregroundColor(Theme.text)

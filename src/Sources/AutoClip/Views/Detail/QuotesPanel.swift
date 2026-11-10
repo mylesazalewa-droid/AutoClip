@@ -40,13 +40,13 @@ struct QuotesPanel: View {
             if quotes.isEmpty {
                 VStack(spacing: 10) {
                     Image(systemName: "text.quote")
-                        .font(.system(size: 32))
+                        .font(.ui(size: 32))
                         .foregroundColor(Theme.ink.opacity(0.55))
                     Text("No quotes found")
-                        .font(.system(size: 13))
+                        .font(.ui(size: 13))
                         .foregroundColor(Theme.ink.opacity(0.55))
                     Text("Add a transcript to generate quotes")
-                        .font(.system(size: 12))
+                        .font(.ui(size: 12))
                         .foregroundColor(Theme.ink.opacity(0.55))
                 }
                 .frame(maxWidth: .infinity)
@@ -55,11 +55,11 @@ struct QuotesPanel: View {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {
                         Text("\(quotes.count) high-impact quotes")
-                            .font(.system(size: 12))
+                            .font(.ui(size: 12))
                             .foregroundColor(Theme.ink.opacity(0.55))
                         Spacer()
                         Text("Tap to seek")
-                            .font(.system(size: 11.5))
+                            .font(.ui(size: 11.5))
                             .foregroundColor(Theme.ink.opacity(0.55))
                     }
                     .padding(.horizontal, 14)
@@ -212,7 +212,7 @@ struct QuoteCard: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Label(quote.type.rawValue, systemImage: quote.type.icon)
-                    .font(.system(size: 11.5, weight: .semibold))
+                    .font(.ui(size: 11.5, weight: .semibold))
                     .foregroundColor(gold.opacity(0.8))
 
                 Spacer()
@@ -222,9 +222,9 @@ struct QuoteCard: View {
                     Button(action: { seek(quote.startTime) }) {
                         HStack(spacing: 3) {
                             Image(systemName: "arrow.forward.circle")
-                                .font(.system(size: 12))
+                                .font(.ui(size: 12))
                             Text(formatTime(quote.startTime))
-                                .font(.system(size: 11.5, weight: .medium))
+                                .font(.ui(size: 11.5, weight: .medium))
                         }
                         .foregroundColor(Theme.ink.opacity(0.55))
                         .padding(.horizontal, 7)
@@ -237,7 +237,7 @@ struct QuoteCard: View {
             }
 
             Text(quote.text)
-                .font(.system(size: 13, weight: .medium))
+                .font(.ui(size: 13, weight: .medium))
                 .foregroundColor(Theme.ink)
                 .lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)
@@ -247,9 +247,9 @@ struct QuoteCard: View {
                 Button(action: copyQuote) {
                     HStack(spacing: 4) {
                         Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                            .font(.system(size: 11.5))
+                            .font(.ui(size: 11.5))
                         Text(copied ? "Copied!" : "Copy")
-                            .font(.system(size: 12))
+                            .font(.ui(size: 12))
                     }
                     .foregroundColor(copied ? Theme.good : Theme.ink.opacity(0.45))
                     .padding(.horizontal, 8)

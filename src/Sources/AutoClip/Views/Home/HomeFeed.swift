@@ -179,7 +179,7 @@ struct HomeFeed: View {
 
     private func arrow(_ icon: String, _ go: @escaping () -> Void) -> some View {
         Button { withAnimation(.easeInOut(duration: 0.4)) { go() } } label: {
-            Image(systemName: icon).font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.cream)
+            Image(systemName: icon).font(.ui(size: 14, weight: .semibold)).foregroundColor(Theme.cream)
                 .frame(width: 34, height: 34).background(Circle().fill(Color.black.opacity(0.45)))
                 .overlay(Circle().stroke(Theme.ink.opacity(0.12), lineWidth: 1))
         }
@@ -192,7 +192,7 @@ struct HomeFeed: View {
             VStack(alignment: .leading, spacing: 12) {
                 DisplayTitle(text: "Welcome to AutoClip", size: 30)
                 Text("Turn a sermon into clips, make a podcast, or get feedback on your delivery.")
-                    .font(.system(size: 14)).foregroundColor(Theme.text.opacity(0.8))
+                    .font(.ui(size: 14)).foregroundColor(Theme.text.opacity(0.8))
                 HStack(spacing: 10) {
                     Button { HomeNav.shared.open(.autoReels) } label: { Label("Make clips", systemImage: "play.rectangle.on.rectangle.fill") }
                         .buttonStyle(PrimaryButtonStyle())
@@ -230,12 +230,12 @@ struct HomeFeed: View {
     private func rowTitle(_ title: String, count: Int?, action: (String, () -> Void)?) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(title).font(Theme.display(22, weight: .medium)).foregroundColor(Theme.cream)
-            if let count { Text("\(count)").font(.system(size: 13, weight: .medium)).foregroundColor(Theme.faint) }
+            if let count { Text("\(count)").font(.ui(size: 13, weight: .medium)).foregroundColor(Theme.faint) }
             Spacer()
             if let action {
                 Button(action: action.1) {
-                    HStack(spacing: 4) { Text(action.0); Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)) }
-                        .font(.system(size: 13, weight: .medium)).foregroundColor(Theme.sand)
+                    HStack(spacing: 4) { Text(action.0); Image(systemName: "chevron.right").font(.ui(size: 11, weight: .semibold)) }
+                        .font(.ui(size: 13, weight: .medium)).foregroundColor(Theme.sand)
                 }
                 .buttonStyle(.plain)
             }
@@ -274,12 +274,12 @@ struct PosterCard: View {
                 ScrubThumb(draft: draft, path: path, faceAspect: 200 / 340).frame(width: 200, height: 340).clipped()
                 LinearGradient(colors: [.clear, .clear, .black.opacity(0.9)], startPoint: .top, endPoint: .bottom)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(title).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.ink).lineLimit(2)
-                    Text(meta).font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.7)).lineLimit(1)
+                    Text(title).font(.ui(size: 13, weight: .semibold)).foregroundColor(Theme.ink).lineLimit(2)
+                    Text(meta).font(.ui(size: 12)).foregroundColor(Theme.ink.opacity(0.7)).lineLimit(1)
                 }
                 .padding(12)
                 if let badge {
-                    Text(badge).font(.system(size: 11, weight: .semibold)).foregroundColor(Theme.cream)
+                    Text(badge).font(.ui(size: 11, weight: .semibold)).foregroundColor(Theme.cream)
                         .padding(.horizontal, 7).padding(.vertical, 3).background(Capsule().fill(Color.black.opacity(0.6)))
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).padding(10)
                 }
@@ -298,7 +298,7 @@ struct PosterCard: View {
     }
 
     private var playBadge: some View {
-        Image(systemName: "play.fill").font(.system(size: 18)).foregroundColor(Theme.onSand)
+        Image(systemName: "play.fill").font(.ui(size: 18)).foregroundColor(Theme.onSand)
             .frame(width: 48, height: 48).background(Circle().fill(Theme.ink.opacity(0.92)))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -321,12 +321,12 @@ struct WideCard: View {
                 if let path { ReelThumbnailView(path: path).frame(width: 340, height: 192).clipped() }
                 else {
                     LinearGradient(colors: [Theme.navy, Theme.charcoal], startPoint: .topLeading, endPoint: .bottomTrailing)
-                        .overlay(Image(systemName: icon).font(.system(size: 40)).foregroundColor(Theme.sand.opacity(0.5)))
+                        .overlay(Image(systemName: icon).font(.ui(size: 40)).foregroundColor(Theme.sand.opacity(0.5)))
                 }
                 LinearGradient(colors: [.clear, .clear, .black.opacity(0.88)], startPoint: .top, endPoint: .bottom)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(title).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.ink).lineLimit(1)
-                    Text(meta).font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.7)).lineLimit(1)
+                    Text(title).font(.ui(size: 13, weight: .semibold)).foregroundColor(Theme.ink).lineLimit(1)
+                    Text(meta).font(.ui(size: 12)).foregroundColor(Theme.ink.opacity(0.7)).lineLimit(1)
                 }
                 .padding(.horizontal, 12).padding(.bottom, progress == nil ? 11 : 15)
                 if let progress {
@@ -339,7 +339,7 @@ struct WideCard: View {
                     .frame(height: 3)
                 }
                 if hover {
-                    Image(systemName: "play.fill").font(.system(size: 16)).foregroundColor(Theme.onSand)
+                    Image(systemName: "play.fill").font(.ui(size: 16)).foregroundColor(Theme.onSand)
                         .frame(width: 44, height: 44).background(Circle().fill(Theme.ink.opacity(0.92)))
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
@@ -369,15 +369,15 @@ struct StartTile: View {
     var body: some View {
         Button(action: open) {
             HStack(spacing: 14) {
-                Image(systemName: icon).font(.system(size: 18)).foregroundColor(Theme.onColor)
+                Image(systemName: icon).font(.ui(size: 18)).foregroundColor(Theme.onColor)
                     .frame(width: 46, height: 46)
                     .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(color))
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title).font(Theme.display(17, weight: .medium)).foregroundColor(Theme.cream)
-                    Text(subtitle).font(.system(size: 13)).foregroundColor(Theme.muted)
+                    Text(subtitle).font(.ui(size: 13)).foregroundColor(Theme.muted)
                 }
                 Spacer()
-                Image(systemName: "arrow.right").font(.system(size: 13, weight: .medium)).foregroundColor(hover ? Theme.sand : Theme.faint)
+                Image(systemName: "arrow.right").font(.ui(size: 13, weight: .medium)).foregroundColor(hover ? Theme.sand : Theme.faint)
             }
             .padding(.horizontal, 16)
             .frame(height: 84).frame(maxWidth: .infinity)

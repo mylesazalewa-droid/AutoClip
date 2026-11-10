@@ -26,7 +26,7 @@ struct ScoreBadge: View {
                 .rotationEffect(.degrees(-90))
 
             Text("\(Int(score))")
-                .font(.system(size: size * 0.33, weight: .bold, design: .rounded))
+                .font(.ui(size: size * 0.33, weight: .bold, design: .rounded))
                 .foregroundColor(color)
         }
     }
@@ -39,9 +39,9 @@ struct TagBadge: View {
     var body: some View {
         HStack(spacing: 3) {
             Image(systemName: "flame.fill")
-                .font(.system(size: 11)).foregroundColor(color)
+                .font(.ui(size: 11)).foregroundColor(color)
             Text(text)
-                .font(.system(size: 12, weight: .semibold))
+                .font(.ui(size: 12, weight: .semibold))
                 .foregroundColor(color)
         }
         .padding(.horizontal, 7)
@@ -60,7 +60,7 @@ struct StarRatingView: View {
         HStack(spacing: 2) {
             ForEach(1...5, id: \.self) { star in
                 Image(systemName: star <= rating ? "star.fill" : "star")
-                    .font(.system(size: 11.5))
+                    .font(.ui(size: 11.5))
                     .foregroundColor(star <= rating ? Theme.sand : Theme.ink.opacity(0.3))
                     .onTapGesture {
                         if interactive { onRate?(star) }

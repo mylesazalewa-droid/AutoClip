@@ -84,12 +84,12 @@ struct ProjectDetailView: View {
                 VStack(spacing: 0) {
                     HStack {
                         Text("Best Quotes")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.ui(size: 14, weight: .semibold))
                             .foregroundColor(Theme.ink)
                         Spacer()
                         Button(action: { showProjectQuotes = false }) {
                             Image(systemName: "xmark")
-                                .font(.system(size: 13))
+                                .font(.ui(size: 13))
                                 .foregroundColor(Theme.ink.opacity(0.55))
                         }
                         .buttonStyle(.plain)
@@ -129,7 +129,7 @@ struct ProjectDetailView: View {
                     appState.selectedClip = nil
                 }) {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.ui(size: 13, weight: .semibold))
                         .foregroundColor(Theme.ink.opacity(0.7))
                 }
                 .buttonStyle(.plain)
@@ -144,13 +144,13 @@ struct ProjectDetailView: View {
                         isEditingTitle = false
                     })
                     .textFieldStyle(.plain)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.ui(size: 14, weight: .semibold))
                     .foregroundColor(Theme.ink)
                     .frame(maxWidth: 240)
                     .onAppear { editTitle = project.title }
                 } else {
                     Text(project.title)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.ui(size: 14, weight: .semibold))
                         .foregroundColor(Theme.ink)
                         .lineLimit(1)
                 }
@@ -160,7 +160,7 @@ struct ProjectDetailView: View {
                     isEditingTitle = true
                 }) {
                     Image(systemName: "pencil")
-                        .font(.system(size: 12))
+                        .font(.ui(size: 12))
                         .foregroundColor(Theme.ink.opacity(0.55))
                 }
                 .buttonStyle(.plain)
@@ -170,11 +170,11 @@ struct ProjectDetailView: View {
                 // Search
                 HStack(spacing: 5) {
                     Image(systemName: "magnifyingglass")
-                        .font(.system(size: 12))
+                        .font(.ui(size: 12))
                         .foregroundColor(Theme.ink.opacity(0.55))
                     TextField("Find keywords or moments...", text: $searchText)
                         .textFieldStyle(.plain)
-                        .font(.system(size: 13))
+                        .font(.ui(size: 13))
                         .foregroundColor(Theme.ink)
                 }
                 .padding(.horizontal, 10)
@@ -184,7 +184,7 @@ struct ProjectDetailView: View {
                 .frame(maxWidth: 240)
 
                 Text("⌘K")
-                    .font(.system(size: 11.5))
+                    .font(.ui(size: 11.5))
                     .foregroundColor(Theme.ink.opacity(0.55))
 
                 Spacer()
@@ -197,11 +197,11 @@ struct ProjectDetailView: View {
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.up.arrow.down")
-                            .font(.system(size: 11.5))
+                            .font(.ui(size: 11.5))
                         Text(sortOrder.rawValue)
-                            .font(.system(size: 13))
+                            .font(.ui(size: 13))
                         Image(systemName: "chevron.down")
-                            .font(.system(size: 11))
+                            .font(.ui(size: 11))
                     }
                     .foregroundColor(Theme.ink.opacity(0.7))
                     .padding(.horizontal, 8)
@@ -215,9 +215,9 @@ struct ProjectDetailView: View {
                 Button(action: { showProjectQuotes.toggle() }) {
                     HStack(spacing: 5) {
                         Image(systemName: "star.fill")
-                            .font(.system(size: 12))
+                            .font(.ui(size: 12))
                         Text("Best Quotes")
-                            .font(.system(size: 13))
+                            .font(.ui(size: 13))
                     }
                     .foregroundColor(showProjectQuotes ? Theme.sand : Theme.ink.opacity(0.7))
                     .padding(.horizontal, 8)
@@ -231,9 +231,9 @@ struct ProjectDetailView: View {
                 Button(action: { showHistory = true }) {
                     HStack(spacing: 5) {
                         Image(systemName: "clock.arrow.circlepath")
-                            .font(.system(size: 12))
+                            .font(.ui(size: 12))
                         Text("History")
-                            .font(.system(size: 13))
+                            .font(.ui(size: 13))
                     }
                     .foregroundColor(Theme.ink.opacity(0.7))
                     .padding(.horizontal, 8)
@@ -247,9 +247,9 @@ struct ProjectDetailView: View {
                 Button(action: { showAutoReel = true }) {
                     HStack(spacing: 5) {
                         Image(systemName: "play.rectangle.on.rectangle.fill")
-                            .font(.system(size: 12))
+                            .font(.ui(size: 12))
                         Text("Auto Clip")
-                            .font(.system(size: 13, weight: .medium))
+                            .font(.ui(size: 13, weight: .medium))
                     }
                     .foregroundColor(Theme.onSand)
                     .padding(.horizontal, 8)
@@ -264,9 +264,9 @@ struct ProjectDetailView: View {
                 Button(action: { appState.reanalyzeProject(project) }) {
                     HStack(spacing: 5) {
                         Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 12))
+                            .font(.ui(size: 12))
                         Text("Reanalyze")
-                            .font(.system(size: 13))
+                            .font(.ui(size: 13))
                     }
                     .foregroundColor(Theme.ink.opacity(0.7))
                     .padding(.horizontal, 8)
@@ -294,20 +294,20 @@ struct ProjectDetailView: View {
                 Spacer()
 
                 Text("\(filteredClips.count) clips")
-                    .font(.system(size: 12))
+                    .font(.ui(size: 12))
                     .foregroundColor(Theme.ink.opacity(0.55))
                 Text("\(avgScore) avg score")
-                    .font(.system(size: 12))
+                    .font(.ui(size: 12))
                     .foregroundColor(Theme.ink.opacity(0.55))
                 Text("\(likedCount) liked")
-                    .font(.system(size: 12))
+                    .font(.ui(size: 12))
                     .foregroundColor(Theme.ink.opacity(0.55))
 
                 // View toggle
                 HStack(spacing: 0) {
                     Button(action: { isGridView = true }) {
                         Image(systemName: "square.grid.2x2")
-                            .font(.system(size: 13))
+                            .font(.ui(size: 13))
                             .foregroundColor(isGridView ? .white : Theme.ink.opacity(0.3))
                             .padding(6)
                             .background(isGridView ? Theme.ink.opacity(0.12) : Color.clear)
@@ -317,7 +317,7 @@ struct ProjectDetailView: View {
 
                     Button(action: { isGridView = false }) {
                         Image(systemName: "list.bullet")
-                            .font(.system(size: 13))
+                            .font(.ui(size: 13))
                             .foregroundColor(!isGridView ? .white : Theme.ink.opacity(0.3))
                             .padding(6)
                             .background(!isGridView ? Theme.ink.opacity(0.12) : Color.clear)
@@ -377,14 +377,14 @@ struct ProjectDetailView: View {
     func statItem(icon: String, value: String, label: String) -> some View {
         HStack(spacing: 4) {
             Image(systemName: icon)
-                .font(.system(size: 11.5))
+                .font(.ui(size: 11.5))
                 .foregroundColor(Theme.ink.opacity(0.55))
             VStack(alignment: .leading, spacing: 0) {
                 Text(value)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.ui(size: 13, weight: .semibold))
                     .foregroundColor(Theme.ink)
                 Text(label)
-                    .font(.system(size: 11.5))
+                    .font(.ui(size: 11.5))
                     .foregroundColor(Theme.ink.opacity(0.55))
             }
         }
@@ -407,10 +407,10 @@ struct ProjectDetailView: View {
             HStack(spacing: 4) {
                 if filter == .trending {
                     Image(systemName: "flame.fill")
-                        .font(.system(size: 11))
+                        .font(.ui(size: 11))
                 }
                 Text(label)
-                    .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+                    .font(.ui(size: 13, weight: isSelected ? .semibold : .regular))
             }
             .foregroundColor(isSelected ? Theme.sand : Theme.ink.opacity(0.5))
             .padding(.horizontal, 10)
@@ -471,7 +471,7 @@ struct ProjectDetailView: View {
                 .accentColor(Theme.sand)
                 .padding(.horizontal, 60)
             Text(appState.analyzeStatus)
-                .font(.system(size: 13))
+                .font(.ui(size: 13))
                 .foregroundColor(Theme.ink.opacity(0.6))
             Spacer()
         }
@@ -481,13 +481,13 @@ struct ProjectDetailView: View {
         VStack(spacing: 12) {
             Spacer()
             Image(systemName: "waveform.slash")
-                .font(.system(size: 40))
+                .font(.ui(size: 40))
                 .foregroundColor(Theme.ink.opacity(0.55))
             Text("No clips found")
-                .font(.system(size: 16, weight: .semibold))
+                .font(.ui(size: 16, weight: .semibold))
                 .foregroundColor(Theme.ink.opacity(0.55))
             Text("Try a different filter or reanalyze the video")
-                .font(.system(size: 13))
+                .font(.ui(size: 13))
                 .foregroundColor(Theme.ink.opacity(0.55))
             Spacer()
         }
@@ -502,16 +502,16 @@ struct ExportHistoryView: View {
         VStack(spacing: 0) {
             HStack {
                 Text("Export History")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.ui(size: 16, weight: .semibold))
                     .foregroundColor(Theme.ink)
                 Text("\(library.exportHistory.count) exports")
-                    .font(.system(size: 13))
+                    .font(.ui(size: 13))
                     .foregroundColor(Theme.ink.opacity(0.55))
                     .padding(.leading, 8)
                 Spacer()
                 Button("Done") { dismiss() }
                     .buttonStyle(.plain)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.ui(size: 13, weight: .medium))
                     .foregroundColor(Theme.ink.opacity(0.7))
             }
             .padding(.horizontal, 20)
@@ -523,13 +523,13 @@ struct ExportHistoryView: View {
                 VStack(spacing: 12) {
                     Spacer()
                     Image(systemName: "clock.arrow.circlepath")
-                        .font(.system(size: 44))
+                        .font(.ui(size: 44))
                         .foregroundColor(Theme.ink.opacity(0.55))
                     Text("No exports yet")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.ui(size: 16, weight: .semibold))
                         .foregroundColor(Theme.ink.opacity(0.55))
                     Text("Exported clips will appear here")
-                        .font(.system(size: 13))
+                        .font(.ui(size: 13))
                         .foregroundColor(Theme.ink.opacity(0.55))
                     Spacer()
                 }
@@ -540,15 +540,15 @@ struct ExportHistoryView: View {
                             HStack {
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(record.clipTitle)
-                                        .font(.system(size: 13, weight: .medium))
+                                        .font(.ui(size: 13, weight: .medium))
                                         .foregroundColor(Theme.ink)
                                     Text(record.format)
-                                        .font(.system(size: 12))
+                                        .font(.ui(size: 12))
                                         .foregroundColor(Theme.ink.opacity(0.55))
                                 }
                                 Spacer()
                                 Text(record.exportDate, style: .relative)
-                                    .font(.system(size: 12))
+                                    .font(.ui(size: 12))
                                     .foregroundColor(Theme.ink.opacity(0.55))
                             }
                             .padding(.horizontal, 20)

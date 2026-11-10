@@ -141,7 +141,7 @@ struct CarouselWindow: View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Social graphics").font(Theme.display(20, weight: .medium)).foregroundColor(Theme.cream)
-                Text(record?.title ?? "").font(.system(size: 12)).foregroundColor(Theme.muted).lineLimit(1)
+                Text(record?.title ?? "").font(.ui(size: 12)).foregroundColor(Theme.muted).lineLimit(1)
             }
             if let c = carousel {
                 Picker("", selection: $mode) {
@@ -153,7 +153,7 @@ struct CarouselWindow: View {
             Spacer()
             if let status {
                 ProgressView().controlSize(.small)
-                Text(status).font(.system(size: 12)).foregroundColor(Theme.muted).lineLimit(1)
+                Text(status).font(.ui(size: 12)).foregroundColor(Theme.muted).lineLimit(1)
             }
             if let saved {
                 Button { NSWorkspace.shared.activateFileViewerSelecting([saved]) } label: {
@@ -164,7 +164,7 @@ struct CarouselWindow: View {
                 if isPosts {
                     Button { jobs.makePosts(record!) } label: { Label("Write more posts", systemImage: "sparkles") }
                         .buttonStyle(SecondaryButtonStyle(compact: true)).disabled(status != nil || record == nil)
-                        .help("AI writes another set of posts from this sermon (one AI request)")
+                        .help("AI writes another set of posts from this sermon (uses \(AICost.phrase()))")
                 } else {
                     Button { confirmRewrite = true } label: { Label("Rewrite with AI", systemImage: "sparkles") }
                         .buttonStyle(SecondaryButtonStyle(compact: true)).disabled(status != nil)
@@ -188,18 +188,18 @@ struct CarouselWindow: View {
             fan
             Text("The whole message in one swipe").font(Theme.display(26, weight: .medium)).foregroundColor(Theme.cream)
             Text("AI reads the full sermon and writes a carousel (a cover, the question it answers, the big idea, the main points, the key Scripture, a quote, a question for the week and a closing slide) plus a week of single posts. Then design them your way and save them for Instagram.")
-                .font(.system(size: 13)).foregroundColor(Theme.muted).multilineTextAlignment(.center).frame(maxWidth: 540)
+                .font(.ui(size: 13)).foregroundColor(Theme.muted).multilineTextAlignment(.center).frame(maxWidth: 540)
             if let status {
-                HStack(spacing: 8) { ProgressView().controlSize(.small); Text(status).font(.system(size: 13)).foregroundColor(Theme.muted) }
+                HStack(spacing: 8) { ProgressView().controlSize(.small); Text(status).font(.ui(size: 13)).foregroundColor(Theme.muted) }
                 Text("You can close this window. It keeps going and shows up in Social Graphics.")
-                    .font(.system(size: 11.5)).foregroundColor(Theme.faint)
+                    .font(.ui(size: 11.5)).foregroundColor(Theme.faint)
             } else {
                 Button { make() } label: { Label("Make the graphics", systemImage: "sparkles") }
                     .buttonStyle(PrimaryButtonStyle()).disabled(record == nil)
-                Text("Uses one AI request.").font(.system(size: 11.5)).foregroundColor(Theme.faint)
+                Text("Uses \(AICost.phrase()).").font(.ui(size: 11.5)).foregroundColor(Theme.faint)
             }
             if let error {
-                Text(error).font(.system(size: 12)).foregroundColor(Theme.danger).multilineTextAlignment(.center).frame(maxWidth: 460)
+                Text(error).font(.ui(size: 12)).foregroundColor(Theme.danger).multilineTextAlignment(.center).frame(maxWidth: 460)
             }
             Spacer()
         }
@@ -212,15 +212,15 @@ struct CarouselWindow: View {
             fan
             Text("A week of posts from this sermon").font(Theme.display(24, weight: .medium)).foregroundColor(Theme.cream)
             Text("Quotes, Scripture, a question for the comments, encouragement and an invite for Sunday. Each one in its own look.")
-                .font(.system(size: 13)).foregroundColor(Theme.muted).multilineTextAlignment(.center).frame(maxWidth: 480)
+                .font(.ui(size: 13)).foregroundColor(Theme.muted).multilineTextAlignment(.center).frame(maxWidth: 480)
             if let status {
-                HStack(spacing: 8) { ProgressView().controlSize(.small); Text(status).font(.system(size: 13)).foregroundColor(Theme.muted) }
+                HStack(spacing: 8) { ProgressView().controlSize(.small); Text(status).font(.ui(size: 13)).foregroundColor(Theme.muted) }
             } else {
                 Button { if let r = record { jobs.makePosts(r) } } label: { Label("Write the posts", systemImage: "sparkles") }
                     .buttonStyle(PrimaryButtonStyle()).disabled(record == nil)
-                Text("Uses one AI request.").font(.system(size: 11.5)).foregroundColor(Theme.faint)
+                Text("Uses \(AICost.phrase()).").font(.ui(size: 11.5)).foregroundColor(Theme.faint)
             }
-            if let error { Text(error).font(.system(size: 12)).foregroundColor(Theme.danger) }
+            if let error { Text(error).font(.ui(size: 12)).foregroundColor(Theme.danger) }
             Spacer()
         }
         .frame(maxWidth: .infinity)
@@ -262,7 +262,7 @@ struct CarouselWindow: View {
         .overlay(alignment: .bottom) { if editingField != nil { inlineEditor.padding(.bottom, 16) } }
         .overlay(alignment: .topLeading) {
             Text("Click words to edit them · drag the words up or down · drag stickers to move them")
-                .font(.system(size: 11.5)).foregroundColor(Theme.faint).padding(10)
+                .font(.ui(size: 11.5)).foregroundColor(Theme.faint).padding(10)
         }
     }
 
@@ -308,18 +308,18 @@ struct CarouselWindow: View {
             }
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text(label.uppercased()).font(.system(size: 10.5, weight: .semibold)).tracking(1).foregroundColor(Theme.faint)
+                    Text(label.uppercased()).font(.ui(size: 10.5, weight: .semibold)).tracking(1).foregroundColor(Theme.faint)
                     Spacer()
                     Button("Done") { editingField = nil }.buttonStyle(.link).keyboardShortcut(.defaultAction)
                 }
                 TextField(label, text: itemBinding(kp), axis: .vertical)
-                    .textFieldStyle(.plain).font(.system(size: 15)).foregroundColor(Theme.ink)
+                    .textFieldStyle(.plain).font(.ui(size: 15)).foregroundColor(Theme.ink)
                     .lineLimit(1...5).focused($editorFocus)
                 if f == .headline {
                     HStack(spacing: 6) {
-                        Image(systemName: "highlighter").foregroundColor(Theme.sand).font(.system(size: 12))
+                        Image(systemName: "highlighter").foregroundColor(Theme.sand).font(.ui(size: 12))
                         TextField("Words to highlight", text: itemBinding(\.emphasis))
-                            .textFieldStyle(.plain).font(.system(size: 13)).foregroundColor(Theme.text)
+                            .textFieldStyle(.plain).font(.ui(size: 13)).foregroundColor(Theme.text)
                     }
                 }
             }
@@ -333,7 +333,7 @@ struct CarouselWindow: View {
 
     private func arrow(_ icon: String, enabled: Bool, _ go: @escaping () -> Void) -> some View {
         Button(action: go) {
-            Image(systemName: icon).font(.system(size: 18, weight: .semibold)).frame(width: 40, height: 40)
+            Image(systemName: icon).font(.ui(size: 18, weight: .semibold)).frame(width: 40, height: 40)
                 .background(Circle().fill(Theme.raised))
         }
         .buttonStyle(.plain).foregroundColor(Theme.ink).opacity(enabled ? 1 : 0.25).disabled(!enabled)
@@ -350,7 +350,7 @@ struct CarouselWindow: View {
         let i = min(selected, list.count - 1)
         return VStack(spacing: 0) {
             HStack(spacing: 8) {
-                Text("Drag to reorder").font(.system(size: 11.5)).foregroundColor(Theme.faint)
+                Text("Drag to reorder").font(.ui(size: 11.5)).foregroundColor(Theme.faint)
                 Spacer()
                 Button { move(i, by: -1) } label: { Label("Earlier", systemImage: "arrow.left") }.disabled(i == 0)
                 Button { move(i, by: 1) } label: { Label("Later", systemImage: "arrow.right") }.disabled(i >= list.count - 1)
@@ -386,14 +386,14 @@ struct CarouselWindow: View {
             .overlay(alignment: .topTrailing) {
                 if hovered == slide.id && count > minCount {
                     Button { delete(idx) } label: {
-                        Image(systemName: "xmark").font(.system(size: 9, weight: .bold)).foregroundColor(.white)
+                        Image(systemName: "xmark").font(.ui(size: 9, weight: .bold)).foregroundColor(.white)
                             .frame(width: 18, height: 18).background(Circle().fill(Color.black.opacity(0.75)))
                     }
                     .buttonStyle(.plain).padding(4).help("Delete this \(noun)")
                 }
             }
             .overlay(alignment: .bottomLeading) {
-                Text("\(idx + 1)").font(.system(size: 10, weight: .bold)).foregroundColor(.white)
+                Text("\(idx + 1)").font(.ui(size: 10, weight: .bold)).foregroundColor(.white)
                     .padding(.horizontal, 5).padding(.vertical, 1)
                     .background(Capsule().fill(Color.black.opacity(0.6))).padding(4)
             }
@@ -460,7 +460,7 @@ struct CarouselWindow: View {
                             Button { setStyle(st) } label: {
                                 VStack(spacing: 5) {
                                     styleSwatch(st, l)
-                                    Text(st.label).font(.system(size: 11.5, weight: l.style == st ? .semibold : .regular))
+                                    Text(st.label).font(.ui(size: 11.5, weight: l.style == st ? .semibold : .regular))
                                         .foregroundColor(l.style == st ? Theme.ink : Theme.muted)
                                 }
                             }.buttonStyle(.plain)
@@ -478,18 +478,18 @@ struct CarouselWindow: View {
                             .labelsHidden().help("Your church's colour")
                     }
                     HStack {
-                        Text("Type").font(.system(size: 11.5)).foregroundColor(Theme.muted)
+                        Text("Type").font(.ui(size: 11.5)).foregroundColor(Theme.muted)
                         Picker("", selection: Binding(get: { l.font ?? .auto }, set: { setFont($0) })) {
                             ForEach(SermonCarousel.TypeChoice.allCases) { Text($0.label).tag($0) }
                         }.labelsHidden()
                     }
                     if isPosts {
                         Button { applyLookToAllPosts() } label: { Label("Use this look for every post", systemImage: "square.on.square") }
-                            .buttonStyle(.link).font(.system(size: 12))
+                            .buttonStyle(.link).font(.ui(size: 12))
                     }
                     if let b = BrandKit.load() {
                         Button { useBrand(b) } label: { Label("Use our brand colour and type", systemImage: "paintpalette") }
-                            .buttonStyle(.link).font(.system(size: 12))
+                            .buttonStyle(.link).font(.ui(size: 12))
                             .help("From the Brand kit page")
                     }
                 }
@@ -508,7 +508,7 @@ struct CarouselWindow: View {
                             Label(savedDefault ? "Saved as your default" : "Use this design for new carousels",
                                   systemImage: savedDefault ? "checkmark" : "star")
                         }
-                        .buttonStyle(.link).font(.system(size: 12))
+                        .buttonStyle(.link).font(.ui(size: 12))
                         .help("New carousels start with this style, colour, type, size and church name")
                     }
                 }
@@ -523,7 +523,7 @@ struct CarouselWindow: View {
                                 Button("Replace…") { pickArt() }.buttonStyle(.link)
                                 Button("Remove") { carousel?.artPath = nil }.buttonStyle(.link).foregroundColor(Theme.danger)
                             }
-                            .font(.system(size: 12))
+                            .font(.ui(size: 12))
                         }
                         Picker("", selection: Binding(get: { c.treatment }, set: { carousel?.artTreatment = $0 })) {
                             ForEach(SermonCarousel.ArtTreatment.allCases) { Text($0.label).tag($0) }
@@ -535,22 +535,22 @@ struct CarouselWindow: View {
                                 .disabled(c.style == .split)
                         }
                         Button { matchArtColour() } label: { Label("Match colour to the graphic", systemImage: "eyedropper") }
-                            .buttonStyle(.link).font(.system(size: 12))
+                            .buttonStyle(.link).font(.ui(size: 12))
                     } else {
                         Text("Add the series artwork. AutoClip recolours or softens it to match each style, and uses it for every sermon in the series.")
-                            .font(.system(size: 12)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                            .font(.ui(size: 12)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
                         Button { pickArt() } label: { Label("Add series graphic…", systemImage: "photo.badge.plus") }
                             .buttonStyle(SecondaryButtonStyle(compact: true))
                     }
                 }
-                .toggleStyle(.checkbox).font(.system(size: 13)).foregroundColor(Theme.text)
+                .toggleStyle(.checkbox).font(.ui(size: 13)).foregroundColor(Theme.text)
 
                 let list = items(c)
                 if list.indices.contains(selected) {
                     let s = list[selected]
                     section("\(isPosts ? "Post" : "Slide") \(selected + 1) · \(s.kind.label)") {
                         HStack(spacing: 8) {
-                            Text("Type").font(.system(size: 11.5)).foregroundColor(Theme.muted)
+                            Text("Type").font(.ui(size: 11.5)).foregroundColor(Theme.muted)
                             Picker("", selection: Binding(get: { s.kind }, set: { changeKind(selected, to: $0) })) {
                                 ForEach(SermonCarousel.Kind.allCases, id: \.self) { k in
                                     Label(k.label, systemImage: k.icon).tag(k)
@@ -561,7 +561,7 @@ struct CarouselWindow: View {
                             Spacer()
                         }
                         HStack(spacing: 8) {
-                            Text("Words").font(.system(size: 11.5)).foregroundColor(Theme.muted)
+                            Text("Words").font(.ui(size: 11.5)).foregroundColor(Theme.muted)
                             Picker("", selection: Binding(get: { s.textAlign ?? "auto" }, set: { v in
                                 let i = selected
                                 update { list in
@@ -590,14 +590,14 @@ struct CarouselWindow: View {
                             field(s.kind == .invite ? "Times or details" : "Text", text: itemBinding(\.body), lines: 4)
                         }
                         if l.style != .photo {
-                            Toggle("Photo of the speaker", isOn: itemBinding(\.photo)).font(.system(size: 13)).foregroundColor(Theme.text)
+                            Toggle("Photo of the speaker", isOn: itemBinding(\.photo)).font(.ui(size: 13)).foregroundColor(Theme.text)
                         }
                         if SlideCanvas.needsPhoto(s, in: display(c, selected).c) {
                             HStack {
                                 Button { nudge(-8) } label: { Label("Earlier", systemImage: "backward") }
                                 Button { nudge(8) } label: { Label("Later", systemImage: "forward") }
                                 Spacer()
-                                Text(timeLabel(s.time)).font(.system(size: 11.5).monospacedDigit()).foregroundColor(Theme.faint)
+                                Text(timeLabel(s.time)).font(.ui(size: 11.5).monospacedDigit()).foregroundColor(Theme.faint)
                             }
                             .controlSize(.small)
                         }
@@ -610,7 +610,7 @@ struct CarouselWindow: View {
                                 }
                             }
                             .controlSize(.small)
-                            if rewriting { HStack(spacing: 6) { ProgressView().controlSize(.mini); Text("Rewriting…").font(.system(size: 11.5)).foregroundColor(Theme.muted) } }
+                            if rewriting { HStack(spacing: 6) { ProgressView().controlSize(.mini); Text("Rewriting…").font(.ui(size: 11.5)).foregroundColor(Theme.muted) } }
                         }
                     }
                     section("Background picture") {
@@ -622,11 +622,11 @@ struct CarouselWindow: View {
                                     Button("Choose a photo…") { choosePhoto() }.buttonStyle(.link)
                                     Button("Use on every \(noun)") { bgOnAll(p) }.buttonStyle(.link)
                                     Button("Remove") { setBG(nil) }.buttonStyle(.link).foregroundColor(Theme.danger)
-                                }.font(.system(size: 12))
+                                }.font(.ui(size: 12))
                             }
                         } else {
                             Text("A picture behind the words: made by AI (Nano Banana) to suit this \(noun), or one of your own photos. The words stay editable on top.")
-                                .font(.system(size: 12)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                                .font(.ui(size: 12)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
                             HStack {
                                 Button { openBG(s, c) } label: { Label("Make with AI…", systemImage: "wand.and.stars") }
                                     .buttonStyle(SecondaryButtonStyle(compact: true))
@@ -639,7 +639,7 @@ struct CarouselWindow: View {
                     if isPosts {
                         section("Caption") {
                             TextEditor(text: Binding(get: { s.caption ?? "" }, set: { v in update { if $0.indices.contains(selectedPost) { $0[selectedPost].caption = v } } }))
-                                .font(.system(size: 13)).foregroundColor(Theme.text)
+                                .font(.ui(size: 13)).foregroundColor(Theme.text)
                                 .scrollContentBackground(.hidden).padding(6)
                                 .frame(height: 90)
                                 .background(RoundedRectangle(cornerRadius: 8).fill(Theme.ink.opacity(0.05)))
@@ -651,7 +651,7 @@ struct CarouselWindow: View {
                 if !isPosts {
                     section("Caption") {
                         TextEditor(text: Binding(get: { c.caption }, set: { carousel?.caption = $0 }))
-                            .font(.system(size: 13)).foregroundColor(Theme.text)
+                            .font(.ui(size: 13)).foregroundColor(Theme.text)
                             .scrollContentBackground(.hidden).padding(6)
                             .frame(height: 110)
                             .background(RoundedRectangle(cornerRadius: 8).fill(Theme.ink.opacity(0.05)))
@@ -661,7 +661,7 @@ struct CarouselWindow: View {
                     }
                 }
                 if let error {
-                    Text(error).font(.system(size: 12)).foregroundColor(Theme.danger)
+                    Text(error).font(.ui(size: 12)).foregroundColor(Theme.danger)
                 }
             }
             .padding(18)
@@ -693,14 +693,14 @@ struct CarouselWindow: View {
         default: AnyShapeStyle(p.ground)
         }
         let font: Font = switch t {
-        case .serif: .system(size: 20, weight: .semibold, design: .serif)
+        case .serif: .ui(size: 20, weight: .semibold, design: .serif)
         case .classic: .custom("Didot-Bold", size: 20)
         case .script: .custom("SnellRoundhand-Black", size: 22)
         case .geometric: .custom("Futura-CondensedExtraBold", size: 20)
         case .slab: .custom("Rockwell-Bold", size: 19)
-        case .rounded: .system(size: 20, weight: .heavy, design: .rounded)
-        case .modern: .system(size: 20, weight: .bold)
-        default: .system(size: 20, weight: .black)
+        case .rounded: .ui(size: 20, weight: .heavy, design: .rounded)
+        case .modern: .ui(size: 20, weight: .bold)
+        default: .ui(size: 20, weight: .black)
         }
         return RoundedRectangle(cornerRadius: 7).fill(fill)
             .frame(width: 64, height: 78)
@@ -715,16 +715,16 @@ struct CarouselWindow: View {
 
     private func section<V: View>(_ title: String, @ViewBuilder _ content: () -> V) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(title.uppercased()).font(.system(size: 11, weight: .semibold)).tracking(1).foregroundColor(Theme.faint)
+            Text(title.uppercased()).font(.ui(size: 11, weight: .semibold)).tracking(1).foregroundColor(Theme.faint)
             content()
         }
     }
 
     private func field(_ label: String, text: Binding<String>, lines: Int = 1) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(label).font(.system(size: 11.5)).foregroundColor(Theme.muted)
+            Text(label).font(.ui(size: 11.5)).foregroundColor(Theme.muted)
             TextField(label, text: text, axis: .vertical)
-                .textFieldStyle(.plain).font(.system(size: 13)).foregroundColor(Theme.text)
+                .textFieldStyle(.plain).font(.ui(size: 13)).foregroundColor(Theme.text)
                 .lineLimit(1...max(1, lines))
                 .padding(8).background(RoundedRectangle(cornerRadius: 7).fill(Theme.ink.opacity(0.05)))
         }
@@ -843,7 +843,7 @@ struct CarouselWindow: View {
                 }
                 ForEach(SermonCarousel.stickerSymbols, id: \.self) { name in
                     Button { addLayer(.symbol, name) } label: {
-                        Image(systemName: name).font(.system(size: 16)).foregroundColor(Theme.ink).frame(width: 34, height: 34)
+                        Image(systemName: name).font(.ui(size: 16)).foregroundColor(Theme.ink).frame(width: 34, height: 34)
                     }
                     .buttonStyle(.plain)
                     .background(RoundedRectangle(cornerRadius: 6).fill(Theme.ink.opacity(0.06)))
@@ -852,18 +852,18 @@ struct CarouselWindow: View {
             if let id = selectedLayer, let layer = s.layerList.first(where: { $0.id == id }) {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
-                        Text("Size").font(.system(size: 11.5)).foregroundColor(Theme.muted).frame(width: 46, alignment: .leading)
+                        Text("Size").font(.ui(size: 11.5)).foregroundColor(Theme.muted).frame(width: 46, alignment: .leading)
                         Slider(value: layerBinding(id, \.size), in: 0.04...0.8)
                     }
                     HStack {
-                        Text("Turn").font(.system(size: 11.5)).foregroundColor(Theme.muted).frame(width: 46, alignment: .leading)
+                        Text("Turn").font(.ui(size: 11.5)).foregroundColor(Theme.muted).frame(width: 46, alignment: .leading)
                         Slider(value: layerBinding(id, \.rotation), in: -180...180)
                     }
                     HStack(spacing: 8) {
-                        Text("Colour").font(.system(size: 11.5)).foregroundColor(Theme.muted).frame(width: 46, alignment: .leading)
+                        Text("Colour").font(.ui(size: 11.5)).foregroundColor(Theme.muted).frame(width: 46, alignment: .leading)
                         ForEach([("Accent", nil as String?), ("Text", "ink"), ("White", "white")], id: \.0) { item in
                             Button(item.0) { setLayerColour(id, item.1) }
-                                .buttonStyle(.link).font(.system(size: 12, weight: layer.colour == item.1 ? .bold : .regular))
+                                .buttonStyle(.link).font(.ui(size: 12, weight: layer.colour == item.1 ? .bold : .regular))
                         }
                         ColorPicker("", selection: Binding(get: { Color(nsColor: NSColor(hexString: layer.colour ?? l.accentHex)) },
                                                            set: { setLayerColour(id, NSColor($0).hexString) }), supportsOpacity: false)
@@ -881,7 +881,7 @@ struct CarouselWindow: View {
                 .padding(10).background(RoundedRectangle(cornerRadius: 8).fill(Theme.ink.opacity(0.04)))
             } else if !s.layerList.isEmpty {
                 Text("Click a sticker on the slide to size, turn, recolour or remove it.")
-                    .font(.system(size: 11.5)).foregroundColor(Theme.faint)
+                    .font(.ui(size: 11.5)).foregroundColor(Theme.faint)
             }
         }
     }
@@ -943,7 +943,7 @@ struct CarouselWindow: View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Make a background with AI").font(Theme.display(20, weight: .medium)).foregroundColor(Theme.cream)
             Text("Google's image AI (Nano Banana) paints a picture to sit behind this \(noun). It's told not to draw any words, so your text stays sharp and editable on top.")
-                .font(.system(size: 12.5)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                .font(.ui(size: 12.5)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
             Picker("Scene", selection: $bgScene) {
                 ForEach(GraphicsAI.Scene.allCases) { Text($0.label).tag($0) }
             }
@@ -952,15 +952,15 @@ struct CarouselWindow: View {
                     bgPrompt = GraphicsAI.prompt(for: items(c)[selected], in: display(c, selected).c, scene: sc)
                 }
             }
-            Text("What to paint (you can change this)").font(.system(size: 11.5)).foregroundColor(Theme.muted)
+            Text("What to paint (you can change this)").font(.ui(size: 11.5)).foregroundColor(Theme.muted)
             TextEditor(text: $bgPrompt)
-                .font(.system(size: 12.5)).scrollContentBackground(.hidden).padding(6)
+                .font(.ui(size: 12.5)).scrollContentBackground(.hidden).padding(6)
                 .frame(height: 130)
                 .background(RoundedRectangle(cornerRadius: 8).fill(Theme.ink.opacity(0.05)))
-            if let bgError { Text(bgError).font(.system(size: 12)).foregroundColor(Theme.danger).fixedSize(horizontal: false, vertical: true) }
+            if let bgError { Text(bgError).font(.ui(size: 12)).foregroundColor(Theme.danger).fixedSize(horizontal: false, vertical: true) }
             HStack {
                 Text("Uses one image request on your Google key (or OpenAI's if that's the one you have).")
-                    .font(.system(size: 11)).foregroundColor(Theme.faint)
+                    .font(.ui(size: 11)).foregroundColor(Theme.faint)
                 Spacer()
                 Button("Cancel") { showBG = false }.disabled(bgBusy)
                 Button { generateBG() } label: {

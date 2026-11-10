@@ -80,7 +80,7 @@ struct GuidedPathCard: View {
                 Text(latest == nil ? "Start here" : current == nil ? "That one's done" : "Your next step")
                     .font(Theme.display(22, weight: .medium)).foregroundColor(Theme.cream)
                 if let t = latest?.title {
-                    Text(t).font(.system(size: 13)).foregroundColor(Theme.muted).lineLimit(1)
+                    Text(t).font(.ui(size: 13)).foregroundColor(Theme.muted).lineLimit(1)
                 }
                 Spacer()
                 if current == nil {
@@ -102,12 +102,12 @@ struct GuidedPathCard: View {
             HStack(spacing: 8) {
                 ZStack {
                     Circle().fill(done ? Theme.good.opacity(0.25) : now ? Theme.sand : Theme.ink.opacity(0.08)).frame(width: 22, height: 22)
-                    if done { Image(systemName: "checkmark").font(.system(size: 11.5, weight: .bold)).foregroundColor(Theme.good) }
-                    else { Text("\(s.rawValue + 1)").font(.system(size: 12, weight: .bold)).foregroundColor(now ? Theme.bg : Theme.muted) }
+                    if done { Image(systemName: "checkmark").font(.ui(size: 11.5, weight: .bold)).foregroundColor(Theme.good) }
+                    else { Text("\(s.rawValue + 1)").font(.ui(size: 12, weight: .bold)).foregroundColor(now ? Theme.bg : Theme.muted) }
                 }
-                Text(title(s)).font(.system(size: 13, weight: .semibold)).foregroundColor(now || done ? Theme.cream : Theme.muted)
+                Text(title(s)).font(.ui(size: 13, weight: .semibold)).foregroundColor(now || done ? Theme.cream : Theme.muted)
             }
-            Text(detail(s)).font(.system(size: 12)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
+            Text(detail(s)).font(.ui(size: 12)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
             if now {
                 let a = action(s)

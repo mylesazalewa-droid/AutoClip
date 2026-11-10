@@ -159,7 +159,7 @@ struct CaptionEditorView: View {
             label("Highlight")
             ColorPicker("", selection: $look.highlightColor.color, supportsOpacity: false).labelsHidden()
             Spacer(minLength: 6)
-            Toggle("AA", isOn: $look.uppercase).toggleStyle(.button).font(.system(size: 12, weight: .bold))
+            Toggle("AA", isOn: $look.uppercase).toggleStyle(.button).font(.ui(size: 12, weight: .bold))
                 .help("ALL CAPS")
         }
     }
@@ -182,7 +182,7 @@ struct CaptionEditorView: View {
             ColorPicker("", selection: $look.strokeColor.color, supportsOpacity: false).labelsHidden()
             Slider(value: $look.strokeWidth, in: 0...10).tint(Theme.action)
             Text(look.strokeWidth < 0.5 ? "Off" : "\(Int(look.strokeWidth))")
-                .font(.system(size: 12, design: .monospaced)).foregroundColor(gold).frame(width: 28)
+                .font(.ui(size: 12, design: .monospaced)).foregroundColor(gold).frame(width: 28)
         }
     }
 
@@ -202,12 +202,12 @@ struct CaptionEditorView: View {
         HStack(spacing: 10) {
             label(title)
             Slider(value: value, in: range).tint(Theme.action)
-            Text(text).font(.system(size: 12, design: .monospaced)).foregroundColor(gold).frame(width: 48, alignment: .trailing)
+            Text(text).font(.ui(size: 12, design: .monospaced)).foregroundColor(gold).frame(width: 48, alignment: .trailing)
         }
     }
 
     private func label(_ s: String) -> some View {
-        Text(s).font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.6))
+        Text(s).font(.ui(size: 13)).foregroundColor(Theme.ink.opacity(0.6))
             .lineLimit(1).fixedSize()
     }
 }

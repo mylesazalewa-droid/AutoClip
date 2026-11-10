@@ -26,9 +26,9 @@ struct SocialGraphicsView: View {
         VStack(spacing: 0) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Social graphics").font(.system(size: 15, weight: .semibold)).foregroundColor(Theme.ink)
+                    Text("Social graphics").font(.ui(size: 15, weight: .semibold)).foregroundColor(Theme.ink)
                     Text("Quote cards and a thumbnail from this message")
-                        .font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.55))
+                        .font(.ui(size: 12)).foregroundColor(Theme.ink.opacity(0.55))
                 }
                 Spacer()
                 Button { dismiss(); openWindow(id: "carousel-window", value: record.id) } label: {
@@ -49,15 +49,15 @@ struct SocialGraphicsView: View {
                     Spacer()
                     if let status {
                         ProgressView().controlSize(.small)
-                        Text(status).font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.6))
+                        Text(status).font(.ui(size: 13)).foregroundColor(Theme.ink.opacity(0.6))
                     } else {
-                        Image(systemName: "photo.on.rectangle.angled").font(.system(size: 38)).foregroundColor(gold)
+                        Image(systemName: "photo.on.rectangle.angled").font(.ui(size: 38)).foregroundColor(gold)
                         Text("AI reads the message and writes 5 quote cards and a thumbnail headline.")
-                            .font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.6))
+                            .font(.ui(size: 13)).foregroundColor(Theme.ink.opacity(0.6))
                         Button("Create graphics") { generate() }.buttonStyle(PrimaryButtonStyle())
                     }
                     if let error {
-                        Text(error).font(.system(size: 12)).foregroundColor(Theme.danger)
+                        Text(error).font(.ui(size: 12)).foregroundColor(Theme.danger)
                             .multilineTextAlignment(.center).frame(maxWidth: 420)
                     }
                     Spacer()
@@ -67,15 +67,15 @@ struct SocialGraphicsView: View {
                 ScrollView {
                     if let saved {
                         HStack {
-                            Image(systemName: "checkmark.circle.fill").foregroundColor(.green)
-                            Text("Saved to \(saved.lastPathComponent)").font(.system(size: 13)).foregroundColor(Theme.ink)
+                            Image(systemName: "checkmark.circle.fill").foregroundColor(Theme.good)
+                            Text("Saved to \(saved.lastPathComponent)").font(.ui(size: 13)).foregroundColor(Theme.ink)
                             Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([saved]) }
                                 .buttonStyle(.link)
                             Spacer()
                         }.padding(.horizontal, 16).padding(.top, 12)
                     }
                     if let status {
-                        HStack(spacing: 6) { ProgressView().scaleEffect(0.5); Text(status).font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.6)) }
+                        HStack(spacing: 6) { ProgressView().scaleEffect(0.5); Text(status).font(.ui(size: 12)).foregroundColor(Theme.ink.opacity(0.6)) }
                             .padding(.top, 8)
                     }
                     section("Thumbnail for the full video", kinds: [.thumbnail], min: 360)
@@ -91,7 +91,7 @@ struct SocialGraphicsView: View {
         let items = cards.indices.filter { kinds.contains(cards[$0].kind) }
         if !items.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
-                Text(title.uppercased()).font(.system(size: 11.5, weight: .semibold))
+                Text(title.uppercased()).font(.ui(size: 11.5, weight: .semibold))
                     .foregroundColor(Theme.ink.opacity(0.55)).tracking(1)
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: min), spacing: 14)], alignment: .leading, spacing: 14) {
                     ForEach(items, id: \.self) { i in cardView(i) }
@@ -112,15 +112,15 @@ struct SocialGraphicsView: View {
             .aspectRatio(c.size.width / c.size.height, contentMode: .fit)
             .cornerRadius(6)
             TextField("Text", text: Binding(get: { cards[i].text }, set: { cards[i].text = $0 }), axis: .vertical)
-                .textFieldStyle(.plain).font(.system(size: 12)).foregroundColor(Theme.ink)
+                .textFieldStyle(.plain).font(.ui(size: 12)).foregroundColor(Theme.ink)
                 .lineLimit(1...5)
                 .padding(6).background(Theme.ink.opacity(0.06)).cornerRadius(5)
                 .onSubmit { redraw(cards[i]) }
             HStack {
-                Button("Update") { redraw(cards[i]) }.buttonStyle(.link).font(.system(size: 12))
+                Button("Update") { redraw(cards[i]) }.buttonStyle(.link).font(.ui(size: 12))
                 Spacer()
                 Button { shiftFrame(i) } label: { Label("Other photo", systemImage: "photo") }
-                    .buttonStyle(.link).font(.system(size: 12))
+                    .buttonStyle(.link).font(.ui(size: 12))
                     .help("Use a different moment from the video as the background")
             }
         }

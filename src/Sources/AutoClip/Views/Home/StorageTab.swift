@@ -27,11 +27,11 @@ struct StorageTab: View {
                 if let report {
                     disk(report)
                     clearCard(report)
-                    if let note { Text(note).font(.system(size: 13)).foregroundColor(Theme.good).fixedSize(horizontal: false, vertical: true) }
-                    if let problem { Text(problem).font(.system(size: 13)).foregroundColor(Theme.warn).fixedSize(horizontal: false, vertical: true) }
+                    if let note { Text(note).font(.ui(size: 13)).foregroundColor(Theme.good).fixedSize(horizontal: false, vertical: true) }
+                    if let problem { Text(problem).font(.ui(size: 13)).foregroundColor(Theme.warn).fixedSize(horizontal: false, vertical: true) }
                     ForEach(report.groups) { groupCard($0) }
                 } else {
-                    Text("Adding up your files…").font(.system(size: 13)).foregroundColor(Theme.muted)
+                    Text("Adding up your files…").font(.ui(size: 13)).foregroundColor(Theme.muted)
                 }
             }
             .padding(.horizontal, 32).padding(.bottom, 28).padding(.top, 8)
@@ -80,7 +80,7 @@ struct StorageTab: View {
             }
             if r.free < lowSpace {
                 Label("Space is low. Video exports need room to work and may fail.", systemImage: "exclamationmark.triangle")
-                    .font(.system(size: 13)).foregroundColor(Theme.warn)
+                    .font(.ui(size: 13)).foregroundColor(Theme.warn)
             }
         }
     }
@@ -88,14 +88,14 @@ struct StorageTab: View {
     private func figure(_ value: String, _ label: String, _ color: Color) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(value).font(Theme.display(30, weight: .medium)).foregroundColor(color).monospacedDigit()
-            Text(label).font(.system(size: 12)).foregroundColor(Theme.muted)
+            Text(label).font(.ui(size: 12)).foregroundColor(Theme.muted)
         }
     }
 
     private func key(_ color: Color, _ label: String) -> some View {
         HStack(spacing: 5) {
             Circle().fill(color).frame(width: 7, height: 7)
-            Text(label).font(.system(size: 11.5)).foregroundColor(Theme.muted)
+            Text(label).font(.ui(size: 11.5)).foregroundColor(Theme.muted)
         }
     }
 
@@ -105,30 +105,30 @@ struct StorageTab: View {
         return AssessCard(title: "Safe to clear", subtitle: "Files nothing in AutoClip mentions any more. They go to the Trash, so you can get them back.") {
             if unused.isEmpty {
                 Text("Nothing unused right now. Everything here belongs to a project, report or review. Open a group below to choose for yourself.")
-                    .font(.system(size: 13)).foregroundColor(Theme.text).fixedSize(horizontal: false, vertical: true)
+                    .font(.ui(size: 13)).foregroundColor(Theme.text).fixedSize(horizontal: false, vertical: true)
             } else {
                 HStack(spacing: 14) {
                     Text("\(size(unused.reduce(0) { $0 + $1.bytes })) in \(unused.count) \(unused.count == 1 ? "item" : "items")")
-                        .font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.cream)
+                        .font(.ui(size: 13, weight: .semibold)).foregroundColor(Theme.cream)
                     Spacer()
                     Button { pending = unused } label: { Label("Move all to Trash", systemImage: "trash") }
                         .buttonStyle(PrimaryButtonStyle()).disabled(busy)
                 }
                 ForEach(unused.prefix(5)) { i in
                     HStack {
-                        Text(i.name).font(.system(size: 12)).foregroundColor(Theme.muted).lineLimit(1).truncationMode(.middle)
+                        Text(i.name).font(.ui(size: 12)).foregroundColor(Theme.muted).lineLimit(1).truncationMode(.middle)
                         Spacer()
-                        Text(size(i.bytes)).font(.system(size: 12)).foregroundColor(Theme.faint).monospacedDigit()
+                        Text(size(i.bytes)).font(.ui(size: 12)).foregroundColor(Theme.faint).monospacedDigit()
                     }
                 }
-                if unused.count > 5 { Text("and \(unused.count - 5) more").font(.system(size: 12)).foregroundColor(Theme.faint) }
+                if unused.count > 5 { Text("and \(unused.count - 5) more").font(.ui(size: 12)).foregroundColor(Theme.faint) }
             }
             if busy {
                 Label("AutoClip is working on something, so clearing waits until it finishes.", systemImage: "hourglass")
-                    .font(.system(size: 12)).foregroundColor(Theme.warn)
+                    .font(.ui(size: 12)).foregroundColor(Theme.warn)
             }
             Button("Open the Trash") { NSWorkspace.shared.open(URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".Trash")) }
-                .buttonStyle(.plain).font(.system(size: 12, weight: .medium)).foregroundColor(Theme.sand)
+                .buttonStyle(.plain).font(.ui(size: 12, weight: .medium)).foregroundColor(Theme.sand)
         }
     }
 
@@ -139,14 +139,14 @@ struct StorageTab: View {
                 if isOpen { open.remove(g.id) } else { open.insert(g.id) }
             } label: {
                 HStack(spacing: 12) {
-                    Image(systemName: g.icon).font(.system(size: 14)).foregroundColor(Theme.sand).frame(width: 24)
+                    Image(systemName: g.icon).font(.ui(size: 14)).foregroundColor(Theme.sand).frame(width: 24)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(g.title).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.cream)
-                        Text(g.detail).font(.system(size: 12)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true).multilineTextAlignment(.leading)
+                        Text(g.title).font(.ui(size: 13, weight: .semibold)).foregroundColor(Theme.cream)
+                        Text(g.detail).font(.ui(size: 12)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true).multilineTextAlignment(.leading)
                     }
                     Spacer(minLength: 12)
-                    Text(size(g.bytes)).font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.ink).monospacedDigit()
-                    Image(systemName: isOpen ? "chevron.up" : "chevron.down").font(.system(size: 11.5)).foregroundColor(Theme.faint)
+                    Text(size(g.bytes)).font(.ui(size: 14, weight: .semibold)).foregroundColor(Theme.ink).monospacedDigit()
+                    Image(systemName: isOpen ? "chevron.up" : "chevron.down").font(.ui(size: 11.5)).foregroundColor(Theme.faint)
                 }
                 .contentShape(Rectangle())
             }
@@ -164,15 +164,15 @@ struct StorageTab: View {
     private func itemRow(_ i: StorageItem, canClear: Bool) -> some View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(i.name).font(.system(size: 13)).foregroundColor(Theme.text).lineLimit(1).truncationMode(.middle)
-                Text(usage(i, canClear: canClear)).font(.system(size: 11.5)).foregroundColor(i.usedBy.isEmpty && canClear ? Theme.good : Theme.faint)
+                Text(i.name).font(.ui(size: 13)).foregroundColor(Theme.text).lineLimit(1).truncationMode(.middle)
+                Text(usage(i, canClear: canClear)).font(.ui(size: 11.5)).foregroundColor(i.usedBy.isEmpty && canClear ? Theme.good : Theme.faint)
             }
             Spacer(minLength: 8)
-            Text(size(i.bytes)).font(.system(size: 13)).foregroundColor(Theme.muted).monospacedDigit()
-            Button { NSWorkspace.shared.activateFileViewerSelecting([i.url]) } label: { Image(systemName: "folder").font(.system(size: 12)) }
+            Text(size(i.bytes)).font(.ui(size: 13)).foregroundColor(Theme.muted).monospacedDigit()
+            Button { NSWorkspace.shared.activateFileViewerSelecting([i.url]) } label: { Image(systemName: "folder").font(.ui(size: 12)) }
                 .buttonStyle(.plain).foregroundColor(Theme.muted).help("Show in Finder")
             if canClear {
-                Button { pending = [i] } label: { Image(systemName: "trash").font(.system(size: 12)) }
+                Button { pending = [i] } label: { Image(systemName: "trash").font(.ui(size: 12)) }
                     .buttonStyle(.plain).foregroundColor(Theme.muted).help("Move to the Trash").disabled(activity.anythingRunning)
             }
         }

@@ -30,7 +30,7 @@ struct PlaceholderRows: View {
     var label: String?
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if let label { Text(label).font(.system(size: 12)).foregroundColor(Theme.muted) }
+            if let label { Text(label).font(.ui(size: 12)).foregroundColor(Theme.muted) }
             ForEach(0..<count, id: \.self) { i in
                 HStack(spacing: 12) {
                     RoundedRectangle(cornerRadius: 6).fill(Theme.ink.opacity(0.07)).frame(width: 44, height: 44)

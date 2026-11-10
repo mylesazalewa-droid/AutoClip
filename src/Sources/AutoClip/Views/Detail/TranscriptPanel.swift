@@ -22,7 +22,7 @@ struct TranscriptPanel: View {
                 ForEach(TranscriptSubTab.allCases, id: \.self) { tab in
                     Button(action: { subTab = tab }) {
                         Text(tab.rawValue)
-                            .font(.system(size: 12, weight: subTab == tab ? .semibold : .regular))
+                            .font(.ui(size: 12, weight: subTab == tab ? .semibold : .regular))
                             .foregroundColor(subTab == tab ? .white : Theme.ink.opacity(0.4))
                             .padding(.horizontal, 10)
                             .padding(.vertical, 5)
@@ -59,7 +59,7 @@ struct TranscriptPanel: View {
     var paragraphView: some View {
         let text = cleanText(clip.transcriptText)
         return Text(text.isEmpty ? "No transcript available." : text)
-            .font(.system(size: 13, design: .default))
+            .font(.ui(size: 13, design: .default))
             .foregroundColor(Theme.ink.opacity(0.8))
             .lineSpacing(5)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -76,7 +76,7 @@ struct TranscriptPanel: View {
                             .frame(width: 5, height: 5)
                             .padding(.top, 6)
                         Text(sentence.trimmingCharacters(in: .whitespaces))
-                            .font(.system(size: 13))
+                            .font(.ui(size: 13))
                             .foregroundColor(Theme.ink.opacity(0.8))
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -91,11 +91,11 @@ struct TranscriptPanel: View {
         return VStack(alignment: .leading, spacing: 12) {
             if detected.isEmpty {
                 Text("No filler words detected.")
-                    .font(.system(size: 13))
+                    .font(.ui(size: 13))
                     .foregroundColor(Theme.ink.opacity(0.55))
             } else {
                 Text("Filler words found: \(detected.count)")
-                    .font(.system(size: 13))
+                    .font(.ui(size: 13))
                     .foregroundColor(Theme.ink.opacity(0.55))
 
                 transcriptWithFillers
@@ -114,7 +114,7 @@ struct TranscriptPanel: View {
                     seekAction?(word.startTime - clip.startTime)
                 }) {
                     Text(word.word)
-                        .font(.system(size: 13))
+                        .font(.ui(size: 13))
                         .foregroundColor(isFiller ? Theme.warn : Theme.ink.opacity(0.8))
                         .background(isFiller ? Theme.warn.opacity(0.15) : Color.clear)
                         .cornerRadius(2)

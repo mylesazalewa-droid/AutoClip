@@ -35,7 +35,7 @@ struct ClipCard: View {
                 // Time indicators
                 HStack {
                     Text(clip.formattedStartTime)
-                        .font(.system(size: 11.5, weight: .medium))
+                        .font(.ui(size: 11.5, weight: .medium))
                         .foregroundColor(Theme.ink)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
@@ -47,7 +47,7 @@ struct ClipCard: View {
                             .fill(Color(red: 1, green: 0.2, blue: 0.2))
                             .frame(width: 6, height: 6)
                         Text(clip.formattedDuration)
-                            .font(.system(size: 11.5, weight: .medium))
+                            .font(.ui(size: 11.5, weight: .medium))
                             .foregroundColor(Theme.ink)
                     }
                     .padding(.horizontal, 6)
@@ -64,7 +64,7 @@ struct ClipCard: View {
                         HStack {
                             Spacer()
                             Image(systemName: "xmark")
-                                .font(.system(size: 11.5, weight: .bold))
+                                .font(.ui(size: 11.5, weight: .bold))
                                 .foregroundColor(Theme.ink)
                                 .padding(5)
                                 .background(Color.black.opacity(0.7))
@@ -84,7 +84,7 @@ struct ClipCard: View {
 
             // Transcript excerpt
             Text(clip.transcriptText)
-                .font(.system(size: 12))
+                .font(.ui(size: 12))
                 .foregroundColor(Theme.ink.opacity(0.6))
                 .lineLimit(2)
                 .padding(.horizontal, 8)
@@ -103,7 +103,7 @@ struct ClipCard: View {
                 Spacer()
 
                 Image(systemName: clip.isLiked ? "heart.fill" : "heart")
-                    .font(.system(size: 13))
+                    .font(.ui(size: 13))
                     .foregroundColor(clip.isLiked ? Theme.danger : Theme.ink.opacity(0.35))
                     .frame(width: 28, height: 28)
                     .contentShape(Rectangle())
@@ -116,7 +116,7 @@ struct ClipCard: View {
 
             // Title
             Text(clip.title)
-                .font(.system(size: 12, weight: .medium))
+                .font(.ui(size: 12, weight: .medium))
                 .foregroundColor(Theme.ink.opacity(0.8))
                 .lineLimit(2)
                 .padding(.horizontal, 8)
@@ -150,7 +150,7 @@ struct ClipCard: View {
                 .fill(Theme.raised)
                 .overlay(
                     Image(systemName: "film")
-                        .font(.system(size: 28))
+                        .font(.ui(size: 28))
                         .foregroundColor(Theme.ink.opacity(0.55))
                 )
         }
@@ -160,7 +160,7 @@ struct ClipCard: View {
         let words = clip.words.prefix(6)
         let preview = words.map(\.word).joined(separator: " ")
         return Text(preview.isEmpty ? "" : preview)
-            .font(.system(size: 13, weight: .heavy))
+            .font(.ui(size: 13, weight: .heavy))
             .foregroundColor(Theme.ink)
             .shadow(color: .black, radius: 2, x: 0, y: 1)
             .multilineTextAlignment(.center)

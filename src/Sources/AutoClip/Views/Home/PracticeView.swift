@@ -114,9 +114,9 @@ struct PracticeSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Practice run").font(.system(size: 18, weight: .semibold)).foregroundColor(Theme.ink)
+            Text("Practice run").font(.ui(size: 18, weight: .semibold)).foregroundColor(Theme.ink)
             Text("Preach it through once before Sunday. When you stop, AutoClip gives you the same report as a sermon: pace, pauses, filler words, voice and the AI coach.")
-                .font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.6)).fixedSize(horizontal: false, vertical: true)
+                .font(.ui(size: 13)).foregroundColor(Theme.ink.opacity(0.6)).fixedSize(horizontal: false, vertical: true)
 
             ZStack {
                 Color.black
@@ -124,16 +124,16 @@ struct PracticeSheet: View {
                     CameraPreview(session: rec.session)
                 } else {
                     VStack(spacing: 8) {
-                        Image(systemName: "mic.fill").font(.system(size: 40)).foregroundColor(gold)
+                        Image(systemName: "mic.fill").font(.ui(size: 40)).foregroundColor(gold)
                         Text(rec.ready ? "Recording sound only" : "Getting ready…")
-                            .font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.6))
+                            .font(.ui(size: 13)).foregroundColor(Theme.ink.opacity(0.6))
                     }
                 }
                 if rec.isRecording {
                     VStack {
                         HStack(spacing: 6) {
                             Circle().fill(Color.red).frame(width: 10, height: 10)
-                            Text(fmt(rec.elapsed)).font(.system(size: 14, weight: .semibold, design: .monospaced)).foregroundColor(Theme.ink)
+                            Text(fmt(rec.elapsed)).font(.ui(size: 14, weight: .semibold, design: .monospaced)).foregroundColor(Theme.ink)
                         }
                         .padding(.horizontal, 10).padding(.vertical, 5).background(Color.black.opacity(0.6)).cornerRadius(6)
                         Spacer()
@@ -144,7 +144,7 @@ struct PracticeSheet: View {
             .frame(width: 480, height: 270).cornerRadius(10)
 
             if let e = rec.error {
-                Text(e).font(.system(size: 12)).foregroundColor(Color(red: 1, green: 0.55, blue: 0.45))
+                Text(e).font(.ui(size: 12)).foregroundColor(Color(red: 1, green: 0.55, blue: 0.45))
                     .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -166,7 +166,7 @@ struct PracticeSheet: View {
                 }
             }
             Text("Recordings are saved in Documents › AutoClip › Practice and don't count toward your sermon progress charts.")
-                .font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
+                .font(.ui(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
         }
         .padding(20)
         .frame(width: 520)

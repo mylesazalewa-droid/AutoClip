@@ -35,7 +35,7 @@ struct CaptionsPanel: View {
             VStack(alignment: .leading, spacing: 12) {
                 Toggle(isOn: $bgEnabled) {
                     Text("Caption Background")
-                        .font(.system(size: 13))
+                        .font(.ui(size: 13))
                         .foregroundColor(Theme.ink)
                 }
                 .toggleStyle(CheckboxToggleStyle())
@@ -45,12 +45,12 @@ struct CaptionsPanel: View {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             Text("Opacity")
-                                .font(.system(size: 13))
+                                .font(.ui(size: 13))
                                 .foregroundColor(Theme.ink.opacity(0.55))
                             Slider(value: $bgOpacity, in: 0...1)
                                 .accentColor(Theme.sand)
                             Text("\(Int(bgOpacity * 100))%")
-                                .font(.system(size: 13, design: .monospaced))
+                                .font(.ui(size: 13, design: .monospaced))
                                 .foregroundColor(Theme.ink.opacity(0.6))
                                 .frame(width: 36)
                         }
@@ -58,7 +58,7 @@ struct CaptionsPanel: View {
 
                         HStack {
                             Text("Bg Color")
-                                .font(.system(size: 13))
+                                .font(.ui(size: 13))
                                 .foregroundColor(Theme.ink.opacity(0.55))
                             Spacer()
                             ColorPicker("", selection: Binding(
@@ -95,26 +95,26 @@ struct CaptionStyleCard: View {
                     if style.isKaraoke {
                         HStack(spacing: 0) {
                             Text("LIFE")
-                                .font(.system(size: 14, weight: .heavy))
+                                .font(.ui(size: 14, weight: .heavy))
                                 .foregroundColor(Color(red: 1.0, green: 0.9, blue: 0.0))
                             Text(" IS")
-                                .font(.system(size: 14, weight: .heavy))
+                                .font(.ui(size: 14, weight: .heavy))
                                 .foregroundColor(Theme.ink)
                         }
                     } else {
                         Text("LIFE IS")
-                            .font(.system(size: 14, weight: .heavy))
+                            .font(.ui(size: 14, weight: .heavy))
                             .foregroundColor(style.textColor)
                     }
                     Text("GOOD")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.ui(size: 12, weight: .bold))
                         .foregroundColor(style.textColor.opacity(0.8))
                 }
             }
             .frame(height: 60)
 
             Text(style.name)
-                .font(.system(size: 12))
+                .font(.ui(size: 12))
                 .foregroundColor(isSelected ? Theme.sand : Theme.ink.opacity(0.6))
         }
     }
@@ -129,7 +129,7 @@ struct CheckboxToggleStyle: ToggleStyle {
                     .frame(width: 16, height: 16)
                 if configuration.isOn {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 11.5, weight: .bold))
+                        .font(.ui(size: 11.5, weight: .bold))
                         .foregroundColor(Theme.onSand)
                 }
             }

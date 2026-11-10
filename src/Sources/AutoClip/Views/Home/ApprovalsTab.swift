@@ -69,7 +69,7 @@ struct ApprovalsTab: View {
                     Text("Starting…")
                 }
             }
-            .font(.system(size: 12.5)).foregroundColor(Theme.muted)
+            .font(.ui(size: 12.5)).foregroundColor(Theme.muted)
         }
     }
 
@@ -78,17 +78,17 @@ struct ApprovalsTab: View {
         return AssessCard(title: r.closed ? "Not shared" : "Shared \(r.created.formatted(.relative(presentation: .named)))") {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(r.title).font(.system(size: 15, weight: .semibold)).foregroundColor(Theme.ink)
+                    Text(r.title).font(.ui(size: 15, weight: .semibold)).foregroundColor(Theme.ink)
                     Text("\(n.approved) approved · \(n.changes) with changes · \(n.waiting) waiting")
-                        .font(.system(size: 12)).foregroundColor(Theme.muted)
+                        .font(.ui(size: 12)).foregroundColor(Theme.muted)
                 }
                 Spacer()
                 if !r.closed {
                     Button { showLink = r } label: { Label("Show link", systemImage: "qrcode") }
                         .buttonStyle(SecondaryButtonStyle(compact: true))
-                    Button("Stop sharing") { store.close(r.id) }.buttonStyle(.link).font(.system(size: 12))
+                    Button("Stop sharing") { store.close(r.id) }.buttonStyle(.link).font(.ui(size: 12))
                 } else {
-                    Button("Share again") { store.reopen(r.id) }.buttonStyle(.link).font(.system(size: 12))
+                    Button("Share again") { store.reopen(r.id) }.buttonStyle(.link).font(.ui(size: 12))
                 }
                 Button { confirmDelete = r } label: { Image(systemName: "trash") }
                     .buttonStyle(SecondaryButtonStyle(compact: true)).help("Delete this review")
@@ -104,13 +104,13 @@ struct ApprovalsTab: View {
             Image(systemName: it.kind == .clip ? "play.rectangle" : it.kind == .carousel ? "rectangle.stack" : "square")
                 .foregroundColor(Theme.sand).frame(width: 18)
             VStack(alignment: .leading, spacing: 3) {
-                Text(it.title).font(.system(size: 13)).foregroundColor(Theme.text).lineLimit(1)
+                Text(it.title).font(.ui(size: 13)).foregroundColor(Theme.text).lineLimit(1)
                 if it.decision == .changes, !it.note.isEmpty {
-                    Text("“\(it.note)”").font(.system(size: 12.5)).foregroundColor(Theme.warn).fixedSize(horizontal: false, vertical: true)
+                    Text("“\(it.note)”").font(.ui(size: 12.5)).foregroundColor(Theme.warn).fixedSize(horizontal: false, vertical: true)
                 }
                 if it.decision != .pending, let at = it.at {
                     Text((it.by.isEmpty ? "" : it.by + " · ") + at.formatted(.relative(presentation: .named)))
-                        .font(.system(size: 11.5)).foregroundColor(Theme.faint)
+                        .font(.ui(size: 11.5)).foregroundColor(Theme.faint)
                 }
             }
             Spacer()
@@ -134,18 +134,18 @@ struct ReviewBadge: View {
     var body: some View {
         switch item.decision {
         case .approved:
-            Label("Approved", systemImage: "checkmark.seal.fill").font(.system(size: 11, weight: .semibold))
+            Label("Approved", systemImage: "checkmark.seal.fill").font(.ui(size: 11, weight: .semibold))
                 .foregroundColor(.white).padding(.horizontal, 8).padding(.vertical, 4)
                 .background(Capsule().fill(Color(red: 0.36, green: 0.45, blue: 0.2)))
                 .help(item.by.isEmpty ? "Approved" : "Approved by \(item.by)")
         case .changes:
-            Label("Changes", systemImage: "exclamationmark.bubble.fill").font(.system(size: 11, weight: .semibold))
+            Label("Changes", systemImage: "exclamationmark.bubble.fill").font(.ui(size: 11, weight: .semibold))
                 .foregroundColor(.white).padding(.horizontal, 8).padding(.vertical, 4)
                 .background(Capsule().fill(Color(red: 0.72, green: 0.42, blue: 0.13)))
                 .help((item.by.isEmpty ? "" : item.by + ": ") + (item.note.isEmpty ? "Asked for changes" : item.note))
         case .pending:
             if showWaiting {
-                Text("Waiting").font(.system(size: 11, weight: .semibold)).foregroundColor(Theme.muted)
+                Text("Waiting").font(.ui(size: 11, weight: .semibold)).foregroundColor(Theme.muted)
                     .padding(.horizontal, 8).padding(.vertical, 4).background(Capsule().fill(Theme.ink.opacity(0.07)))
             }
         }
@@ -168,7 +168,7 @@ struct ReviewSendSheet: View {
         VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Send for review").font(Theme.display(24, weight: .medium)).foregroundColor(Theme.cream)
-                Text(record.title).font(.system(size: 13)).foregroundColor(Theme.muted)
+                Text(record.title).font(.ui(size: 13)).foregroundColor(Theme.muted)
             }
             if let made {
                 ReviewLinkView(request: made)
@@ -179,15 +179,15 @@ struct ReviewSendSheet: View {
                     Toggle("Posts for the week (\(carousel?.postList.count ?? 0))", isOn: $choice.posts).disabled(carousel?.postList.isEmpty ?? true)
                 }
                 Text("They'll get a page on their phone to watch each clip, swipe the graphics, and tap Approve or Ask for changes. Their answers come straight back here.")
-                    .font(.system(size: 12.5)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                    .font(.ui(size: 12.5)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
                 if failed {
-                    Text("There was nothing to send. Make clips or graphics for this sermon first.").font(.system(size: 12.5)).foregroundColor(Theme.warn)
+                    Text("There was nothing to send. Make clips or graphics for this sermon first.").font(.ui(size: 12.5)).foregroundColor(Theme.warn)
                 }
             }
             HStack {
                 if let s = store.preparing[record.id] {
                     ProgressView().controlSize(.small)
-                    Text(s).font(.system(size: 12.5)).foregroundColor(Theme.muted)
+                    Text(s).font(.ui(size: 12.5)).foregroundColor(Theme.muted)
                 }
                 Spacer()
                 Button(made == nil ? "Cancel" : "Done") { dismiss() }.keyboardShortcut(.cancelAction)
@@ -232,8 +232,8 @@ struct ReviewLinkView: View {
                         .padding(12).background(RoundedRectangle(cornerRadius: 12).fill(.white))
                 }
                 Text("Scan with the phone's camera, or send them the link.")
-                    .font(.system(size: 12.5)).foregroundColor(Theme.muted)
-                Text(url.absoluteString).font(.system(size: 12).monospaced()).foregroundColor(Theme.text)
+                    .font(.ui(size: 12.5)).foregroundColor(Theme.muted)
+                Text(url.absoluteString).font(.ui(size: 12).monospaced()).foregroundColor(Theme.text)
                     .textSelection(.enabled).lineLimit(1).truncationMode(.middle)
                 HStack(spacing: 10) {
                     Button {
@@ -249,14 +249,14 @@ struct ReviewLinkView: View {
                         .help("See the page they'll see")
                 }
                 Text("Their phone needs to be on the same Wi-Fi as this Mac, and AutoClip needs to stay open.")
-                    .font(.system(size: 11.5)).foregroundColor(Theme.faint).multilineTextAlignment(.center)
+                    .font(.ui(size: 11.5)).foregroundColor(Theme.faint).multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
             } else if ReviewServer.lanAddress() == nil {
                 Text("This Mac isn't connected to a network. Connect it to Wi-Fi and the link will appear here.")
-                    .font(.system(size: 13)).foregroundColor(Theme.warn).multilineTextAlignment(.center)
+                    .font(.ui(size: 13)).foregroundColor(Theme.warn).multilineTextAlignment(.center)
             } else {
                 ProgressView().controlSize(.small)
-                Text("Starting the link…").font(.system(size: 12.5)).foregroundColor(Theme.muted)
+                Text("Starting the link…").font(.ui(size: 12.5)).foregroundColor(Theme.muted)
             }
         }
         .frame(maxWidth: .infinity)

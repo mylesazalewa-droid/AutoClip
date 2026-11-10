@@ -188,10 +188,10 @@ private struct CommandBarView: View {
             HStack(spacing: 10) {
                 Image(systemName: bar.inEditor ? "text.bubble" : "command").foregroundColor(Theme.sand)
                 TextField(bar.inEditor ? "Say what to change, or pick an action…" : "Go to a page, open a clip, or search your sermons…", text: $bar.query)
-                    .textFieldStyle(.plain).font(.system(size: 16)).foregroundColor(Theme.ink)
+                    .textFieldStyle(.plain).font(.ui(size: 16)).foregroundColor(Theme.ink)
                     .focused($focused)
                     .onChange(of: bar.query) { _ in bar.selection = 0 }
-                Text("esc").font(.system(size: 11.5, weight: .semibold)).foregroundColor(Theme.faint)
+                Text("esc").font(.ui(size: 11.5, weight: .semibold)).foregroundColor(Theme.faint)
                     .padding(.horizontal, 5).padding(.vertical, 2)
                     .overlay(RoundedRectangle(cornerRadius: 4).stroke(Theme.line))
             }
@@ -206,7 +206,7 @@ private struct CommandBarView: View {
                                 .buttonStyle(.plain).id(i)
                         }
                         if list.isEmpty {
-                            Text("Nothing matches. Try another word.").font(.system(size: 13)).foregroundColor(Theme.muted).padding(20)
+                            Text("Nothing matches. Try another word.").font(.ui(size: 13)).foregroundColor(Theme.muted).padding(20)
                         }
                     }
                     .padding(6)
@@ -215,10 +215,10 @@ private struct CommandBarView: View {
             }
             Rectangle().fill(Theme.line).frame(height: 1)
             HStack(spacing: 12) {
-                Text("↑↓ move").font(.system(size: 11.5)).foregroundColor(Theme.faint)
-                Text("return to run").font(.system(size: 11.5)).foregroundColor(Theme.faint)
+                Text("↑↓ move").font(.ui(size: 11.5)).foregroundColor(Theme.faint)
+                Text("return to run").font(.ui(size: 11.5)).foregroundColor(Theme.faint)
                 Spacer()
-                if bar.inEditor { Text("Try: cut the part about my brother · start at the question · remove the ums").font(.system(size: 11.5)).foregroundColor(Theme.faint).lineLimit(1) }
+                if bar.inEditor { Text("Try: cut the part about my brother · start at the question · remove the ums").font(.ui(size: 11.5)).foregroundColor(Theme.faint).lineLimit(1) }
             }
             .padding(.horizontal, 14).padding(.vertical, 8)
         }
@@ -233,10 +233,10 @@ private struct CommandBarView: View {
 
     private func row(_ item: CommandBar.Item, selected: Bool) -> some View {
         HStack(spacing: 10) {
-            Image(systemName: item.icon).font(.system(size: 13)).foregroundColor(selected ? Theme.bg : Theme.sand).frame(width: 22)
-            Text(item.title).font(.system(size: 13, weight: .medium)).foregroundColor(selected ? Theme.bg : Theme.text).lineLimit(1)
+            Image(systemName: item.icon).font(.ui(size: 13)).foregroundColor(selected ? Theme.bg : Theme.sand).frame(width: 22)
+            Text(item.title).font(.ui(size: 13, weight: .medium)).foregroundColor(selected ? Theme.bg : Theme.text).lineLimit(1)
             Spacer()
-            if let d = item.detail { Text(d).font(.system(size: 12)).foregroundColor(selected ? Theme.bg.opacity(0.7) : Theme.faint).lineLimit(1) }
+            if let d = item.detail { Text(d).font(.ui(size: 12)).foregroundColor(selected ? Theme.bg.opacity(0.7) : Theme.faint).lineLimit(1) }
         }
         .padding(.horizontal, 10).padding(.vertical, 8)
         .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(selected ? Theme.sand : Color.clear))

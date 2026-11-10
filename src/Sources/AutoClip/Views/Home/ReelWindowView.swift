@@ -89,7 +89,7 @@ struct DraftPreviewPane: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            Text(draft.title).font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.ink).lineLimit(1)
+            Text(draft.title).font(.ui(size: 14, weight: .semibold)).foregroundColor(Theme.ink).lineLimit(1)
             ZStack {
                 Color.black
                 FillPlayerView(player: player)
@@ -103,7 +103,7 @@ struct DraftPreviewPane: View {
                 }
                 if phone != .off, isVertical { PhoneChrome(view: phone) }
                 if !isPlaying {
-                    Image(systemName: "play.circle.fill").font(.system(size: 54)).foregroundColor(.white.opacity(0.85))
+                    Image(systemName: "play.circle.fill").font(.ui(size: 54)).foregroundColor(.white.opacity(0.85))
                 }
             }
             .aspectRatio(aspect, contentMode: .fit)
@@ -119,18 +119,18 @@ struct DraftPreviewPane: View {
                 Slider(value: Binding(get: { time }, set: { t in
                     time = t; player.seek(to: CMTime(seconds: t, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
                 }), in: 0...max(total, 0.1)).tint(Theme.action)
-                Text("\(fmt(time)) / \(fmt(total))").font(.system(size: 12, design: .monospaced)).foregroundColor(Theme.ink.opacity(0.55))
+                Text("\(fmt(time)) / \(fmt(total))").font(.ui(size: 12, design: .monospaced)).foregroundColor(Theme.ink.opacity(0.55))
             }
             .frame(maxWidth: 520)
             HStack(spacing: 10) {
                 PhoneViewMenu(view: Binding(get: { phone }, set: { phoneRaw = $0.rawValue }))
                 if phone != .off, isVertical, draft.captions, phone.captionsCovered(look) {
-                    Text("Captions sit behind \(phone.label)'s text. Move them up in the editor.").font(.system(size: 11.5)).foregroundColor(Theme.warn)
+                    Text("Captions sit behind \(phone.label)'s text. Move them up in the editor.").font(.ui(size: 11.5)).foregroundColor(Theme.warn)
                 }
             }
             if following {
                 Label("Finding the speaker…", systemImage: "person.crop.rectangle")
-                    .font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
+                    .font(.ui(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
             }
         }
         .padding(20)

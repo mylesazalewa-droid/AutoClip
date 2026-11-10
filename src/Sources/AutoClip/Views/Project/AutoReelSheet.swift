@@ -52,16 +52,16 @@ struct AutoReelSheet: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Auto Clip")
-                        .font(.system(size: 18, weight: .bold))
+                        .font(.ui(size: 18, weight: .bold))
                         .foregroundColor(Theme.ink)
                     Text("Hook-first · word-trimmed · best moments stitched together")
-                        .font(.system(size: 13))
+                        .font(.ui(size: 13))
                         .foregroundColor(Theme.ink.opacity(0.55))
                 }
                 Spacer()
                 Button(action: { isPresented = false }) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.ui(size: 13, weight: .semibold))
                         .foregroundColor(Theme.ink.opacity(0.55))
                 }
                 .buttonStyle(.plain)
@@ -108,7 +108,7 @@ struct AutoReelSheet: View {
     private var configSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Settings")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.ui(size: 13, weight: .semibold))
                 .foregroundColor(Theme.ink.opacity(0.55))
                 .textCase(.uppercase)
 
@@ -123,7 +123,7 @@ struct AutoReelSheet: View {
             // Format picker
             VStack(alignment: .leading, spacing: 10) {
                 Text("Format")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.ui(size: 13, weight: .semibold))
                     .foregroundColor(Theme.ink.opacity(0.55))
                     .textCase(.uppercase)
 
@@ -141,7 +141,7 @@ struct AutoReelSheet: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Text("Captions")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.ui(size: 13, weight: .semibold))
                         .foregroundColor(Theme.ink.opacity(0.55))
                         .textCase(.uppercase)
                     Spacer()
@@ -160,7 +160,7 @@ struct AutoReelSheet: View {
                                     captionLook = CaptionLook(preset: style)
                                 }) {
                                     Text(style.name)
-                                        .font(.system(size: 12, weight: captionStyleIndex == i ? .semibold : .regular))
+                                        .font(.ui(size: 12, weight: captionStyleIndex == i ? .semibold : .regular))
                                         .foregroundColor(captionStyleIndex == i ? .black : Theme.ink.opacity(0.6))
                                         .padding(.horizontal, 10)
                                         .padding(.vertical, 5)
@@ -188,10 +188,10 @@ struct AutoReelSheet: View {
         return Button(action: { selectedFormat = fmt }) {
             VStack(spacing: 4) {
                 Image(systemName: fmt.icon)
-                    .font(.system(size: 14))
+                    .font(.ui(size: 14))
                     .foregroundColor(active ? .black : Theme.ink.opacity(0.5))
                 Text(fmt.rawValue)
-                    .font(.system(size: 11, weight: active ? .semibold : .regular))
+                    .font(.ui(size: 11, weight: active ? .semibold : .regular))
                     .foregroundColor(active ? .black : Theme.ink.opacity(0.4))
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
@@ -207,13 +207,13 @@ struct AutoReelSheet: View {
     private func sliderRow(label: String, value: Binding<Double>, range: ClosedRange<Double>, display: String) -> some View {
         HStack(spacing: 12) {
             Text(label)
-                .font(.system(size: 13))
+                .font(.ui(size: 13))
                 .foregroundColor(Theme.ink.opacity(0.7))
                 .frame(width: 90, alignment: .leading)
             Slider(value: value, in: range, step: 1)
                 .accentColor(Theme.action)
             Text(display)
-                .font(.system(size: 13, design: .monospaced))
+                .font(.ui(size: 13, design: .monospaced))
                 .foregroundColor(gold)
                 .frame(width: 44, alignment: .trailing)
         }
@@ -224,22 +224,22 @@ struct AutoReelSheet: View {
             HStack {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Best moments")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.ui(size: 13, weight: .semibold))
                         .foregroundColor(Theme.ink.opacity(0.55))
                         .textCase(.uppercase)
                     Text("From \(transcriptSegments.count) transcript segments")
-                        .font(.system(size: 11.5))
+                        .font(.ui(size: 11.5))
                         .foregroundColor(Theme.ink.opacity(0.55))
                 }
                 Spacer()
                 HStack(spacing: 8) {
                     Label("\(selectedClips.count) clips", systemImage: "scissors")
-                        .font(.system(size: 12))
+                        .font(.ui(size: 12))
                         .foregroundColor(Theme.ink.opacity(0.55))
                     Text("·")
                         .foregroundColor(Theme.ink.opacity(0.55))
                     Label(formatDuration(totalSelectedDuration), systemImage: "clock")
-                        .font(.system(size: 12))
+                        .font(.ui(size: 12))
                         .foregroundColor(gold)
                 }
             }
@@ -259,34 +259,34 @@ struct AutoReelSheet: View {
                     RoundedRectangle(cornerRadius: 3)
                         .fill(gold.opacity(0.2))
                     Text("HOOK")
-                        .font(.system(size: 10, weight: .black))
+                        .font(.ui(size: 10, weight: .black))
                         .foregroundColor(gold)
                 }
                 .frame(width: 34, height: 16)
             } else {
                 Text("\(index + 1)")
-                    .font(.system(size: 11.5, design: .monospaced))
+                    .font(.ui(size: 11.5, design: .monospaced))
                     .foregroundColor(Theme.ink.opacity(0.55))
                     .frame(width: 34, alignment: .trailing)
             }
             VStack(alignment: .leading, spacing: 1) {
                 Text(clip.title)
-                    .font(.system(size: 13, weight: isHook ? .semibold : .medium))
+                    .font(.ui(size: 13, weight: isHook ? .semibold : .medium))
                     .foregroundColor(isHook ? gold : .white)
                     .lineLimit(1)
                 Text(formatTimeRange(clip.startTime, clip.endTime))
-                    .font(.system(size: 11.5))
+                    .font(.ui(size: 11.5))
                     .foregroundColor(Theme.ink.opacity(0.55))
             }
             Spacer()
             Text(formatDuration(clip.endTime - clip.startTime))
-                .font(.system(size: 11.5, design: .monospaced))
+                .font(.ui(size: 11.5, design: .monospaced))
                 .foregroundColor(Theme.ink.opacity(0.55))
             ZStack {
                 RoundedRectangle(cornerRadius: 4)
                     .fill(scoreColor(clip.score).opacity(0.15))
                 Text("\(Int(clip.score))")
-                    .font(.system(size: 11.5, weight: .semibold))
+                    .font(.ui(size: 11.5, weight: .semibold))
                     .foregroundColor(scoreColor(clip.score))
             }
             .frame(width: 30, height: 18)
@@ -305,7 +305,7 @@ struct AutoReelSheet: View {
             ProgressView()
                 .scaleEffect(0.7)
             Text("Segmenting transcript...")
-                .font(.system(size: 13))
+                .font(.ui(size: 13))
                 .foregroundColor(Theme.ink.opacity(0.55))
         }
         .frame(maxWidth: .infinity)
@@ -315,13 +315,13 @@ struct AutoReelSheet: View {
     private var emptyState: some View {
         VStack(spacing: 8) {
             Image(systemName: "film.stack")
-                .font(.system(size: 28))
+                .font(.ui(size: 28))
                 .foregroundColor(Theme.ink.opacity(0.55))
             Text("No clips available")
-                .font(.system(size: 13))
+                .font(.ui(size: 13))
                 .foregroundColor(Theme.ink.opacity(0.55))
             Text("Analyze the video first to generate clips")
-                .font(.system(size: 12))
+                .font(.ui(size: 12))
                 .foregroundColor(Theme.ink.opacity(0.55))
         }
         .frame(maxWidth: .infinity)
@@ -334,14 +334,14 @@ struct AutoReelSheet: View {
                 VStack(spacing: 8) {
                     HStack {
                         Image(systemName: "waveform")
-                            .font(.system(size: 12))
+                            .font(.ui(size: 12))
                             .foregroundColor(gold)
                         Text(exportStatus)
-                            .font(.system(size: 13))
+                            .font(.ui(size: 13))
                             .foregroundColor(Theme.ink.opacity(0.7))
                         Spacer()
                         Text("\(Int(exportProgress * 100))%")
-                            .font(.system(size: 12, design: .monospaced))
+                            .font(.ui(size: 12, design: .monospaced))
                             .foregroundColor(gold)
                     }
                     GeometryReader { geo in
@@ -364,21 +364,21 @@ struct AutoReelSheet: View {
             if let err = exportError {
                 HStack {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundColor(.red)
+                        .foregroundColor(Theme.danger)
                     Text(err)
-                        .font(.system(size: 13))
-                        .foregroundColor(Color.red.opacity(0.85))
+                        .font(.ui(size: 13))
+                        .foregroundColor(Theme.danger.opacity(0.9))
                         .lineLimit(2)
                     Spacer()
                 }
                 .padding(12)
-                .background(Color.red.opacity(0.08))
+                .background(Theme.danger.opacity(0.08))
             }
 
             HStack(spacing: 10) {
                 Button(action: { isPresented = false }) {
                     Text("Cancel")
-                        .font(.system(size: 13))
+                        .font(.ui(size: 13))
                         .foregroundColor(Theme.ink.opacity(0.6))
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
@@ -392,9 +392,9 @@ struct AutoReelSheet: View {
                 Button(action: startExport) {
                     HStack(spacing: 6) {
                         Image(systemName: isExporting ? "hourglass" : "play.fill")
-                            .font(.system(size: 12))
+                            .font(.ui(size: 12))
                         Text(isExporting ? "Creating Clip..." : "Create Clip")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.ui(size: 13, weight: .semibold))
                     }
                     .foregroundColor(selectedClips.isEmpty || isExporting ? Theme.ink.opacity(0.4) : .black)
                     .padding(.horizontal, 20)
@@ -416,14 +416,14 @@ struct AutoReelSheet: View {
                 HStack(spacing: 6) {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundColor(gold)
-                        .font(.system(size: 14))
+                        .font(.ui(size: 14))
                     Text("Clip Created")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.ui(size: 13, weight: .semibold))
                         .foregroundColor(Theme.ink)
                     Text("·")
                         .foregroundColor(Theme.ink.opacity(0.55))
                     Text("\(selectedClips.count) clips · \(formatDuration(totalSelectedDuration))")
-                        .font(.system(size: 13))
+                        .font(.ui(size: 13))
                         .foregroundColor(Theme.ink.opacity(0.55))
                 }
                 Spacer()
@@ -433,7 +433,7 @@ struct AutoReelSheet: View {
                             Image(systemName: "folder")
                             Text("Finder")
                         }
-                        .font(.system(size: 13))
+                        .font(.ui(size: 13))
                         .foregroundColor(Theme.ink.opacity(0.6))
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
@@ -444,7 +444,7 @@ struct AutoReelSheet: View {
 
                     Button(action: { isPresented = false }) {
                         Text("Done")
-                            .font(.system(size: 13))
+                            .font(.ui(size: 13))
                             .foregroundColor(Theme.ink.opacity(0.6))
                             .padding(.horizontal, 10)
                             .padding(.vertical, 5)
@@ -496,7 +496,7 @@ struct AutoReelSheet: View {
                 // Pause indicator (shows briefly on pause)
                 if !reelIsPlaying {
                     Image(systemName: "play.circle.fill")
-                        .font(.system(size: 44))
+                        .font(.ui(size: 44))
                         .foregroundColor(.white.opacity(0.85))
                         .shadow(color: .black.opacity(0.5), radius: 8)
                 }

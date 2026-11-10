@@ -169,7 +169,7 @@ struct CinematicHero<Actions: View>: View {
             } else {
                 LinearGradient(colors: [Theme.navy.opacity(0.8), Theme.olive.opacity(0.35)], startPoint: .topLeading, endPoint: .bottomTrailing)
                     .overlay(alignment: .trailing) {
-                        Image(systemName: icon).font(.system(size: 170, weight: .thin)).foregroundColor(Theme.ink.opacity(0.55)).padding(.trailing, 90)
+                        Image(systemName: icon).font(.ui(size: 170, weight: .thin)).foregroundColor(Theme.ink.opacity(0.55)).padding(.trailing, 90)
                     }
             }
             // Shade so the words read over any picture
@@ -178,12 +178,12 @@ struct CinematicHero<Actions: View>: View {
             LinearGradient(colors: [.clear, .black.opacity(0.35)], startPoint: .center, endPoint: .bottom)
 
             VStack(alignment: .leading, spacing: 14) {
-                Text(eyebrow.uppercased()).font(.system(size: 12, weight: .semibold)).tracking(2.2).foregroundColor(Theme.sand)
+                Text(eyebrow.uppercased()).font(.ui(size: 12, weight: .semibold)).tracking(2.2).foregroundColor(Theme.sand)
                 Text(title).font(Theme.display(46, weight: .medium)).foregroundColor(Theme.ink)
                     .lineLimit(2).minimumScaleFactor(0.7).frame(maxWidth: 680, alignment: .leading)
                     .shadow(color: .black.opacity(0.4), radius: 8, y: 2)
                 if let detail {
-                    Text(detail).font(.system(size: 14)).foregroundColor(Theme.ink.opacity(0.78)).lineLimit(2).frame(maxWidth: 620, alignment: .leading)
+                    Text(detail).font(.ui(size: 14)).foregroundColor(Theme.ink.opacity(0.78)).lineLimit(2).frame(maxWidth: 620, alignment: .leading)
                 }
                 HStack(spacing: 10) { actions }.padding(.top, 6)
             }
@@ -206,7 +206,7 @@ struct SectionTitle: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(title).font(Theme.display(22, weight: .medium)).foregroundColor(Theme.cream)
-            if let count { Text("\(count)").font(.system(size: 13, weight: .medium)).foregroundColor(Theme.muted) }
+            if let count { Text("\(count)").font(.ui(size: 13, weight: .medium)).foregroundColor(Theme.muted) }
         }
     }
 }
@@ -279,8 +279,8 @@ struct AppSidebar: View {
                 if !volunteer.enabled { PlanChip() }
                 Button { CommandBar.shared.toggle() } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: "command").font(.system(size: 11.5))
-                        Text("K to do anything").font(.system(size: 12))
+                        Image(systemName: "command").font(.ui(size: 11.5))
+                        Text("K to do anything").font(.ui(size: 12))
                     }
                     .foregroundColor(Theme.faint).padding(.horizontal, 12).padding(.vertical, 4)
                     .contentShape(Rectangle())
@@ -299,7 +299,7 @@ struct AppSidebar: View {
     }
 
     private func group(_ title: String) -> some View {
-        Text(title.uppercased()).font(.system(size: 11.5, weight: .semibold)).tracking(1.6).foregroundColor(Theme.faint)
+        Text(title.uppercased()).font(.ui(size: 11.5, weight: .semibold)).tracking(1.6).foregroundColor(Theme.faint)
             .padding(.horizontal, 12).padding(.top, 20).padding(.bottom, 4)
     }
 
@@ -321,9 +321,9 @@ private struct SidebarLink: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 11) {
-                Image(systemName: icon).font(.system(size: 13, weight: isActive ? .semibold : .regular)).frame(width: 20)
+                Image(systemName: icon).font(.ui(size: 13, weight: isActive ? .semibold : .regular)).frame(width: 20)
                     .foregroundColor(isActive ? Theme.sand : Theme.muted)
-                Text(title).font(.system(size: 13, weight: isActive ? .semibold : .regular))
+                Text(title).font(.ui(size: 13, weight: isActive ? .semibold : .regular))
                     .foregroundColor(isActive ? .white : hover ? Theme.text : Theme.ink.opacity(0.72))
                 Spacer()
                 if working {

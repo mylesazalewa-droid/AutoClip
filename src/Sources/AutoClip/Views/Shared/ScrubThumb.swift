@@ -49,7 +49,7 @@ struct ScrubThumb: View {
                         Image(nsImage: img).resizable().scaledToFill()
                             .frame(width: geo.size.width, height: geo.size.height).clipped()
                     }
-                    Text(moments[index].word).font(.system(size: max(11, geo.size.width * 0.075), weight: .heavy))
+                    Text(moments[index].word).font(.ui(size: max(11, geo.size.width * 0.075), weight: .heavy))
                         .foregroundColor(.white).shadow(color: .black, radius: 3).lineLimit(1)
                         .padding(.bottom, geo.size.height * 0.2)
                     GeometryReader { g in

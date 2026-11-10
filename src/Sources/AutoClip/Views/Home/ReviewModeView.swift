@@ -31,10 +31,10 @@ struct ReviewModeView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Quick review").font(Theme.display(20)).foregroundColor(Theme.cream)
                     Text(index < queue.count ? "Clip \(index + 1) of \(queue.count)" : "All reviewed")
-                        .font(.system(size: 12)).foregroundColor(Theme.muted)
+                        .font(.ui(size: 12)).foregroundColor(Theme.muted)
                 }
                 Spacer()
-                Text("\(kept.count) kept · \(tossed.count) tossed").font(.system(size: 13)).foregroundColor(gold).monospacedDigit()
+                Text("\(kept.count) kept · \(tossed.count) tossed").font(.ui(size: 13)).foregroundColor(gold).monospacedDigit()
                 Button("Done") { dismiss() }.keyboardShortcut(.cancelAction).padding(.leading, 10)
             }
             .padding(16)
@@ -69,13 +69,13 @@ struct ReviewModeView: View {
     private var finished: some View {
         VStack(spacing: 14) {
             if kept.isEmpty {
-                Image(systemName: "checkmark.seal").font(.system(size: 34)).foregroundColor(gold)
+                Image(systemName: "checkmark.seal").font(.ui(size: 34)).foregroundColor(gold)
             } else {
                 CelebrationBurst(size: 40)
             }
             Text("You kept \(kept.count) of \(queue.count)").font(Theme.display(24)).foregroundColor(Theme.cream)
             Text("Kept clips are selected in the list. AutoClip will pick more like them next time.")
-                .font(.system(size: 13)).foregroundColor(Theme.muted)
+                .font(.ui(size: 13)).foregroundColor(Theme.muted)
             HStack(spacing: 10) {
                 if !history.isEmpty {
                     Button("Undo last") { undo() }.buttonStyle(SecondaryButtonStyle(compact: false)).keyboardShortcut("z", modifiers: [])
@@ -94,9 +94,9 @@ struct ReviewModeView: View {
                            action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 8) {
-                Text(key).font(.system(size: 13, weight: .bold, design: .monospaced))
+                Text(key).font(.ui(size: 13, weight: .bold, design: .monospaced))
                     .frame(width: 26, height: 22).background(RoundedRectangle(cornerRadius: 5).stroke(color.opacity(0.6)))
-                Text(title).font(.system(size: 13, weight: .semibold))
+                Text(title).font(.ui(size: 13, weight: .semibold))
             }
             .foregroundColor(color)
             .padding(.horizontal, 14).padding(.vertical, 9)

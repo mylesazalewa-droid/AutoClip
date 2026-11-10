@@ -130,7 +130,7 @@ struct CutTrimmer: View {
             let wordX = x(w.startTime)
             let isCut = cutStarts.contains((w.startTime * 100).rounded())
             let plays = isStart ? w.startTime >= cutTime - 0.02 : w.endTime <= cutTime + 0.02
-            let label = context.resolve(Text(w.word).font(.system(size: 11, weight: .medium))
+            let label = context.resolve(Text(w.word).font(.ui(size: 11, weight: .medium))
                 .foregroundColor(isCut ? Theme.danger : plays ? Theme.ink.opacity(0.85) : Theme.ink.opacity(0.35))
                 .strikethrough(isCut))
             let width = label.measure(in: size).width

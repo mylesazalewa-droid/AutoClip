@@ -76,7 +76,7 @@ struct CleanAudioSheet: View {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Clean audio for your podcast").font(Theme.display(24)).foregroundColor(Theme.cream)
-                    Text(title).font(.system(size: 13)).foregroundColor(Theme.muted).lineLimit(1)
+                    Text(title).font(.ui(size: 13)).foregroundColor(Theme.muted).lineLimit(1)
                 }
                 Spacer()
                 if !embedded { Button("Close") { close() }.keyboardShortcut(.cancelAction) }
@@ -85,15 +85,15 @@ struct CleanAudioSheet: View {
             // The whole recording
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Text("DRAG THE HANDLES TO CHOOSE THE PART YOU WANT").font(.system(size: 11, weight: .semibold)).tracking(1).foregroundColor(Theme.faint)
+                    Text("DRAG THE HANDLES TO CHOOSE THE PART YOU WANT").font(.ui(size: 11, weight: .semibold)).tracking(1).foregroundColor(Theme.faint)
                     Spacer()
-                    Text("Length \(fmt(end - start))").font(.system(size: 12, weight: .semibold).monospacedDigit()).foregroundColor(Theme.ink)
+                    Text("Length \(fmt(end - start))").font(.ui(size: 12, weight: .semibold).monospacedDigit()).foregroundColor(Theme.ink)
                 }
                 overview.frame(height: 96)
                 HStack {
-                    Text("0:00").font(.system(size: 11).monospacedDigit()).foregroundColor(Theme.faint)
+                    Text("0:00").font(.ui(size: 11).monospacedDigit()).foregroundColor(Theme.faint)
                     Spacer()
-                    Text(fmt(duration)).font(.system(size: 11).monospacedDigit()).foregroundColor(Theme.faint)
+                    Text(fmt(duration)).font(.ui(size: 11).monospacedDigit()).foregroundColor(Theme.faint)
                 }
             }
 
@@ -108,13 +108,13 @@ struct CleanAudioSheet: View {
             HStack(spacing: 10) {
                 if let status {
                     ProgressView(value: progress).frame(width: 160).tint(gold)
-                    Text(status).font(.system(size: 12.5)).foregroundColor(Theme.muted)
+                    Text(status).font(.ui(size: 12.5)).foregroundColor(Theme.muted)
                     Button("Stop") { jobs.cancel(path) }.buttonStyle(SecondaryButtonStyle(compact: true))
                 } else if let saved {
-                    Label("Saved \(saved.lastPathComponent)", systemImage: "checkmark.circle.fill").font(.system(size: 12.5, weight: .semibold)).foregroundColor(Theme.good)
+                    Label("Saved \(saved.lastPathComponent)", systemImage: "checkmark.circle.fill").font(.ui(size: 12.5, weight: .semibold)).foregroundColor(Theme.good)
                     Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([saved]) }.buttonStyle(SecondaryButtonStyle(compact: true))
                 } else if let error {
-                    Text(error).font(.system(size: 12.5)).foregroundColor(Theme.danger).lineLimit(2)
+                    Text(error).font(.ui(size: 12.5)).foregroundColor(Theme.danger).lineLimit(2)
                 }
                 Spacer()
                 Button { export() } label: { Label("Export audio…", systemImage: "waveform.badge.plus") }
@@ -150,7 +150,7 @@ struct CleanAudioSheet: View {
                     }
                 }
                 if levels.isEmpty {
-                    HStack(spacing: 8) { ProgressView().controlSize(.small); Text("Reading the sound…").font(.system(size: 12)).foregroundColor(Theme.muted) }
+                    HStack(spacing: 8) { ProgressView().controlSize(.small); Text("Reading the sound…").font(.ui(size: 12)).foregroundColor(Theme.muted) }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
                 if duration > 0 {
@@ -175,7 +175,7 @@ struct CleanAudioSheet: View {
     private func handle(_ h: Handle, x: CGFloat) -> some View {
         Rectangle().fill(Theme.cream).frame(width: 2)
             .overlay(alignment: h == .start ? .topLeading : .topTrailing) {
-                Text(h == .start ? "START" : "END").font(.system(size: 9, weight: .bold)).foregroundColor(Theme.onSand)
+                Text(h == .start ? "START" : "END").font(.ui(size: 9, weight: .bold)).foregroundColor(Theme.onSand)
                     .padding(.horizontal, 4).padding(.vertical, 2).background(Theme.cream).fixedSize()
                     .offset(x: h == .start ? 0 : 0)
             }
@@ -191,11 +191,11 @@ struct CleanAudioSheet: View {
         let t = isStart ? start : end
         return VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text(isStart ? "Starts at" : "Ends at").font(.system(size: 12.5, weight: .semibold)).foregroundColor(Theme.ink)
-                Text(fmt(t, tenths: true)).font(.system(size: 12.5).monospacedDigit()).foregroundColor(gold)
+                Text(isStart ? "Starts at" : "Ends at").font(.ui(size: 12.5, weight: .semibold)).foregroundColor(Theme.ink)
+                Text(fmt(t, tenths: true)).font(.ui(size: 12.5).monospacedDigit()).foregroundColor(gold)
                 Spacer()
                 Button { preview(isStart: isStart) } label: {
-                    Label(isStart ? "Play from here" : "Play to here", systemImage: playing ? "stop.fill" : "play.fill").font(.system(size: 12))
+                    Label(isStart ? "Play from here" : "Play to here", systemImage: playing ? "stop.fill" : "play.fill").font(.ui(size: 12))
                 }
                 .buttonStyle(SecondaryButtonStyle(compact: true))
             }
@@ -205,7 +205,7 @@ struct CleanAudioSheet: View {
                 }
                 .id("\(isStart)-\(t)")
             }
-            Text("Drag along the sound to move it a few seconds.").font(.system(size: 11)).foregroundColor(Theme.faint)
+            Text("Drag along the sound to move it a few seconds.").font(.ui(size: 11)).foregroundColor(Theme.faint)
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -222,7 +222,7 @@ struct CleanAudioSheet: View {
                     .help("Removes room echo, hum, crowd and background noise, like clip exports")
                 if options.cleanVoice {
                     HStack(spacing: 6) {
-                        Text("Strength").font(.system(size: 12)).foregroundColor(Theme.muted)
+                        Text("Strength").font(.ui(size: 12)).foregroundColor(Theme.muted)
                         Slider(value: $options.strength, in: 0.3...1).frame(width: 120)
                     }
                 }
@@ -238,9 +238,9 @@ struct CleanAudioSheet: View {
                 .fixedSize()
             }
             Text("Spotify, Apple Podcasts, Buzzsprout and Anchor all take WAV or M4A. WAV is the best quality; M4A is a tenth of the size.")
-                .font(.system(size: 11.5)).foregroundColor(Theme.faint)
+                .font(.ui(size: 11.5)).foregroundColor(Theme.faint)
         }
-        .font(.system(size: 13))
+        .font(.ui(size: 13))
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 10).fill(Theme.surface))

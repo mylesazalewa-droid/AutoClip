@@ -267,7 +267,7 @@ final class AutoImport: ObservableObject {
             guard let rec = AutoReelsStore.shared.reels.first(where: { $0.dateCreated >= started && $0.genParams?.sourceTitle == title }) else {
                 let err = AutoReelsStore.shared.activeJobs.first { $0.id == jobID }?.error
                 note(title, err ?? "Couldn't make clips.", ok: false)
-                notify("Auto-import couldn't finish", "\(title): \(err ?? "no reels were made")")
+                notify("Auto-import couldn't finish", "\(title): \(err ?? "no clips were made")")
                 return
             }
             var detail = "\(rec.drafts?.count ?? 0) clips ready"

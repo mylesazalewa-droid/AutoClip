@@ -134,23 +134,23 @@ struct ShortScriptView: View {
     var body: some View {
         HStack(alignment: .top, spacing: 24) {
             VStack(alignment: .leading, spacing: 10) {
-                Text("YOUR SCRIPT").font(.system(size: 11, weight: .semibold)).tracking(1).foregroundColor(Theme.faint)
+                Text("YOUR SCRIPT").font(.ui(size: 11, weight: .semibold)).tracking(1).foregroundColor(Theme.faint)
                 TextField("What's it about? (optional, helps the AI)", text: $topic).textFieldStyle(.roundedBorder)
                 ZStack(alignment: .topLeading) {
                     TextEditor(text: $script)
-                        .font(.system(size: 15)).scrollContentBackground(.hidden)
+                        .font(.ui(size: 15)).scrollContentBackground(.hidden)
                         .padding(10)
                         .background(RoundedRectangle(cornerRadius: 10).fill(Theme.surface))
                         .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.line))
                     if script.isEmpty {
                         Text("Paste or write your Short here, one line per thought.\n\nStart with the line that stops the scroll.")
-                            .font(.system(size: 15)).foregroundColor(Theme.faint).padding(16).allowsHitTesting(false)
+                            .font(.ui(size: 15)).foregroundColor(Theme.faint).padding(16).allowsHitTesting(false)
                     }
                 }
                 .frame(minHeight: 300)
                 HStack(spacing: 10) {
                     Text("\(ScriptCheck.words(script).count) words · about \(Int(ScriptCheck.seconds(script))) seconds")
-                        .font(.system(size: 12)).foregroundColor(Theme.muted)
+                        .font(.ui(size: 12)).foregroundColor(Theme.muted)
                     Spacer()
                     if let previous {
                         Button { script = previous; self.previous = nil } label: { Label("Undo", systemImage: "arrow.uturn.backward") }
@@ -164,18 +164,19 @@ struct ShortScriptView: View {
                     }
                     .buttonStyle(PrimaryButtonStyle(compact: true))
                     .disabled(script.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || working)
-                    .help("AI rewrites it with a stronger hook, real turns and a looping ending, in your voice. One AI request.")
+                    .help("AI rewrites it with a stronger hook, real turns and a looping ending, in your voice. Uses \(AICost.phrase()).")
                 }
-                if let error { Text(error).font(.system(size: 12.5)).foregroundColor(Theme.danger).fixedSize(horizontal: false, vertical: true) }
+                Text("Checks are free. Make it better uses \(AICost.phrase()).").font(.ui(size: 11)).foregroundColor(Theme.faint)
+                if let error { Text(error).font(.ui(size: 12.5)).foregroundColor(Theme.danger).fixedSize(horizontal: false, vertical: true) }
                 if !hooks.isEmpty || rewrite != nil { aiCard }
             }
             .frame(maxWidth: .infinity)
 
             VStack(alignment: .leading, spacing: 10) {
-                Text("CHECKS").font(.system(size: 11, weight: .semibold)).tracking(1).foregroundColor(Theme.faint)
+                Text("CHECKS").font(.ui(size: 11, weight: .semibold)).tracking(1).foregroundColor(Theme.faint)
                 if findings.isEmpty {
                     Text("Start typing and AutoClip checks the hook, length, turns and ending as you go. No AI needed for this part.")
-                        .font(.system(size: 12.5)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                        .font(.ui(size: 12.5)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
                 } else {
                     ForEach(findings) { f in findingRow(f) }
                 }
@@ -187,12 +188,12 @@ struct ShortScriptView: View {
     private func findingRow(_ f: ScriptCheck.Finding) -> some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: f.good ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                .foregroundColor(f.good ? Theme.good : Theme.warn).font(.system(size: 14))
+                .foregroundColor(f.good ? Theme.good : Theme.warn).font(.ui(size: 14))
             VStack(alignment: .leading, spacing: 3) {
-                Text(f.title).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.ink)
-                Text(f.detail).font(.system(size: 12)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                Text(f.title).font(.ui(size: 13, weight: .semibold)).foregroundColor(Theme.ink)
+                Text(f.detail).font(.ui(size: 12)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
                 if let e = f.example {
-                    Text(e).font(.system(size: 12).italic()).foregroundColor(Theme.sand).fixedSize(horizontal: false, vertical: true)
+                    Text(e).font(.ui(size: 12).italic()).foregroundColor(Theme.sand).fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
@@ -203,10 +204,10 @@ struct ShortScriptView: View {
     private var aiCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             if !hooks.isEmpty {
-                Text("HOOKS TO TRY").font(.system(size: 11, weight: .semibold)).tracking(1).foregroundColor(Theme.faint)
+                Text("HOOKS TO TRY").font(.ui(size: 11, weight: .semibold)).tracking(1).foregroundColor(Theme.faint)
                 ForEach(hooks, id: \.self) { h in
                     HStack(alignment: .top) {
-                        Text(h).font(.system(size: 13.5, weight: .semibold)).foregroundColor(Theme.cream).fixedSize(horizontal: false, vertical: true)
+                        Text(h).font(.ui(size: 13.5, weight: .semibold)).foregroundColor(Theme.cream).fixedSize(horizontal: false, vertical: true)
                         Spacer()
                         Button("Use") { useHook(h) }.buttonStyle(SecondaryButtonStyle(compact: true))
                             .help("Put this at the top of your script in place of the first line")
@@ -214,18 +215,18 @@ struct ShortScriptView: View {
                 }
             }
             if let rewrite {
-                Text("REWRITTEN").font(.system(size: 11, weight: .semibold)).tracking(1).foregroundColor(Theme.faint)
-                Text(rewrite).font(.system(size: 13.5)).foregroundColor(Theme.text).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                Text("REWRITTEN").font(.ui(size: 11, weight: .semibold)).tracking(1).foregroundColor(Theme.faint)
+                Text(rewrite).font(.ui(size: 13.5)).foregroundColor(Theme.text).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
                 if !why.isEmpty {
                     VStack(alignment: .leading, spacing: 3) {
-                        ForEach(why, id: \.self) { w in Label(w, systemImage: "arrow.turn.down.right").font(.system(size: 12)).foregroundColor(Theme.muted) }
+                        ForEach(why, id: \.self) { w in Label(w, systemImage: "arrow.turn.down.right").font(.ui(size: 12)).foregroundColor(Theme.muted) }
                     }
                 }
                 HStack {
                     Button { previous = script; script = rewrite; self.rewrite = nil } label: { Label("Use this version", systemImage: "checkmark") }
                         .buttonStyle(PrimaryButtonStyle(compact: true))
                     Button { copy(rewrite) } label: { Label("Copy", systemImage: "doc.on.doc") }.buttonStyle(SecondaryButtonStyle(compact: true))
-                    Text("Your version is kept: Undo brings it back.").font(.system(size: 11.5)).foregroundColor(Theme.faint)
+                    Text("Your version is kept: Undo brings it back.").font(.ui(size: 11.5)).foregroundColor(Theme.faint)
                 }
             }
         }

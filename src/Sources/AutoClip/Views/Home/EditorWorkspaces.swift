@@ -101,7 +101,7 @@ struct ReframeWorkspace<Advanced: View>: View {
                 beforeImage.frame(maxWidth: 460)
                 if let p = piece, let first = p.sentences.first, let last = p.sentences.last, last.end - first.start > 1 {
                     HStack(spacing: 8) {
-                        Image(systemName: "clock").font(.system(size: 11.5)).foregroundColor(Theme.muted)
+                        Image(systemName: "clock").font(.ui(size: 11.5)).foregroundColor(Theme.muted)
                         Slider(value: $moment, in: first.start...last.end) { editing in
                             if !editing { Task { await show(moment) } }
                         }
@@ -112,7 +112,7 @@ struct ReframeWorkspace<Advanced: View>: View {
                 }
                 label("Before")
             }
-            Image(systemName: "arrow.right").font(.system(size: 14, weight: .medium)).foregroundColor(Theme.muted)
+            Image(systemName: "arrow.right").font(.ui(size: 14, weight: .medium)).foregroundColor(Theme.muted)
             VStack(spacing: 10) {
                 afterImage
                 label(framing?.mode == "split" ? "Split layout" : canReframe ? "Fill layout" : "Original shape")
@@ -122,7 +122,7 @@ struct ReframeWorkspace<Advanced: View>: View {
     }
 
     private func label(_ s: String) -> some View {
-        Text(s).font(.system(size: 13, weight: .medium)).foregroundColor(Theme.cream)
+        Text(s).font(.ui(size: 13, weight: .medium)).foregroundColor(Theme.cream)
             .padding(.horizontal, 14).padding(.vertical, 6)
             .background(Capsule().fill(Theme.ink.opacity(0.1)))
     }
@@ -157,7 +157,7 @@ struct ReframeWorkspace<Advanced: View>: View {
                                     .frame(width: w, height: geo.size.height)
                                     .position(x: cx, y: geo.size.height / 2)
                                     .allowsHitTesting(false)
-                                Label("AI", systemImage: "sparkles").font(.system(size: 11, weight: .bold)).foregroundColor(Theme.onSand)
+                                Label("AI", systemImage: "sparkles").font(.ui(size: 11, weight: .bold)).foregroundColor(Theme.onSand)
                                     .padding(.horizontal, 7).padding(.vertical, 3)
                                     .background(Capsule().fill(Theme.sand))
                                     .position(x: cx, y: geo.size.height - 16)
@@ -215,13 +215,13 @@ struct ReframeWorkspace<Advanced: View>: View {
     @ViewBuilder private var question: some View {
         if !canReframe, frame != nil {
             Text("This clip keeps the video's shape, so there's nothing to reframe. Pick 9:16, 4:5 or 1:1 on the Edit tab to choose a framing.")
-                .font(.system(size: 13)).foregroundColor(Theme.muted).multilineTextAlignment(.center)
+                .font(.ui(size: 13)).foregroundColor(Theme.muted).multilineTextAlignment(.center)
         } else if let crew {
             VStack(spacing: 12) {
                 Text(crew.count >= 2 ? "\(crew.count) people found. Who should this follow?" : framing?.mode == "person" ? "Following who you picked." : crew.count == 1 ? "One person found. The frame follows them." : "No one found clearly.")
                     .font(Theme.display(17)).foregroundColor(Theme.cream)
                 Text("Wrong person or missed someone? Click them in the picture. Use the slider to find a clearer moment.")
-                    .font(.system(size: 12)).foregroundColor(Theme.muted)
+                    .font(.ui(size: 12)).foregroundColor(Theme.muted)
                 if crew.count < 2, framing != nil {
                     Button("Back to whoever's talking") { apply(nil) }.controlSize(.small)
                 }
@@ -233,24 +233,24 @@ struct ReframeWorkspace<Advanced: View>: View {
                             } action: { moment = person.time; apply(ReelDraft.Framing(mode: "person", x: person.x, t: person.time)); Task { await show(person.time) } }
                         }
                         ReframeTile(title: "Whoever's talking", selected: framing == nil) {
-                            Image(systemName: "waveform").font(.system(size: 20)).foregroundColor(Theme.sand)
+                            Image(systemName: "waveform").font(.ui(size: 20)).foregroundColor(Theme.sand)
                         } action: { apply(nil) }
                         if outputAspect ?? 1 < 1 {
                             ReframeTile(title: "Both, stacked", selected: framing?.mode == "split") {
-                                Image(systemName: "rectangle.split.1x2").font(.system(size: 20)).foregroundColor(Theme.sand)
+                                Image(systemName: "rectangle.split.1x2").font(.ui(size: 20)).foregroundColor(Theme.sand)
                             } action: { apply(ReelDraft.Framing(mode: "split", x: crew[0].x, x2: crew[crew.count - 1].x)) }
                         }
                     }
                     if draft.pieces.count > 1 {
                         Toggle("Use for every clip", isOn: $everyClip).toggleStyle(.checkbox)
-                            .font(.system(size: 12)).foregroundColor(Theme.muted)
+                            .font(.ui(size: 12)).foregroundColor(Theme.muted)
                     }
                 }
             }
         } else {
             HStack(spacing: 8) {
                 ProgressView().controlSize(.small)
-                Text("Looking for people…").font(.system(size: 13)).foregroundColor(Theme.muted)
+                Text("Looking for people…").font(.ui(size: 13)).foregroundColor(Theme.muted)
             }
         }
     }
@@ -278,7 +278,7 @@ struct ReframeTile<Content: View>: View {
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .stroke(selected ? Theme.cream : Theme.ink.opacity(0.12), lineWidth: selected ? 2 : 1))
-                Text(title).font(.system(size: 11.5, weight: selected ? .semibold : .regular))
+                Text(title).font(.ui(size: 11.5, weight: selected ? .semibold : .regular))
                     .foregroundColor(selected ? Theme.cream : Theme.muted).lineLimit(1).fixedSize()
             }
         }
@@ -367,7 +367,7 @@ struct CaptionPanel: View {
             HStack(spacing: 18) {
                 ForEach([Tab.presets, .font, .effects], id: \.self) { t in
                     Button(t.rawValue) { tab = t }.buttonStyle(.plain)
-                        .font(.system(size: 13, weight: tab == t ? .semibold : .regular))
+                        .font(.ui(size: 13, weight: tab == t ? .semibold : .regular))
                         .foregroundColor(tab == t ? Theme.cream : Theme.muted)
                 }
                 Spacer()
@@ -392,7 +392,7 @@ struct CaptionPanel: View {
 
     @ViewBuilder private var presets: some View {
         Button { captions = false } label: {
-            tile(selected: !captions) { Image(systemName: "nosign").font(.system(size: 18)).foregroundColor(Theme.muted) }
+            tile(selected: !captions) { Image(systemName: "nosign").font(.ui(size: 18)).foregroundColor(Theme.muted) }
         }.buttonStyle(.plain)
         name("No captions")
         ForEach(CaptionStyle.all) { style in
@@ -419,7 +419,7 @@ struct CaptionPanel: View {
     }
 
     private func name(_ s: String) -> some View {
-        Text(s).font(.system(size: 11.5)).foregroundColor(Theme.muted).padding(.top, -6)
+        Text(s).font(.ui(size: 11.5)).foregroundColor(Theme.muted).padding(.top, -6)
     }
 }
 

@@ -15,12 +15,12 @@ struct PageHeader<Trailing: View>: View {
         HStack(alignment: .bottom, spacing: 16) {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 7) {
-                    Image(systemName: "diamond.fill").font(.system(size: 5)).foregroundColor(Theme.sand)
-                    Text(eyebrow.uppercased()).font(.system(size: 11.5, weight: .semibold)).tracking(2).foregroundColor(Theme.sand)
+                    Image(systemName: "diamond.fill").font(.ui(size: 5)).foregroundColor(Theme.sand)
+                    Text(eyebrow.uppercased()).font(.ui(size: 11.5, weight: .semibold)).tracking(2).foregroundColor(Theme.sand)
                 }
                 Text(title).font(Theme.display(36, weight: .medium)).foregroundColor(Theme.ink).lineLimit(2)
                 if let subtitle {
-                    Text(subtitle).font(.system(size: 13)).foregroundColor(Theme.muted).lineLimit(2)
+                    Text(subtitle).font(.ui(size: 13)).foregroundColor(Theme.muted).lineLimit(2)
                 }
             }
             Spacer(minLength: 12)
@@ -67,7 +67,7 @@ private struct PillTab: View {
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: compact ? 11 : 12, weight: active ? .semibold : .medium))
+                .font(.ui(size: compact ? 11 : 12, weight: active ? .semibold : .medium))
                 .foregroundColor(active ? Theme.bg : hover ? Theme.text : Theme.muted)
                 .padding(.horizontal, compact ? 10 : 14).padding(.vertical, compact ? 4 : 6)
                 .background(Capsule().fill(active ? Theme.sand : hover ? Theme.ink.opacity(0.06) : Color.clear))
@@ -86,10 +86,10 @@ struct SearchPill: View {
 
     var body: some View {
         HStack(spacing: 7) {
-            Image(systemName: "magnifyingglass").font(.system(size: 12)).foregroundColor(Theme.faint)
-            TextField(placeholder, text: $text).textFieldStyle(.plain).font(.system(size: 13)).foregroundColor(Theme.text)
+            Image(systemName: "magnifyingglass").font(.ui(size: 12)).foregroundColor(Theme.faint)
+            TextField(placeholder, text: $text).textFieldStyle(.plain).font(.ui(size: 13)).foregroundColor(Theme.text)
             if !text.isEmpty {
-                Button { text = "" } label: { Image(systemName: "xmark.circle.fill").font(.system(size: 12)).foregroundColor(Theme.faint) }
+                Button { text = "" } label: { Image(systemName: "xmark.circle.fill").font(.ui(size: 12)).foregroundColor(Theme.faint) }
                     .buttonStyle(.plain)
             }
         }
@@ -141,18 +141,18 @@ struct SidebarRow: View {
                     ReelThumbnailView(path: thumb).frame(width: 56, height: 34).clipped()
                 } else {
                     LinearGradient(colors: [Theme.navy, Theme.charcoal], startPoint: .topLeading, endPoint: .bottomTrailing)
-                    Image(systemName: icon).font(.system(size: 13)).foregroundColor(Theme.sand.opacity(0.8))
+                    Image(systemName: icon).font(.ui(size: 13)).foregroundColor(Theme.sand.opacity(0.8))
                 }
             }
             .frame(width: 56, height: 34)
             .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).stroke(Theme.ink.opacity(0.08), lineWidth: 1))
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.system(size: 13, weight: selected ? .semibold : .medium))
+                Text(title).font(.ui(size: 13, weight: selected ? .semibold : .medium))
                     .foregroundColor(selected ? Theme.cream : Theme.text.opacity(0.85))
                     .lineLimit(2).multilineTextAlignment(.leading)
                 if let detail {
-                    Text(detail).font(.system(size: 11.5)).foregroundColor(selected ? Theme.sand : Theme.faint).lineLimit(1)
+                    Text(detail).font(.ui(size: 11.5)).foregroundColor(selected ? Theme.sand : Theme.faint).lineLimit(1)
                 }
             }
             Spacer(minLength: 0)
@@ -179,7 +179,7 @@ struct IconPillButton: View {
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: icon).font(.system(size: 12, weight: .semibold))
+            Image(systemName: icon).font(.ui(size: 12, weight: .semibold))
                 .foregroundColor(hover ? Theme.cream : Theme.sand)
                 .frame(width: 26, height: 26)
                 .background(Circle().fill(Theme.ink.opacity(hover ? 0.1 : 0.05)))
@@ -200,12 +200,12 @@ struct EmptyState<Actions: View>: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            Image(systemName: icon).font(.system(size: 26)).foregroundColor(Theme.sand)
+            Image(systemName: icon).font(.ui(size: 26)).foregroundColor(Theme.sand)
                 .frame(width: 72, height: 72)
                 .background(Circle().fill(Theme.sand.opacity(0.08)))
                 .overlay(Circle().stroke(Theme.sand.opacity(0.3), lineWidth: 1))
             Text(title).font(Theme.display(24)).foregroundColor(Theme.cream)
-            Text(message).font(.system(size: 13)).foregroundColor(Theme.muted)
+            Text(message).font(.ui(size: 13)).foregroundColor(Theme.muted)
                 .multilineTextAlignment(.center).frame(maxWidth: 460).fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 10) { actions }.padding(.top, 4)
         }

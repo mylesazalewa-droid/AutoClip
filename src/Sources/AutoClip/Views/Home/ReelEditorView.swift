@@ -65,7 +65,7 @@ struct ReelDraftsView: View {
                         ForEach(shown, id: \.d.id) { item in row(item.i, item.d) }
                         if shown.isEmpty && !drafts.isEmpty {
                             Text(filter == .todo ? "Every clip is exported." : "No clips here yet.")
-                                .font(.system(size: 13)).foregroundColor(Theme.muted).padding(.top, 30)
+                                .font(.ui(size: 13)).foregroundColor(Theme.muted).padding(.top, 30)
                         }
                     }
                     .padding(.horizontal, 16).padding(.bottom, 16).padding(.top, 4)
@@ -83,7 +83,7 @@ struct ReelDraftsView: View {
                 if let rec = record, let src = sourcePath {
                     ScrollView { CleanAudioSheet(path: src, title: rec.title, embedded: true).id(src) }
                 } else {
-                    Text("The recording for this message can't be found.").font(.system(size: 13)).foregroundColor(Theme.muted)
+                    Text("The recording for this message can't be found.").font(.ui(size: 13)).foregroundColor(Theme.muted)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
@@ -101,13 +101,13 @@ struct ReelDraftsView: View {
     private var header: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text(record?.title ?? "Clips").font(.system(size: 15, weight: .semibold)).foregroundColor(Theme.ink)
+                Text(record?.title ?? "Clips").font(.ui(size: 15, weight: .semibold)).foregroundColor(Theme.ink)
                 Text(pane == .clips || volunteer.enabled ? "\(drafts.count) clip\(drafts.count == 1 ? "" : "s") · pick which to export, or open one to edit" : "Everything made from this message")
-                    .font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.55))
+                    .font(.ui(size: 12)).foregroundColor(Theme.ink.opacity(0.55))
             }
             Spacer()
             Button { showReview = true } label: {
-                Label("Quick review", systemImage: "rectangle.stack").font(.system(size: 13, weight: .semibold))
+                Label("Quick review", systemImage: "rectangle.stack").font(.ui(size: 13, weight: .semibold))
                     .padding(.horizontal, 10).padding(.vertical, 5)
                     .background(gold).cornerRadius(6)
             }
@@ -124,7 +124,7 @@ struct ReelDraftsView: View {
             }
             if !volunteer.enabled {
                 Button { showKit = true } label: {
-                    Label("Content kit", systemImage: "shippingbox").font(.system(size: 13, weight: .semibold))
+                    Label("Content kit", systemImage: "shippingbox").font(.ui(size: 13, weight: .semibold))
                         .padding(.horizontal, 10).padding(.vertical, 5)
                         .background(Theme.terracotta).cornerRadius(6)
                 }
@@ -132,7 +132,7 @@ struct ReelDraftsView: View {
                 .help("Every clip, its captions and hashtags, notes, graphics and a posting plan, in one folder")
                 .sheet(isPresented: $showKit) { ContentKitSheet(recordID: recordID) }
                 Button { showMore = true } label: {
-                    Label("More", systemImage: "ellipsis.circle").font(.system(size: 13, weight: .medium))
+                    Label("More", systemImage: "ellipsis.circle").font(.ui(size: 13, weight: .medium))
                         .padding(.horizontal, 10).padding(.vertical, 5)
                         .background(Theme.ink.opacity(0.08)).cornerRadius(6)
                 }
@@ -162,7 +162,7 @@ struct ReelDraftsView: View {
     /// Less-used things made from the whole message, in one place.
     private var moreMenu: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text("From the full message").font(.system(size: 11, weight: .semibold)).foregroundColor(Theme.faint).padding(.bottom, 4)
+            Text("From the full message").font(.ui(size: 11, weight: .semibold)).foregroundColor(Theme.faint).padding(.bottom, 4)
             useForRow("Clean up the full video", "scissors", detail: "A tighter copy with fillers, false starts and long pauses cut") {
                 showMore = false; showCleanup = true
             }
@@ -174,7 +174,7 @@ struct ReelDraftsView: View {
             }
             .disabled(sourcePath == nil)
             Divider().padding(.vertical, 4)
-            Text("Graphics, captions and podcast audio are in the tabs above.").font(.system(size: 11)).foregroundColor(Theme.faint)
+            Text("Graphics, captions and podcast audio are in the tabs above.").font(.ui(size: 11)).foregroundColor(Theme.faint)
         }
         .padding(12).frame(width: 300)
     }
@@ -184,8 +184,8 @@ struct ReelDraftsView: View {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: icon).frame(width: 18).foregroundColor(Theme.sand)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(title).font(.system(size: 13, weight: .semibold))
-                    Text(detail).font(.system(size: 11.5)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                    Text(title).font(.ui(size: 13, weight: .semibold))
+                    Text(detail).font(.ui(size: 11.5)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)
             }
@@ -214,45 +214,46 @@ struct ReelDraftsView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 10) {
                 Button { generateMore() } label: {
-                    Label("Generate more", systemImage: "plus.square.on.square").font(.system(size: 13, weight: .semibold)).lineLimit(1).fixedSize()
+                    Label("Generate more", systemImage: "plus.square.on.square").font(.ui(size: 13, weight: .semibold)).lineLimit(1).fixedSize()
                         .padding(.horizontal, 10).padding(.vertical, 6)
                         .background(Theme.ink.opacity(0.08)).cornerRadius(7)
                 }.buttonStyle(.plain).foregroundColor(Theme.ink).disabled(genStatus != nil)
-                Stepper("\(moreCount)", value: $moreCount, in: 1...5).font(.system(size: 13)).fixedSize()
+                Stepper("\(moreCount)", value: $moreCount, in: 1...5).font(.ui(size: 13)).fixedSize()
                 Spacer()
                 Button { generateFire() } label: {
-                    Label("Teaser", systemImage: "flame.fill").font(.system(size: 13, weight: .bold))
+                    Label("Teaser", systemImage: "flame.fill").font(.ui(size: 13, weight: .semibold))
                         .padding(.horizontal, 12).padding(.vertical, 6)
-                        .background(LinearGradient(colors: [Color(red: 1, green: 0.35, blue: 0.1), Color(red: 1, green: 0.65, blue: 0.0)],
-                                                   startPoint: .leading, endPoint: .trailing))
-                        .cornerRadius(7)
+                        .background(Theme.sand.opacity(0.14)).cornerRadius(7)
+                        .overlay(RoundedRectangle(cornerRadius: 7).stroke(Theme.sand.opacity(0.45)))
                 }
-                .buttonStyle(.plain).foregroundColor(Theme.onColor).disabled(genStatus != nil)
+                .buttonStyle(.plain).foregroundColor(Theme.sand).disabled(genStatus != nil)
                 .help("One teaser clip with a title, description and hashtags, built to end on a cliffhanger")
             }
             // Chat: ask for a short about something the talk covers
             HStack(spacing: 8) {
-                Image(systemName: "bubble.left.and.text.bubble.right").foregroundColor(gold).font(.system(size: 13))
+                Image(systemName: "bubble.left.and.text.bubble.right").foregroundColor(gold).font(.ui(size: 13))
                 TextField("Ask for a clip… e.g. \"a 60-second clip about forgiveness\"", text: $request)
-                    .textFieldStyle(.plain).font(.system(size: 13)).foregroundColor(Theme.ink)
+                    .textFieldStyle(.plain).font(.ui(size: 13)).foregroundColor(Theme.ink)
                     .onSubmit { askForShort(request) }
                 Button("Create") { askForShort(request) }
-                    .buttonStyle(.plain).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.onSand)
+                    .buttonStyle(.plain).font(.ui(size: 13, weight: .semibold)).foregroundColor(Theme.onSand)
                     .padding(.horizontal, 10).padding(.vertical, 4)
                     .background(request.trimmingCharacters(in: .whitespaces).isEmpty ? Theme.ink.opacity(0.15) : gold).cornerRadius(6)
                     .disabled(request.trimmingCharacters(in: .whitespaces).isEmpty || genStatus != nil)
             }
             .padding(8).background(Theme.ink.opacity(0.06)).cornerRadius(8)
+            Text("Generate more, Teaser and Create each use \(AICost.phrase()).")
+                .font(.ui(size: 11)).foregroundColor(Theme.faint)
             if topics.isEmpty {
                 Button("What does this talk cover?") { suggestTopics() }
-                    .buttonStyle(.plain).font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.55))
+                    .buttonStyle(.plain).font(.ui(size: 12)).foregroundColor(Theme.ink.opacity(0.55))
                     .disabled(genStatus != nil)
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
                         ForEach(topics, id: \.self) { t in
                             Button(t) { request = t; askForShort(t) }
-                                .buttonStyle(.plain).font(.system(size: 12)).foregroundColor(Theme.ink)
+                                .buttonStyle(.plain).font(.ui(size: 12)).foregroundColor(Theme.ink)
                                 .padding(.horizontal, 9).padding(.vertical, 4)
                                 .background(Theme.ink.opacity(0.08)).cornerRadius(12)
                                 .disabled(genStatus != nil)
@@ -261,9 +262,9 @@ struct ReelDraftsView: View {
                 }
             }
             if let st = genStatus {
-                HStack(spacing: 6) { ProgressView().scaleEffect(0.5); Text(st).font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.6)) }
+                HStack(spacing: 6) { ProgressView().scaleEffect(0.5); Text(st).font(.ui(size: 12)).foregroundColor(Theme.ink.opacity(0.6)) }
             } else if let e = genError {
-                Text(e).font(.system(size: 12)).foregroundColor(Theme.danger)
+                Text(e).font(.ui(size: 12)).foregroundColor(Theme.danger)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -349,20 +350,20 @@ struct ReelDraftsView: View {
             seoLine("Hashtags", seo.hashtags.joined(separator: " "))
             if !seo.hookText.isEmpty { seoLine("On-screen hook", seo.hookText) }
             Button("Copy all") { copy(seo.asText) }.buttonStyle(.plain)
-                .font(.system(size: 12, weight: .semibold)).foregroundColor(.orange)
+                .font(.ui(size: 12, weight: .semibold)).foregroundColor(Theme.sand)
         }
         .padding(10)
-        .background(Color.orange.opacity(0.08)).cornerRadius(8)
+        .background(Theme.sand.opacity(0.08)).cornerRadius(8)
     }
 
     private func seoLine(_ label: String, _ text: String) -> some View {
         HStack(alignment: .top, spacing: 6) {
-            Text(label).font(.system(size: 11.5, weight: .semibold)).foregroundColor(Theme.ink.opacity(0.55))
+            Text(label).font(.ui(size: 11.5, weight: .semibold)).foregroundColor(Theme.ink.opacity(0.55))
                 .frame(width: 84, alignment: .leading)
-            Text(text).font(.system(size: 12)).foregroundColor(Theme.ink).textSelection(.enabled)
+            Text(text).font(.ui(size: 12)).foregroundColor(Theme.ink).textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
             Button { copy(text) } label: { Image(systemName: "doc.on.doc") }
-                .buttonStyle(.plain).font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55)).help("Copy")
+                .buttonStyle(.plain).font(.ui(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55)).help("Copy")
         }
     }
 
@@ -421,7 +422,7 @@ struct ReelDraftsView: View {
         return HStack(spacing: 12) {
             Button { if isSel { selected.remove(d.id) } else { selected.insert(d.id) } } label: {
                 Image(systemName: isSel ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 18)).foregroundColor(isSel ? gold : Theme.ink.opacity(0.3))
+                    .font(.ui(size: 18)).foregroundColor(isSel ? gold : Theme.ink.opacity(0.3))
             }.buttonStyle(.plain)
 
             ScrubThumb(draft: d, path: d.pieces.first?.sourceVideoPath ?? "", faceAspect: 9 / 16)
@@ -431,21 +432,21 @@ struct ReelDraftsView: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 8) {
-                    Text("\(i + 1). \(d.title)").font(.system(size: 13.5, weight: .semibold)).foregroundColor(Theme.ink).lineLimit(1)
+                    Text("\(i + 1). \(d.title)").font(.ui(size: 13.5, weight: .semibold)).foregroundColor(Theme.ink).lineLimit(1)
                     if best.contains(d.id) {
-                        Label("Best", systemImage: "star.fill").font(.system(size: 10.5, weight: .bold)).foregroundColor(Theme.onSand)
+                        Label("Best", systemImage: "star.fill").font(.ui(size: 10.5, weight: .bold)).foregroundColor(Theme.onSand)
                             .padding(.horizontal, 6).padding(.vertical, 2).background(Capsule().fill(gold))
                             .help("One of the three strongest clips: a strong opening line and little dead air")
                     }
                 }
                 if let line = ClipStrength.firstLine(d) {
-                    Text("“\(line)”").font(.system(size: 12).italic()).foregroundColor(Theme.ink.opacity(0.7)).lineLimit(1)
+                    Text("“\(line)”").font(.ui(size: 12).italic()).foregroundColor(Theme.ink.opacity(0.7)).lineLimit(1)
                         .help("How the clip opens")
                 }
                 HStack(spacing: 8) {
-                    Text(formatDur(d.duration)).font(.system(size: 12, design: .monospaced)).foregroundColor(gold)
+                    Text(formatDur(d.duration)).font(.ui(size: 12, design: .monospaced)).foregroundColor(gold)
                     if d.pieces.count > 1 {
-                        Label("\(d.pieces.count) parts", systemImage: "square.stack.3d.up").font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.55))
+                        Label("\(d.pieces.count) parts", systemImage: "square.stack.3d.up").font(.ui(size: 12)).foregroundColor(Theme.ink.opacity(0.55))
                             .help("Made from \(d.pieces.count) parts of the sermon joined together")
                     }
                     statusPill(d)
@@ -454,7 +455,7 @@ struct ReelDraftsView: View {
                 if let p = exporting[d.id] {
                     ProgressView(value: p).tint(Theme.action).frame(height: 4)
                 } else if let err = exportErrors[d.id] {
-                    Text(err).font(.system(size: 11.5)).foregroundColor(Theme.danger).lineLimit(2)
+                    Text(err).font(.ui(size: 11.5)).foregroundColor(Theme.danger).lineLimit(2)
                 }
             }
             Spacer()
@@ -490,7 +491,7 @@ struct ReelDraftsView: View {
                 smallAction(nil, "hand.thumbsdown", help: "Not for me: remove this clip, and AutoClip learns to pick fewer like it") { notForMe(d) }
             }
             Button { openWindow(id: "reel-editor", value: EditorTarget(record: recordID, draft: d.id)) } label: {
-                Label("Edit", systemImage: "slider.horizontal.3").font(.system(size: 13, weight: .medium))
+                Label("Edit", systemImage: "slider.horizontal.3").font(.ui(size: 13, weight: .medium))
                     .padding(.horizontal, 10).padding(.vertical, 5)
                     .background(Theme.ink.opacity(0.08)).cornerRadius(6)
             }.buttonStyle(.plain).foregroundColor(Theme.ink)
@@ -503,7 +504,7 @@ struct ReelDraftsView: View {
                         }
                     }
                 } label: {
-                    Label("Exported", systemImage: "checkmark").font(.system(size: 13, weight: .semibold))
+                    Label("Exported", systemImage: "checkmark").font(.ui(size: 13, weight: .semibold))
                 }
                 .menuStyle(.borderlessButton).fixedSize()
                 .foregroundColor(Theme.good)
@@ -511,7 +512,7 @@ struct ReelDraftsView: View {
                 .disabled(exporting[d.id] != nil)
             } else {
                 Button { export([d.id]) } label: {
-                    Text(d.exportedPath == nil ? "Export" : "Re-export").font(.system(size: 13, weight: .semibold))
+                    Text(d.exportedPath == nil ? "Export" : "Re-export").font(.ui(size: 13, weight: .semibold))
                         .padding(.horizontal, 10).padding(.vertical, 5)
                         .background(gold).cornerRadius(6)
                 }.buttonStyle(.plain).foregroundColor(Theme.onSand).disabled(exporting[d.id] != nil)
@@ -536,7 +537,7 @@ struct ReelDraftsView: View {
             Group {
                 if let title { Label(title, systemImage: icon) } else { Image(systemName: icon) }
             }
-            .font(.system(size: 12, weight: .medium)).lineLimit(1).fixedSize()
+            .font(.ui(size: 12, weight: .medium)).lineLimit(1).fixedSize()
             .padding(.horizontal, title == nil ? 6 : 8).padding(.vertical, 5)
             .background(Theme.ink.opacity(0.05)).cornerRadius(6)
         }
@@ -548,10 +549,10 @@ struct ReelDraftsView: View {
     @ViewBuilder private func statusPill(_ d: ReelDraft) -> some View {
         let (text, color): (String, Color) = {
             if d.exportedPath == nil { return ("Not exported", Theme.ink.opacity(0.35)) }
-            if d.editedSinceExport { return ("Edited — re-export", Color.orange) }
-            return ("Exported", Color.green)
+            if d.editedSinceExport { return ("Edited — re-export", Theme.warn) }
+            return ("Exported", Theme.good)
         }()
-        Text(text).font(.system(size: 11.5, weight: .medium)).foregroundColor(color)
+        Text(text).font(.ui(size: 11.5, weight: .medium)).foregroundColor(color)
             .padding(.horizontal, 6).padding(.vertical, 2)
             .overlay(RoundedRectangle(cornerRadius: 4).stroke(color.opacity(0.5), lineWidth: 1))
     }
@@ -560,11 +561,11 @@ struct ReelDraftsView: View {
         HStack {
             Button(selected.count == drafts.count ? "Select none" : "Select all") {
                 selected = selected.count == drafts.count ? [] : Set(drafts.map(\.id))
-            }.buttonStyle(.plain).foregroundColor(Theme.ink.opacity(0.6)).font(.system(size: 13))
+            }.buttonStyle(.plain).foregroundColor(Theme.ink.opacity(0.6)).font(.ui(size: 13))
             Spacer()
             if !selected.isEmpty {
                 Button { export(Array(selected)) } label: {
-                    Text("Export selected (\(selected.count))").font(.system(size: 13, weight: .semibold))
+                    Text("Export selected (\(selected.count))").font(.ui(size: 13, weight: .semibold))
                         .padding(.horizontal, 16).padding(.vertical, 8)
                         .background(gold).cornerRadius(8)
                 }
@@ -572,7 +573,7 @@ struct ReelDraftsView: View {
             } else if !notDone.isEmpty {
                 Button { export(notDone.map(\.id)) } label: {
                     Text(notDone.count == drafts.count ? "Export all \(drafts.count)" : "Export the \(notDone.count) not done yet")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.ui(size: 13, weight: .semibold))
                         .padding(.horizontal, 16).padding(.vertical, 8)
                         .background(gold).cornerRadius(8)
                 }
@@ -580,7 +581,7 @@ struct ReelDraftsView: View {
                 .help("Exports every clip that hasn't been exported, or has changed since")
             } else if !drafts.isEmpty {
                 Label("All \(drafts.count) clips exported", systemImage: "checkmark.circle.fill")
-                    .font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.good)
+                    .font(.ui(size: 13, weight: .semibold)).foregroundColor(Theme.good)
             }
         }
         .padding(16)
@@ -606,7 +607,7 @@ struct ReelDraftsView: View {
         // Re-exports overwrite their existing file; new exports ask where to save (once per batch)
         var folder: URL?
         if targets.contains(where: { $0.exportedPath == nil }) {
-            guard let f = ReelExportLocation.pick(title: "Choose where to save \(targets.count == 1 ? "this reel" : "these reels")") else { return }
+            guard let f = ReelExportLocation.pick(title: "Choose where to save \(targets.count == 1 ? "this clip" : "these clips")") else { return }
             folder = f
         }
         for d in targets { exporting[d.id] = 0.01; exportErrors[d.id] = nil }
@@ -763,7 +764,7 @@ struct ReelEditorView: View {
 
     private var sizeSection: some View {
         HStack {
-            Text("SIZE").font(.system(size: 11.5, weight: .semibold)).foregroundColor(Theme.ink.opacity(0.55)).tracking(1)
+            Text("SIZE").font(.ui(size: 11.5, weight: .semibold)).foregroundColor(Theme.ink.opacity(0.55)).tracking(1)
             Spacer()
             Picker("", selection: $draft.formatRaw) {
                 ForEach(Self.sizes, id: \.0) { f, label in Text(label).tag(f.rawValue) }
@@ -777,7 +778,7 @@ struct ReelEditorView: View {
         VStack(spacing: 0) {
             HStack {
                 TextField("Clip title", text: $draft.title)
-                    .textFieldStyle(.plain).font(.system(size: 15, weight: .semibold)).foregroundColor(Theme.ink)
+                    .textFieldStyle(.plain).font(.ui(size: 15, weight: .semibold)).foregroundColor(Theme.ink)
                 Spacer()
                 Button { undo() } label: { Image(systemName: "arrow.uturn.backward") }
                     .buttonStyle(.plain).foregroundColor(undoStack.isEmpty ? Theme.ink.opacity(0.2) : .white)
@@ -785,7 +786,7 @@ struct ReelEditorView: View {
                 Button { redo() } label: { Image(systemName: "arrow.uturn.forward") }
                     .buttonStyle(.plain).foregroundColor(redoStack.isEmpty ? Theme.ink.opacity(0.2) : .white)
                     .disabled(redoStack.isEmpty).keyboardShortcut("z", modifiers: [.command, .shift]).help("Redo (⇧⌘Z)")
-                Text(formatDur(draft.duration)).font(.system(size: 13, design: .monospaced)).foregroundColor(gold).padding(.leading, 8)
+                Text(formatDur(draft.duration)).font(.ui(size: 13, design: .monospaced)).foregroundColor(gold).padding(.leading, 8)
                 Button { showKeys.toggle() } label: { Image(systemName: "keyboard") }
                     .buttonStyle(.plain).foregroundColor(Theme.ink.opacity(0.6)).padding(.leading, 8)
                     .help("Keyboard shortcuts (?)")
@@ -823,7 +824,7 @@ struct ReelEditorView: View {
                     onExport(draft); original = draft; closeEditor()
                 } label: {
                     Text(draft.exportedPath == nil ? "Save & Export" : "Save & Re-export")
-                        .font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.onSand)
+                        .font(.ui(size: 13, weight: .semibold)).foregroundColor(Theme.onSand)
                         .padding(.horizontal, 14).padding(.vertical, 6).background(gold).cornerRadius(7)
                 }
                 .buttonStyle(.plain)
@@ -881,13 +882,13 @@ struct ReelEditorView: View {
     private var askBar: some View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 8) {
-                Image(systemName: "text.bubble").foregroundColor(gold).font(.system(size: 13))
+                Image(systemName: "text.bubble").foregroundColor(gold).font(.ui(size: 13))
                 TextField("Say what to change: cut the part about my brother, start at the question…", text: $askText)
-                    .textFieldStyle(.plain).font(.system(size: 13)).foregroundColor(Theme.ink)
+                    .textFieldStyle(.plain).font(.ui(size: 13)).foregroundColor(Theme.ink)
                     .onSubmit { ask(askText) }
                 if askBusy { ProgressView().scaleEffect(0.5).frame(width: 16, height: 16) }
                 Button("Change") { ask(askText) }
-                    .buttonStyle(.plain).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.onSand)
+                    .buttonStyle(.plain).font(.ui(size: 13, weight: .semibold)).foregroundColor(Theme.onSand)
                     .padding(.horizontal, 10).padding(.vertical, 4)
                     .background(askText.trimmingCharacters(in: .whitespaces).isEmpty ? Theme.ink.opacity(0.15) : gold).cornerRadius(6)
                     .disabled(askText.trimmingCharacters(in: .whitespaces).isEmpty || askBusy)
@@ -896,12 +897,12 @@ struct ReelEditorView: View {
             if let askNote {
                 HStack(spacing: 8) {
                     Image(systemName: askNote.ok ? "checkmark.circle.fill" : "exclamationmark.circle")
-                        .foregroundColor(askNote.ok ? Theme.good : Theme.warn).font(.system(size: 12))
-                    Text(askNote.text).font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.75)).fixedSize(horizontal: false, vertical: true)
+                        .foregroundColor(askNote.ok ? Theme.good : Theme.warn).font(.ui(size: 12))
+                    Text(askNote.text).font(.ui(size: 12)).foregroundColor(Theme.ink.opacity(0.75)).fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
                     if askNote.ok, !undoStack.isEmpty {
                         Button("Undo") { undo(); self.askNote = nil }.buttonStyle(.plain)
-                            .font(.system(size: 12, weight: .semibold)).foregroundColor(gold)
+                            .font(.ui(size: 12, weight: .semibold)).foregroundColor(gold)
                     }
                 }
             }
@@ -1134,7 +1135,7 @@ struct ReelEditorView: View {
                                 polishSection
                             }
                             Text("MOMENTS — click words to cut them (shift-click a range) · ▶ plays · ✏️ fixes caption text · ? for shortcuts")
-                                .font(.system(size: 11.5, weight: .semibold)).foregroundColor(Theme.ink.opacity(0.55)).tracking(1)
+                                .font(.ui(size: 11.5, weight: .semibold)).foregroundColor(Theme.ink.opacity(0.55)).tracking(1)
                             ForEach(Array(draft.pieces.enumerated()), id: \.element.id) { i, _ in pieceCard(i) }
                         }
                         .padding(.trailing, 6)
@@ -1233,7 +1234,7 @@ struct ReelEditorView: View {
                         } action: { follow(ReelDraft.Framing(mode: "person", x: person.x, t: person.time)) }
                     }
                     ReframeTile(title: "Whoever's talking", selected: false) {
-                        Image(systemName: "waveform").font(.system(size: 20)).foregroundColor(gold)
+                        Image(systemName: "waveform").font(.ui(size: 20)).foregroundColor(gold)
                     } action: { follow(nil) }
                     Spacer()
                     Button("See before & after") { workspace = .reframe }.controlSize(.small)
@@ -1274,23 +1275,23 @@ struct ReelEditorView: View {
                 Slider(value: Binding(get: { time }, set: { t in
                     time = t; player.seek(to: CMTime(seconds: t, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
                 }), in: 0...max(total, 0.1)).tint(Theme.action)
-                Text(formatDur(time)).font(.system(size: 11.5, design: .monospaced)).foregroundColor(Theme.ink.opacity(0.55))
+                Text(formatDur(time)).font(.ui(size: 11.5, design: .monospaced)).foregroundColor(Theme.ink.opacity(0.55))
             }
             PhoneViewMenu(view: Binding(get: { phone }, set: { phone = $0 }))
             TipView(PhoneViewTip())
             if phone != .off, draft.formatRaw != VideoExportService.ExportFormat.vertical9x16.rawValue {
-                Text("Phone view is for 9:16 clips.").font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
+                Text("Phone view is for 9:16 clips.").font(.ui(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
             } else if phone != .off, draft.captions, phone.captionsCovered(look) {
                 VStack(spacing: 4) {
-                    Text("Captions sit behind \(phone.label)'s text.").font(.system(size: 11.5)).foregroundColor(Theme.warn).multilineTextAlignment(.center)
+                    Text("Captions sit behind \(phone.label)'s text.").font(.ui(size: 11.5)).foregroundColor(Theme.warn).multilineTextAlignment(.center)
                     Button("Move them up") { applyEdits([ReelEdit(op: "caption_position", value: phone.safeCaptionPosition)], note: "") }
                         .controlSize(.small)
                 }
             } else if phone != .off {
-                Text("Shaded areas are close estimates of what the app covers.").font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55)).multilineTextAlignment(.center)
+                Text("Shaded areas are close estimates of what the app covers.").font(.ui(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55)).multilineTextAlignment(.center)
             }
             Text(following ? "Finding the speaker…" : "The preview follows the speaker like the export does.")
-                .font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55)).multilineTextAlignment(.center)
+                .font(.ui(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55)).multilineTextAlignment(.center)
         }
     }
 
@@ -1371,7 +1372,7 @@ struct ReelEditorView: View {
     private var polishSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("POLISH").font(.system(size: 11.5, weight: .semibold)).foregroundColor(Theme.ink.opacity(0.55)).tracking(1)
+                Text("POLISH").font(.ui(size: 11.5, weight: .semibold)).foregroundColor(Theme.ink.opacity(0.55)).tracking(1)
                 Spacer()
                 if recordID != nil, otherDraftCount > 0 {
                     Menu("Apply to all \(otherDraftCount + 1) clips") {
@@ -1384,20 +1385,20 @@ struct ReelEditorView: View {
                         Divider()
                         Button("All of these") { applyToAll(ApplyPart.allCases) }
                     }
-                    .menuStyle(.borderlessButton).fixedSize().font(.system(size: 12))
+                    .menuStyle(.borderlessButton).fixedSize().font(.ui(size: 12))
                     .help("Use this clip's settings on every clip from this sermon")
                 }
             }
-            if let applyNote { Text(applyNote).font(.system(size: 11.5)).foregroundColor(Theme.good) }
+            if let applyNote { Text(applyNote).font(.ui(size: 11.5)).foregroundColor(Theme.good) }
 
             // Hook text
             VStack(alignment: .leading, spacing: 5) {
-                Text("Hook text (first 3 seconds)").font(.system(size: 13)).foregroundColor(Theme.ink)
+                Text("Hook text (first 3 seconds)").font(.ui(size: 13)).foregroundColor(Theme.ink)
                 HStack(spacing: 6) {
                     TextField("e.g. \"You\'re carrying something you were never meant to\"",
                               text: Binding(get: { draft.hookText ?? draft.seo?.hookText ?? "" },
                                             set: { draft.hookText = $0 }))
-                        .textFieldStyle(.plain).font(.system(size: 13)).foregroundColor(Theme.ink)
+                        .textFieldStyle(.plain).font(.ui(size: 13)).foregroundColor(Theme.ink)
                         .padding(6).background(Theme.ink.opacity(0.06)).cornerRadius(5)
                     Button { writeHook() } label: { Label("Write", systemImage: "sparkles") }
                         .controlSize(.small).disabled(hookStatus != nil)
@@ -1408,13 +1409,13 @@ struct ReelEditorView: View {
                     }
                 }
                 if let hookStatus {
-                    Text(hookStatus).font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
+                    Text(hookStatus).font(.ui(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
                 }
             }
 
             // How the hook arrives
             HStack(spacing: 8) {
-                Text("Hook animation").font(.system(size: 13)).foregroundColor(Theme.ink)
+                Text("Hook animation").font(.ui(size: 13)).foregroundColor(Theme.ink)
                 Spacer()
                 Picker("", selection: Binding(get: { draft.hookAnimation }, set: { draft.hookStyle = $0.rawValue })) {
                     ForEach(HookStyle.allCases) { Text($0.label).tag($0) }
@@ -1428,10 +1429,10 @@ struct ReelEditorView: View {
             // Movement in the picture
             HStack(spacing: 8) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Movement").font(.system(size: 13)).foregroundColor(Theme.ink)
+                    Text("Movement").font(.ui(size: 13)).foregroundColor(Theme.ink)
                     Text(zooms.isEmpty ? "A punch-in on the strongest lines, a slow push through long stretches"
                                        : "\(zooms.filter(\.punch).count) punch-in\(zooms.filter(\.punch).count == 1 ? "" : "s"), \(zooms.filter { !$0.punch }.count) slow push\(zooms.filter { !$0.punch }.count == 1 ? "" : "es")")
-                        .font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
+                        .font(.ui(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
                 }
                 Spacer()
                 Picker("", selection: Binding(get: { ReelMotion.Style(rawValue: draft.motion ?? "") ?? .off }, set: { draft.motion = $0.rawValue; MovementTip().invalidate(reason: .actionPerformed) })) {
@@ -1446,23 +1447,23 @@ struct ReelEditorView: View {
 
             // Highlighted caption words
             VStack(alignment: .leading, spacing: 5) {
-                Text("Key words in the captions").font(.system(size: 13)).foregroundColor(Theme.ink)
+                Text("Key words in the captions").font(.ui(size: 13)).foregroundColor(Theme.ink)
                 TextField("e.g. grace, free, enough",
                           text: Binding(get: { (draft.keywords ?? []).joined(separator: ", ") },
                                         set: { draft.keywords = $0.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty } }))
-                    .textFieldStyle(.plain).font(.system(size: 13)).foregroundColor(Theme.ink)
+                    .textFieldStyle(.plain).font(.ui(size: 13)).foregroundColor(Theme.ink)
                     .padding(6).background(Theme.ink.opacity(0.06)).cornerRadius(5)
                 Text("These words stand out in the caption's key-word colour\(draft.showVerses ? ", along with Bible references" : "").")
-                    .font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
+                    .font(.ui(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
             }
 
             Divider().background(Theme.ink.opacity(0.06))
 
             HStack {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Hopeful ending").font(.system(size: 13)).foregroundColor(Theme.ink)
+                    Text("Hopeful ending").font(.ui(size: 13)).foregroundColor(Theme.ink)
                     Text(endingStatus ?? "Ends on a downer? AI adds a \"But God…\" moment from this message as the last clip")
-                        .font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
+                        .font(.ui(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
@@ -1474,28 +1475,28 @@ struct ReelEditorView: View {
 
             Toggle(isOn: Binding(get: { draft.showVerses }, set: { draft.verseCards = $0 })) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Bible verse cards").font(.system(size: 13)).foregroundColor(Theme.ink)
+                    Text("Bible verse cards").font(.ui(size: 13)).foregroundColor(Theme.ink)
                     let found = detectedVerses
                     Text(found.isEmpty ? "Shows the reference when Scripture is quoted — none spoken in this clip"
                                        : "Found: " + found.joined(separator: ", "))
-                        .font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55)).lineLimit(2)
+                        .font(.ui(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55)).lineLimit(2)
                 }
             }.toggleStyle(.switch).tint(Theme.action)
 
             Toggle(isOn: Binding(get: { draft.pausesTight }, set: { draft.tightenPauses = $0 })) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Shorten long pauses").font(.system(size: 13)).foregroundColor(Theme.ink)
+                    Text("Shorten long pauses").font(.ui(size: 13)).foregroundColor(Theme.ink)
                     Text("Trims silences longer than half a second for a faster pace")
-                        .font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
+                        .font(.ui(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
                 }
             }.toggleStyle(.switch).tint(Theme.action)
 
             HStack {
                 let n = draft.fillerWordIDs.count
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Filler words").font(.system(size: 13)).foregroundColor(Theme.ink)
+                    Text("Filler words").font(.ui(size: 13)).foregroundColor(Theme.ink)
                     Text(fillerNote ?? (n == 0 ? "No ums, uhs or stutters left" : "\(n) um/uh/stutter\(n == 1 ? "" : "s") found"))
-                        .font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
+                        .font(.ui(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
                 }
                 Spacer()
                 Button("Remove all") {
@@ -1556,9 +1557,9 @@ struct ReelEditorView: View {
         let series = seriesStore.series(containing: sourcePath)
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
-                Image(systemName: "square.stack.3d.up").font(.system(size: 12)).foregroundColor(gold.opacity(0.8))
+                Image(systemName: "square.stack.3d.up").font(.ui(size: 12)).foregroundColor(gold.opacity(0.8))
                 if let series {
-                    Text("Series: \(series.name)").font(.system(size: 13)).foregroundColor(Theme.ink).lineLimit(1)
+                    Text("Series: \(series.name)").font(.ui(size: 13)).foregroundColor(Theme.ink).lineLimit(1)
                     Spacer()
                     if series.look != nil {
                         Button("Use series look") { draft.applySeries(series); seriesNote = "Series look applied." }.controlSize(.small)
@@ -1566,7 +1567,7 @@ struct ReelEditorView: View {
                     Button(series.look == nil ? "Save as series look" : "Update series look") { saveSeriesLook(series) }.controlSize(.small)
                         .help("Every new clip from this series' messages will look like this one")
                 } else {
-                    Text("Not part of a series").font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.6))
+                    Text("Not part of a series").font(.ui(size: 13)).foregroundColor(Theme.ink.opacity(0.6))
                     Spacer()
                     Menu("Add to a series") {
                         ForEach(seriesStore.series) { s in Button(s.name) { addToSeries(s) } }
@@ -1583,19 +1584,19 @@ struct ReelEditorView: View {
                         draft.seriesTag = ((series.look?.tag?.isEmpty == false ? series.look!.tag! : series.name) + part).uppercased()
                     } else { draft.seriesTag = nil }
                 })) {
-                    Text("Show the series name on the clip").font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.7))
+                    Text("Show the series name on the clip").font(.ui(size: 12)).foregroundColor(Theme.ink.opacity(0.7))
                 }
                 .toggleStyle(.switch).controlSize(.mini).tint(Theme.action)
             }
             if showNewSeries {
                 HStack {
-                    TextField("Series name, like Baggage", text: $newSeriesName).textFieldStyle(.roundedBorder).font(.system(size: 13))
+                    TextField("Series name, like Baggage", text: $newSeriesName).textFieldStyle(.roundedBorder).font(.ui(size: 13))
                         .onSubmit { createSeries() }
                     Button("Create") { createSeries() }.controlSize(.small).disabled(newSeriesName.trimmingCharacters(in: .whitespaces).isEmpty)
                     Button("Cancel") { showNewSeries = false }.controlSize(.small)
                 }
             }
-            if let seriesNote { Text(seriesNote).font(.system(size: 11.5)).foregroundColor(Theme.good) }
+            if let seriesNote { Text(seriesNote).font(.ui(size: 11.5)).foregroundColor(Theme.good) }
         }
     }
 
@@ -1687,8 +1688,8 @@ struct ReelEditorView: View {
         HStack(spacing: 18) {
             Toggle(isOn: audio.cleanVoice) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Clean up voice").font(.system(size: 13)).foregroundColor(Theme.ink)
-                    Text("Removes echo, hum and noise").font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
+                    Text("Clean up voice").font(.ui(size: 13)).foregroundColor(Theme.ink)
+                    Text("Removes echo, hum and noise").font(.ui(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
                 }
             }.toggleStyle(.switch).tint(Theme.action).fixedSize()
             if audio.wrappedValue.cleanVoice {
@@ -1696,14 +1697,14 @@ struct ReelEditorView: View {
             }
             Toggle(isOn: audio.levelVoice) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Even out volume").font(.system(size: 13)).foregroundColor(Theme.ink)
-                    Text("Steady loud and quiet moments").font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
+                    Text("Even out volume").font(.ui(size: 13)).foregroundColor(Theme.ink)
+                    Text("Steady loud and quiet moments").font(.ui(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
                 }
             }.toggleStyle(.switch).tint(Theme.action).fixedSize()
             Spacer(minLength: 0)
             VStack(alignment: .leading, spacing: 1) {
-                Text("Background music").font(.system(size: 13)).foregroundColor(Theme.ink)
-                Text(audio.wrappedValue.musicName ?? "Dips under speech").font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55)).lineLimit(1)
+                Text("Background music").font(.ui(size: 13)).foregroundColor(Theme.ink)
+                Text(audio.wrappedValue.musicName ?? "Dips under speech").font(.ui(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55)).lineLimit(1)
             }.frame(maxWidth: 130, alignment: .leading)
             if audio.wrappedValue.musicPath != nil {
                 Slider(value: audio.musicVolume, in: 0.03...0.35).tint(Theme.action).frame(width: 80).help("Music volume")
@@ -1732,11 +1733,11 @@ struct ReelEditorView: View {
         let dur = draft.playingLength(ofPiece: i)
         return VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
-                Image(systemName: "line.3.horizontal").font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.55))
+                Image(systemName: "line.3.horizontal").font(.ui(size: 12)).foregroundColor(Theme.ink.opacity(0.55))
                     .help("Drag to move this moment")
                     .onDrag { draggingPiece = piece.id; return NSItemProvider(object: piece.id.uuidString as NSString) }
-                Text("Moment \(i + 1)").font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.ink)
-                Text(formatDur(dur)).font(.system(size: 12, design: .monospaced)).foregroundColor(gold)
+                Text("Moment \(i + 1)").font(.ui(size: 13, weight: .semibold)).foregroundColor(Theme.ink)
+                Text(formatDur(dur)).font(.ui(size: 12, design: .monospaced)).foregroundColor(gold)
                 Spacer()
                 Button { jump(toPiece: i) } label: { Image(systemName: "play.circle") }
                     .buttonStyle(.plain).foregroundColor(Theme.ink.opacity(0.6)).help("Preview from here")
@@ -1769,23 +1770,23 @@ struct ReelEditorView: View {
                     .help(s.included ? "Cut this sentence out" : "Put this sentence back")
                     if editingSentence == s.id {
                         TextField("Caption text", text: $editText, axis: .vertical)
-                            .textFieldStyle(.plain).font(.system(size: 13)).foregroundColor(Theme.ink)
+                            .textFieldStyle(.plain).font(.ui(size: 13)).foregroundColor(Theme.ink)
                             .padding(4).background(Theme.ink.opacity(0.08)).cornerRadius(4)
                             .onSubmit { commitEdit(i, j) }
                         Button("Done") { commitEdit(i, j) }.buttonStyle(.plain)
-                            .font(.system(size: 12, weight: .semibold)).foregroundColor(gold)
+                            .font(.ui(size: 12, weight: .semibold)).foregroundColor(gold)
                         Button("Cancel") { editingSentence = nil }.buttonStyle(.plain)
-                            .font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.55))
+                            .font(.ui(size: 12)).foregroundColor(Theme.ink.opacity(0.55))
                     } else {
                         wordFlow(i, j, activeWord: now?.word)
                             .frame(maxWidth: .infinity, alignment: .leading)
                         if s.included {
                             Button { play(from: s.id) } label: { Image(systemName: "play.fill") }
-                                .buttonStyle(.plain).font(.system(size: 11)).foregroundColor(Theme.ink.opacity(0.55))
+                                .buttonStyle(.plain).font(.ui(size: 11)).foregroundColor(Theme.ink.opacity(0.55))
                                 .help("Play from this sentence")
                         }
                         Button { editText = s.text; editingSentence = s.id } label: { Image(systemName: "pencil") }
-                            .buttonStyle(.plain).font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
+                            .buttonStyle(.plain).font(.ui(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
                             .help("Fix the caption text for this sentence")
                     }
                 }
@@ -1800,7 +1801,7 @@ struct ReelEditorView: View {
             }
             neighbourButton(i, before: false)
             Text("Words in red were cut — click one to put it back. Untick a sentence to drop it.")
-                .font(.system(size: 11)).foregroundColor(Theme.ink.opacity(0.55))
+                .font(.ui(size: 11)).foregroundColor(Theme.ink.opacity(0.55))
         }
         .padding(12)
         .background(Theme.ink.opacity(draggingPiece == piece.id ? 0.1 : 0.04))
@@ -1828,14 +1829,14 @@ struct ReelEditorView: View {
                 Image(systemName: before ? "plus.circle" : "plus.circle")
                 Text(before ? "Add the sentence before" : "Add the sentence after")
             }
-            .font(.system(size: 11.5, weight: .medium)).foregroundColor(gold.opacity(0.85))
+            .font(.ui(size: 11.5, weight: .medium)).foregroundColor(gold.opacity(0.85))
             .padding(.horizontal, 8).padding(.vertical, 3)
             .background(Capsule().stroke(gold.opacity(0.3), lineWidth: 1))
         }
         .buttonStyle(.plain)
         .help(before ? "Bring back what was said just before this clip" : "Bring back what was said just after this clip")
         if let note = neighbourNote, note.piece == draft.pieces[i].id, note.text.contains("beginning") == before {
-            Text(note.text).font(.system(size: 11)).foregroundColor(Theme.ink.opacity(0.55))
+            Text(note.text).font(.ui(size: 11)).foregroundColor(Theme.ink.opacity(0.55))
         }
         }
     }
@@ -1869,43 +1870,43 @@ struct ReelEditorView: View {
         })
         return VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
-                Image(systemName: "person.crop.rectangle").font(.system(size: 11.5)).foregroundColor(gold.opacity(0.8))
-                Text("Framing").font(.system(size: 11.5, weight: .semibold)).foregroundColor(Theme.ink.opacity(0.55))
+                Image(systemName: "person.crop.rectangle").font(.ui(size: 11.5)).foregroundColor(gold.opacity(0.8))
+                Text("Framing").font(.ui(size: 11.5, weight: .semibold)).foregroundColor(Theme.ink.opacity(0.55))
                 PillTabs(selection: mode, items: (f.mode == "person" ? [("person", "Chosen person")] : []) + [("auto", "Follow speaker"), ("careful", "Look closer"), ("fixed", "Hold still"), ("split", "Split screen")], compact: true)
                 Spacer(minLength: 0)
             }
             if f.mode == "careful" {
                 Text("Checks this clip twice as often and catches smaller faces. Use it where the frame drifted off the person.")
-                    .font(.system(size: 11)).foregroundColor(Theme.ink.opacity(0.55))
+                    .font(.ui(size: 11)).foregroundColor(Theme.ink.opacity(0.55))
             } else if f.mode == "fixed" {
                 HStack(spacing: 6) {
-                    Text("Left").font(.system(size: 11)).foregroundColor(Theme.ink.opacity(0.55))
+                    Text("Left").font(.ui(size: 11)).foregroundColor(Theme.ink.opacity(0.55))
                     Slider(value: Binding(get: { f.x }, set: { v in
                         draft.pieces[i].framing = ReelDraft.Framing(mode: "fixed", x: (v * 100).rounded() / 100)
                     }), in: 0...1)
                     .controlSize(.mini)
-                    Text("Right").font(.system(size: 11)).foregroundColor(Theme.ink.opacity(0.55))
+                    Text("Right").font(.ui(size: 11)).foregroundColor(Theme.ink.opacity(0.55))
                 }
                 Text("The frame stays put on this part of the video for the whole clip.")
-                    .font(.system(size: 11)).foregroundColor(Theme.ink.opacity(0.55))
+                    .font(.ui(size: 11)).foregroundColor(Theme.ink.opacity(0.55))
             }
             else if f.mode == "split" {
                 ForEach(0..<2, id: \.self) { k in
                     HStack(spacing: 6) {
-                        Text(k == 0 ? "Top" : "Bottom").font(.system(size: 11, weight: .semibold)).foregroundColor(Theme.ink.opacity(0.55))
+                        Text(k == 0 ? "Top" : "Bottom").font(.ui(size: 11, weight: .semibold)).foregroundColor(Theme.ink.opacity(0.55))
                             .frame(width: 40, alignment: .leading)
-                        Text("Left").font(.system(size: 11)).foregroundColor(Theme.ink.opacity(0.55))
+                        Text("Left").font(.ui(size: 11)).foregroundColor(Theme.ink.opacity(0.55))
                         Slider(value: Binding(get: { k == 0 ? f.x : (f.x2 ?? 0.75) }, set: { v in
                             var nf = draft.pieces[i].framing ?? ReelDraft.Framing(mode: "split")
                             if k == 0 { nf.x = (v * 100).rounded() / 100 } else { nf.x2 = (v * 100).rounded() / 100 }
                             draft.pieces[i].framing = nf
                         }), in: 0...1)
                         .controlSize(.mini)
-                        Text("Right").font(.system(size: 11)).foregroundColor(Theme.ink.opacity(0.55))
+                        Text("Right").font(.ui(size: 11)).foregroundColor(Theme.ink.opacity(0.55))
                     }
                 }
                 Text(splitNote[draft.pieces[i].id] ?? "Two people stacked: one on top, one below. Best for interviews and podcasts shot wide.")
-                    .font(.system(size: 11)).foregroundColor(Theme.ink.opacity(0.55))
+                    .font(.ui(size: 11)).foregroundColor(Theme.ink.opacity(0.55))
             }
         }
         .padding(.vertical, 3).padding(.horizontal, 6)
@@ -1922,7 +1923,7 @@ struct ReelEditorView: View {
                 let cut = s.isCut(w)
                 let isActive = activeWord == k && !cut
                 Text(w.word)
-                    .font(.system(size: large ? 15 : 12, weight: isActive ? .bold : .regular))
+                    .font(.ui(size: large ? 15 : 12, weight: isActive ? .bold : .regular))
                     .foregroundColor(!s.included ? Theme.ink.opacity(0.3)
                                      : cut ? (large ? Theme.ink.opacity(0.3) : Theme.danger.opacity(0.7))
                                      : isActive ? gold
@@ -1979,23 +1980,23 @@ struct ReelEditorView: View {
         return VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
                 Image(systemName: isStart ? "arrow.right.to.line" : "arrow.left.to.line")
-                    .font(.system(size: 11.5)).foregroundColor(gold.opacity(0.8))
-                Text(isStart ? "Starts" : "Ends").font(.system(size: 11.5, weight: .semibold))
+                    .font(.ui(size: 11.5)).foregroundColor(gold.opacity(0.8))
+                Text(isStart ? "Starts" : "Ends").font(.ui(size: 11.5, weight: .semibold))
                     .foregroundColor(Theme.ink.opacity(0.55))
-                Text("drag the handle").font(.system(size: 11)).foregroundColor(Theme.ink.opacity(0.55))
+                Text("drag the handle").font(.ui(size: 11)).foregroundColor(Theme.ink.opacity(0.55))
                 Spacer(minLength: 0)
                 nudgeButton("−0.1", i, j, isStart, -0.1)
                 Text(value == 0 ? "0.0s" : String(format: "%+.2fs", value))
-                    .font(.system(size: 11.5, design: .monospaced))
+                    .font(.ui(size: 11.5, design: .monospaced))
                     .foregroundColor(value == 0 ? Theme.ink.opacity(0.4) : gold)
                     .frame(width: 48)
                 nudgeButton("+0.1", i, j, isStart, 0.1)
                 if value != 0 {
                     Button("Reset") { setNudge(i, j, isStart, nil) }
-                        .buttonStyle(.plain).font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
+                        .buttonStyle(.plain).font(.ui(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
                 }
                 Button { audition(i, j, isStart) } label: { Image(systemName: "ear") }
-                    .buttonStyle(.plain).font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.55))
+                    .buttonStyle(.plain).font(.ui(size: 12)).foregroundColor(Theme.ink.opacity(0.55))
                     .help("Play across this cut")
             }
             CutTrimmer(path: draft.pieces[i].sourceVideoPath, base: isStart ? s.startBase : s.endBase, isStart: isStart, value: value,
@@ -2018,7 +2019,7 @@ struct ReelEditorView: View {
             audition(i, j, isStart)
         }
         .buttonStyle(.plain)
-        .font(.system(size: 11.5, weight: .medium, design: .monospaced))
+        .font(.ui(size: 11.5, weight: .medium, design: .monospaced))
         .foregroundColor(Theme.ink)
         .padding(.horizontal, 5).padding(.vertical, 2)
         .background(Theme.ink.opacity(0.08)).cornerRadius(4)

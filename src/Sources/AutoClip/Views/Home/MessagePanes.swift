@@ -22,7 +22,7 @@ struct MessageGraphicsPane: View {
                 if jobs.running(recordID) {
                     HStack(spacing: 8) {
                         ProgressView().controlSize(.small)
-                        Text(jobs.status[recordID] ?? "Writing the graphics…").font(.system(size: 13)).foregroundColor(Theme.muted)
+                        Text(jobs.status[recordID] ?? "Writing the graphics…").font(.ui(size: 13)).foregroundColor(Theme.muted)
                     }
                 } else if let c = carousel {
                     section("Carousel", "\(c.slides.count) slides · \(c.style.label)") {
@@ -43,7 +43,7 @@ struct MessageGraphicsPane: View {
                         if c.postList.isEmpty {
                             Button { if let r = record { jobs.makePosts(r) } } label: { Label("Write a week of posts", systemImage: "sparkles") }
                                 .buttonStyle(SecondaryButtonStyle(compact: true))
-                                .help("One AI request")
+                                .help("Uses \(AICost.phrase())")
                         } else {
                             LazyVGrid(columns: [GridItem(.adaptive(minimum: 150, maximum: 170), spacing: 12, alignment: .top)], alignment: .leading, spacing: 12) {
                                 ForEach(Array(c.postList.indices), id: \.self) { i in
@@ -51,7 +51,7 @@ struct MessageGraphicsPane: View {
                                     VStack(alignment: .leading, spacing: 4) {
                                         ScaledSlide(carousel: p, index: 0, images: photos.images(p.slides[0], p), scale: 150 / p.shape.size.width)
                                             .drawingGroup().clipShape(RoundedRectangle(cornerRadius: 6))
-                                        Text("\(i + 1). " + c.postList[i].kind.label).font(.system(size: 11)).foregroundColor(Theme.muted)
+                                        Text("\(i + 1). " + c.postList[i].kind.label).font(.ui(size: 11)).foregroundColor(Theme.muted)
                                     }
                                     .contentShape(Rectangle())
                                     .onTapGesture { open(posts: true, index: i) }
@@ -62,9 +62,9 @@ struct MessageGraphicsPane: View {
                     }
                 } else {
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("No graphics for this message yet").font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.ink)
-                        Text("AI reads the whole message and writes a carousel and a week of posts. One AI request.")
-                            .font(.system(size: 12.5)).foregroundColor(Theme.muted)
+                        Text("No graphics for this message yet").font(.ui(size: 14, weight: .semibold)).foregroundColor(Theme.ink)
+                        Text("AI reads the whole message and writes a carousel and a week of posts. Uses \(AICost.phrase()).")
+                            .font(.ui(size: 12.5)).foregroundColor(Theme.muted)
                         Button { if let r = record { jobs.make(r) } } label: { Label("Make the graphics", systemImage: "sparkles") }
                             .buttonStyle(PrimaryButtonStyle(compact: true))
                     }
@@ -100,7 +100,7 @@ struct MessageGraphicsPane: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(title).font(Theme.display(17, weight: .medium)).foregroundColor(Theme.cream)
-                Text(detail).font(.system(size: 12)).foregroundColor(Theme.muted)
+                Text(detail).font(.ui(size: 12)).foregroundColor(Theme.muted)
             }
             content()
         }
@@ -136,7 +136,7 @@ struct MessageCaptionsPane: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 HStack {
-                    Text("\(all.filter { !$0.text.isEmpty }.count) captions from this message").font(.system(size: 12.5)).foregroundColor(Theme.muted)
+                    Text("\(all.filter { !$0.text.isEmpty }.count) captions from this message").font(.ui(size: 12.5)).foregroundColor(Theme.muted)
                     Spacer()
                     Button { copy(allText(all), "all") } label: {
                         Label(copied == "all" ? "Copied" : "Copy all", systemImage: copied == "all" ? "checkmark" : "doc.on.doc").lineLimit(1).fixedSize()
@@ -148,12 +148,12 @@ struct MessageCaptionsPane: View {
                 ForEach(["Clips", "Carousel", "Posts"], id: \.self) { g in
                     let group = all.filter { $0.group == g }
                     if !group.isEmpty {
-                        Text(g.uppercased()).font(.system(size: 11, weight: .semibold)).tracking(1).foregroundColor(Theme.faint)
+                        Text(g.uppercased()).font(.ui(size: 11, weight: .semibold)).tracking(1).foregroundColor(Theme.faint)
                         ForEach(group) { item in card(item) }
                     }
                 }
                 if all.isEmpty {
-                    Text("Captions appear here once the clips or graphics are made.").font(.system(size: 13)).foregroundColor(Theme.muted)
+                    Text("Captions appear here once the clips or graphics are made.").font(.ui(size: 13)).foregroundColor(Theme.muted)
                 }
             }
             .padding(16).frame(maxWidth: .infinity, alignment: .leading)
@@ -167,17 +167,17 @@ struct MessageCaptionsPane: View {
     private func card(_ item: Item) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(item.title).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.ink).lineLimit(1)
+                Text(item.title).font(.ui(size: 13, weight: .semibold)).foregroundColor(Theme.ink).lineLimit(1)
                 Spacer()
                 if !item.text.isEmpty {
                     Button { copy(item.text, item.id) } label: {
                         Label(copied == item.id ? "Copied" : "Copy", systemImage: copied == item.id ? "checkmark" : "doc.on.doc").lineLimit(1).fixedSize()
                     }
-                    .buttonStyle(.link).font(.system(size: 12))
+                    .buttonStyle(.link).font(.ui(size: 12))
                 }
             }
             Text(item.text.isEmpty ? "No caption yet." : item.text)
-                .font(.system(size: 12.5)).foregroundColor(item.text.isEmpty ? Theme.faint : Theme.text)
+                .font(.ui(size: 12.5)).foregroundColor(item.text.isEmpty ? Theme.faint : Theme.text)
                 .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
         }
         .padding(12)

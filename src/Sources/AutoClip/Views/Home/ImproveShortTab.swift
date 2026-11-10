@@ -26,7 +26,7 @@ struct ImproveShortTab: View {
         VStack(spacing: 12) {
             Text("Reviewing your short").font(Theme.display(26, weight: .medium)).foregroundColor(Theme.ink)
             ProgressView(value: model.progress).tint(Theme.action).frame(width: 340)
-            Text(text).font(.system(size: 13)).foregroundColor(Theme.muted)
+            Text(text).font(.ui(size: 13)).foregroundColor(Theme.muted)
             Button("Cancel") { model.cancel() }.buttonStyle(SecondaryButtonStyle(compact: true))
         }
     }
@@ -39,7 +39,7 @@ struct ImproveShortTab: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Write a Shorts script").font(Theme.display(28, weight: .medium)).foregroundColor(Theme.cream)
                         Text("Write or paste a script before you film. AutoClip checks the hook, length, turns and ending as you type, and AI can rewrite it in your voice.")
-                            .font(.system(size: 13)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                            .font(.ui(size: 13)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
                     }
                     ShortScriptView()
                 } else {
@@ -63,14 +63,14 @@ struct ImproveShortTab: View {
                         .onSubmit(download)
                     Button("Get it", action: download).buttonStyle(SecondaryButtonStyle(compact: true))
                         .disabled(link.trimmingCharacters(in: .whitespaces).isEmpty || ytStatus != nil)
-                    if let ytStatus { ProgressView().controlSize(.small); Text(ytStatus).font(.system(size: 12)).foregroundColor(Theme.muted).lineLimit(1) }
+                    if let ytStatus { ProgressView().controlSize(.small); Text(ytStatus).font(.ui(size: 12)).foregroundColor(Theme.muted).lineLimit(1) }
                 }
-                if let ytError { Text(ytError).font(.system(size: 13)).foregroundColor(Theme.danger).fixedSize(horizontal: false, vertical: true) }
+                if let ytError { Text(ytError).font(.ui(size: 13)).foregroundColor(Theme.danger).fixedSize(horizontal: false, vertical: true) }
                 if let e = model.error {
-                    Text(e).font(.system(size: 13)).foregroundColor(Theme.danger).fixedSize(horizontal: false, vertical: true)
+                    Text(e).font(.ui(size: 13)).foregroundColor(Theme.danger).fixedSize(horizontal: false, vertical: true)
                 }
                 Text("Works best on someone talking to camera, from the version without music or captions. On-screen text and music can't be separated once they're in the video.")
-                    .font(.system(size: 13)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                    .font(.ui(size: 13)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
                 if !model.reviews.isEmpty {
                     SectionTitle(title: "Your reviews", count: model.reviews.count)
                     ForEach(model.reviews) { r in row(r) }
@@ -95,9 +95,9 @@ struct ImproveShortTab: View {
                     VideoFrameView(path: r.path, width: 320).frame(width: 64, height: 84).clipped()
                         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(r.title).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.cream).lineLimit(1)
+                        Text(r.title).font(.ui(size: 13, weight: .semibold)).foregroundColor(Theme.cream).lineLimit(1)
                         Text("\(assessTime(r.duration)) · reviewed \(r.createdAt.formatted(date: .abbreviated, time: .omitted))")
-                            .font(.system(size: 12)).foregroundColor(Theme.muted)
+                            .font(.ui(size: 12)).foregroundColor(Theme.muted)
                     }
                     Spacer()
                 }
@@ -107,7 +107,7 @@ struct ImproveShortTab: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            Button { confirmDelete = r } label: { Image(systemName: "trash").font(.system(size: 13)) }
+            Button { confirmDelete = r } label: { Image(systemName: "trash").font(.ui(size: 13)) }
                 .buttonStyle(.plain).foregroundColor(Theme.muted).padding(8).help("Delete this review")
         }
     }
@@ -281,7 +281,7 @@ private struct ShortReviewPage: View {
         VStack(spacing: 12) {
             HStack {
                 Button { player.pause(); model.currentPath = nil } label: {
-                    Label("All shorts", systemImage: "chevron.left").font(.system(size: 13, weight: .medium)).foregroundColor(gold)
+                    Label("All shorts", systemImage: "chevron.left").font(.ui(size: 13, weight: .medium)).foregroundColor(gold)
                 }
                 .buttonStyle(.plain)
                 .disabled(saving != nil)
@@ -291,7 +291,7 @@ private struct ShortReviewPage: View {
             ZStack(alignment: .top) {
                 VideoPlayer(player: player)
                 if showAfter, review.choices.useHookText, time < 3, !review.choices.hookText.isEmpty {
-                    Text(review.choices.hookText).font(.system(size: 17, weight: .bold)).foregroundColor(Theme.ink).multilineTextAlignment(.center)
+                    Text(review.choices.hookText).font(.ui(size: 17, weight: .bold)).foregroundColor(Theme.ink).multilineTextAlignment(.center)
                         .padding(.horizontal, 12).padding(.vertical, 8)
                         .background(RoundedRectangle(cornerRadius: 9).fill(Color.black.opacity(0.7)))
                         .padding(.top, 54).padding(.horizontal, 16)
@@ -303,10 +303,10 @@ private struct ShortReviewPage: View {
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Theme.ink.opacity(0.1), lineWidth: 1))
 
-            if let buildError { Text(buildError).font(.system(size: 12)).foregroundColor(Theme.danger) }
+            if let buildError { Text(buildError).font(.ui(size: 12)).foregroundColor(Theme.danger) }
             let after = ShortDoctor.length(of: ranges)
             Text("\(assessTime(review.duration)) → \(assessTime(after)) · \(Int((review.duration - after).rounded()))s shorter")
-                .font(.system(size: 13, weight: .medium)).foregroundColor(Theme.text).monospacedDigit()
+                .font(.ui(size: 13, weight: .medium)).foregroundColor(Theme.text).monospacedDigit()
             if let p = saving {
                 HStack(spacing: 10) {
                     ProgressView(value: p).tint(Theme.action)
@@ -323,7 +323,7 @@ private struct ShortReviewPage: View {
             }
             Button { announce() } label: { Label(results.latest(forVideo: review.path) == nil ? "Posted it? Add results" : "Update results", systemImage: "chart.line.uptrend.xyaxis") }
                 .buttonStyle(SecondaryButtonStyle(compact: true))
-            if let saveError { Text(saveError).font(.system(size: 12)).foregroundColor(Theme.danger).fixedSize(horizontal: false, vertical: true) }
+            if let saveError { Text(saveError).font(.ui(size: 12)).foregroundColor(Theme.danger).fixedSize(horizontal: false, vertical: true) }
             Spacer(minLength: 0)
         }
     }
@@ -359,7 +359,7 @@ private struct ShortReviewPage: View {
         return VStack(alignment: .leading, spacing: 14) {
             Text(review.title).font(Theme.display(26, weight: .medium)).foregroundColor(Theme.ink).lineLimit(2)
             if !review.summary.isEmpty {
-                Text(review.summary).font(.system(size: 13)).foregroundColor(Theme.text).fixedSize(horizontal: false, vertical: true)
+                Text(review.summary).font(.ui(size: 13)).foregroundColor(Theme.text).fixedSize(horizontal: false, vertical: true)
             }
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), alignment: .leading)], alignment: .leading, spacing: 14) {
                 score("Hook", review.hookScore, after: hookAfter, why: "How quickly and strongly the video grabs attention. An opinion from \(engineName), not a measurement.")
@@ -367,7 +367,7 @@ private struct ShortReviewPage: View {
                 score("Clarity", review.clarityScore, after: nil, why: "How easy the message is to follow. An opinion from \(engineName), not a measurement.")
                 score("Ending", review.endingScore, after: nil, why: "Whether it finishes strongly. An opinion from \(engineName), not a measurement.")
             }
-            Text("Reviewed by \(engineName).").font(.system(size: 11.5)).foregroundColor(Theme.faint)
+            Text("Reviewed by \(engineName).").font(.ui(size: 11.5)).foregroundColor(Theme.faint)
         }
         .padding(18).frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.surface))
@@ -382,7 +382,7 @@ private struct ShortReviewPage: View {
         VStack(alignment: .leading, spacing: 4) {
             ScoreRing(title: title, value: before, why: why)
             if let after, after != before {
-                Text("\(before) → \(after) after").font(.system(size: 11.5, weight: .medium)).foregroundColor(after > before ? Theme.good : Theme.warn).padding(.leading, 68)
+                Text("\(before) → \(after) after").font(.ui(size: 11.5, weight: .medium)).foregroundColor(after > before ? Theme.good : Theme.warn).padding(.leading, 68)
             }
         }
     }
@@ -400,7 +400,7 @@ private struct ShortReviewPage: View {
                     Label("Captions look burned into the picture. They can't be removed, and they stay with their words wherever a cut lands.", systemImage: "captions.bubble")
                 }
             }
-            .font(.system(size: 13)).foregroundColor(Theme.warn)
+            .font(.ui(size: 13)).foregroundColor(Theme.warn)
             .padding(14).frame(maxWidth: .infinity, alignment: .leading)
             .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.warn.opacity(0.09)))
         }
@@ -413,8 +413,8 @@ private struct ShortReviewPage: View {
     private func toggle(_ on: Binding<Bool>, _ title: String, _ detail: String? = nil) -> some View {
         Toggle(isOn: on) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.cream)
-                if let detail { Text(detail).font(.system(size: 12)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true) }
+                Text(title).font(.ui(size: 13, weight: .semibold)).foregroundColor(Theme.cream)
+                if let detail { Text(detail).font(.ui(size: 12)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true) }
             }
         }
         .toggleStyle(.switch).tint(Theme.sand)
@@ -433,12 +433,12 @@ private struct ShortReviewPage: View {
         }) {
             if review.choices.useHook {
                 Toggle("Also keep it where it was said (play it twice, as a teaser)", isOn: $review.choices.keepHookInPlace)
-                    .toggleStyle(.checkbox).font(.system(size: 13)).foregroundColor(Theme.text)
+                    .toggleStyle(.checkbox).font(.ui(size: 13)).foregroundColor(Theme.text)
             }
             Rectangle().fill(Theme.line).frame(height: 1)
             toggle($review.choices.useHookText, "Add on-screen hook text", "Shows for the first 3 seconds.")
             if review.choices.useHookText {
-                TextField("A few punchy words", text: $review.choices.hookText).textFieldStyle(.roundedBorder).font(.system(size: 13))
+                TextField("A few punchy words", text: $review.choices.hookText).textFieldStyle(.roundedBorder).font(.ui(size: 13))
             }
         }
         .onAppear {
@@ -458,7 +458,7 @@ private struct ShortReviewPage: View {
     private var orderCard: some View {
         AssessCard(title: "Better order") {
             toggle($review.choices.useOrder, "Rearrange the lines", review.orderWhy.isEmpty ? nil : review.orderWhy)
-            Text("Listen through after using this: a moved line can lose what it depended on.").font(.system(size: 12)).foregroundColor(Theme.muted)
+            Text("Listen through after using this: a moved line can lose what it depended on.").font(.ui(size: 12)).foregroundColor(Theme.muted)
         }
     }
 
@@ -468,7 +468,7 @@ private struct ShortReviewPage: View {
                 toggle($review.choices.useEnding, "Finish on this line", review.ending?.note)
                 Text("“\(line(last))”").font(Theme.display(14).italic()).foregroundColor(Theme.ink).fixedSize(horizontal: false, vertical: true)
             } else if let note = review.ending?.note {
-                Text(note).font(.system(size: 13)).foregroundColor(Theme.text).fixedSize(horizontal: false, vertical: true)
+                Text(note).font(.ui(size: 13)).foregroundColor(Theme.text).fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -481,7 +481,7 @@ private struct ShortReviewPage: View {
             }
             let out = lines.indices.filter { !order.contains($0) }
             if !out.isEmpty {
-                Text("TAKEN OUT").font(.system(size: 11, weight: .semibold)).tracking(1.2).foregroundColor(Theme.faint).padding(.top, 6)
+                Text("TAKEN OUT").font(.ui(size: 11, weight: .semibold)).tracking(1.2).foregroundColor(Theme.faint).padding(.top, 6)
                 ForEach(out, id: \.self) { i in lineRow(i, moved: false) }
             }
         }
@@ -498,18 +498,18 @@ private struct ShortReviewPage: View {
             }
             .buttonStyle(.plain)
             VStack(alignment: .leading, spacing: 2) {
-                Text(line(i)).font(.system(size: 13)).foregroundColor(isDropped ? Theme.faint : Theme.text)
+                Text(line(i)).font(.ui(size: 13)).foregroundColor(isDropped ? Theme.faint : Theme.text)
                     .strikethrough(isDropped).fixedSize(horizontal: false, vertical: true)
                 if let suggestion, !isDropped {
-                    Text("Suggested cut: \(suggestion.why)").font(.system(size: 11.5)).foregroundColor(Theme.warn)
+                    Text("Suggested cut: \(suggestion.why)").font(.ui(size: 11.5)).foregroundColor(Theme.warn)
                 }
             }
             Spacer(minLength: 4)
             if moved && !isDropped {
-                Text("Moved").font(.system(size: 11, weight: .semibold)).foregroundColor(gold)
+                Text("Moved").font(.ui(size: 11, weight: .semibold)).foregroundColor(gold)
             }
             if lines.indices.contains(i) {
-                Text(assessTime(lines[i].start)).font(.system(size: 11.5, design: .monospaced)).foregroundColor(Theme.faint)
+                Text(assessTime(lines[i].start)).font(.ui(size: 11.5, design: .monospaced)).foregroundColor(Theme.faint)
             }
         }
     }
@@ -558,7 +558,7 @@ struct ImproveExamples: View {
         VStack(alignment: .leading, spacing: 12) {
             SectionTitle(title: "What usually makes a Short better", count: examples.count)
             Text("These are the same things AutoClip looks for when it reviews your video.")
-                .font(.system(size: 12.5)).foregroundColor(Theme.muted)
+                .font(.ui(size: 12.5)).foregroundColor(Theme.muted)
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: 14, alignment: .top)], alignment: .leading, spacing: 14) {
                 ForEach(examples) { e in card(e) }
             }
@@ -567,18 +567,18 @@ struct ImproveExamples: View {
 
     private func card(_ e: Example) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label(e.title, systemImage: e.icon).font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.cream)
+            Label(e.title, systemImage: e.icon).font(.ui(size: 14, weight: .semibold)).foregroundColor(Theme.cream)
             VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .top, spacing: 6) {
-                    Text("BEFORE").font(.system(size: 10, weight: .bold)).foregroundColor(Theme.danger).frame(width: 46, alignment: .leading)
-                    Text(e.before).font(.system(size: 12.5)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                    Text("BEFORE").font(.ui(size: 10, weight: .bold)).foregroundColor(Theme.danger).frame(width: 46, alignment: .leading)
+                    Text(e.before).font(.ui(size: 12.5)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
                 }
                 HStack(alignment: .top, spacing: 6) {
-                    Text("AFTER").font(.system(size: 10, weight: .bold)).foregroundColor(Theme.good).frame(width: 46, alignment: .leading)
-                    Text(e.after).font(.system(size: 12.5, weight: .medium)).foregroundColor(Theme.ink).fixedSize(horizontal: false, vertical: true)
+                    Text("AFTER").font(.ui(size: 10, weight: .bold)).foregroundColor(Theme.good).frame(width: 46, alignment: .leading)
+                    Text(e.after).font(.ui(size: 12.5, weight: .medium)).foregroundColor(Theme.ink).fixedSize(horizontal: false, vertical: true)
                 }
             }
-            Text(e.why).font(.system(size: 11.5)).foregroundColor(Theme.faint).fixedSize(horizontal: false, vertical: true)
+            Text(e.why).font(.ui(size: 11.5)).foregroundColor(Theme.faint).fixedSize(horizontal: false, vertical: true)
         }
         .padding(14).frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.surface))

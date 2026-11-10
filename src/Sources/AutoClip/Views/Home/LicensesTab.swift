@@ -36,7 +36,7 @@ struct LicensesTab: View {
                 if !store.keyWorks {
                     Label("The private key in Documents › AutoClip License Keys doesn't match this version of AutoClip, so keys made here won't work.",
                           systemImage: "exclamationmark.triangle.fill")
-                        .font(.system(size: 12.5)).foregroundColor(Theme.warn)
+                        .font(.ui(size: 12.5)).foregroundColor(Theme.warn)
                 }
                 newCard
                 listCard
@@ -80,12 +80,12 @@ struct LicensesTab: View {
                 }
                 Spacer(minLength: 0)
             }
-            Text(planNote).font(.system(size: 11.5)).foregroundColor(Theme.faint)
+            Text(planNote).font(.ui(size: 11.5)).foregroundColor(Theme.faint)
             HStack(spacing: 10) {
                 Button { make() } label: { Label("Make key", systemImage: "key.fill") }
                     .buttonStyle(PrimaryButtonStyle(compact: true))
                     .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
-                if let error { Text(error).font(.system(size: 12)).foregroundColor(Theme.danger) }
+                if let error { Text(error).font(.ui(size: 12)).foregroundColor(Theme.danger) }
             }
         }
     }
@@ -114,7 +114,7 @@ struct LicensesTab: View {
         AssessCard(title: "Keys you've given out", subtitle: store.issued.isEmpty ? nil : "\(store.issued.count) in all. Lost key? Find them here and copy it again. It works on any Mac.") {
             if store.issued.isEmpty {
                 Text("Keys you make here are kept in a list so you never have to make one again because someone lost theirs.")
-                    .font(.system(size: 12.5)).foregroundColor(Theme.muted)
+                    .font(.ui(size: 12.5)).foregroundColor(Theme.muted)
             } else {
                 TextField("Find a church, email or note", text: $search).textFieldStyle(.roundedBorder).frame(maxWidth: 320)
                 VStack(spacing: 0) {
@@ -123,7 +123,7 @@ struct LicensesTab: View {
                         if item.id != shown.last?.id { Divider().overlay(Theme.line) }
                     }
                 }
-                if shown.isEmpty { Text("Nothing matches “\(search)”.").font(.system(size: 12.5)).foregroundColor(Theme.muted) }
+                if shown.isEmpty { Text("Nothing matches “\(search)”.").font(.ui(size: 12.5)).foregroundColor(Theme.muted) }
             }
         }
     }
@@ -132,17 +132,17 @@ struct LicensesTab: View {
         HStack(alignment: .top, spacing: 14) {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 8) {
-                    Text(item.name).font(.system(size: 13.5, weight: .semibold)).foregroundColor(Theme.ink).lineLimit(1)
-                    Text(item.planValue.label).font(.system(size: 11, weight: .semibold)).foregroundColor(Theme.sand)
+                    Text(item.name).font(.ui(size: 13.5, weight: .semibold)).foregroundColor(Theme.ink).lineLimit(1)
+                    Text(item.planValue.label).font(.ui(size: 11, weight: .semibold)).foregroundColor(Theme.sand)
                         .padding(.horizontal, 7).padding(.vertical, 2).background(Capsule().fill(Theme.sand.opacity(0.14)))
                     status(item)
-                    if justMade == item.id { Text("New").font(.system(size: 11, weight: .semibold)).foregroundColor(Theme.good) }
+                    if justMade == item.id { Text("New").font(.ui(size: 11, weight: .semibold)).foregroundColor(Theme.good) }
                 }
-                Text(detail(item)).font(.system(size: 12)).foregroundColor(Theme.muted).lineLimit(1)
+                Text(detail(item)).font(.ui(size: 12)).foregroundColor(Theme.muted).lineLimit(1)
                 TextField("Note (who paid, invoice, Mac name…)", text: Binding(
                     get: { item.note },
                     set: { var c = item; c.note = $0; store.update(c) }))
-                    .textFieldStyle(.plain).font(.system(size: 12)).foregroundColor(Theme.faint)
+                    .textFieldStyle(.plain).font(.ui(size: 12)).foregroundColor(Theme.faint)
             }
             Spacer(minLength: 8)
             HStack(spacing: 6) {
@@ -171,9 +171,9 @@ struct LicensesTab: View {
         if let end = item.expires {
             let days = Int(ceil(end.timeIntervalSinceNow / 86400))
             if days <= 0 {
-                Text("Ended").font(.system(size: 11.5, weight: .semibold)).foregroundColor(Theme.danger)
+                Text("Ended").font(.ui(size: 11.5, weight: .semibold)).foregroundColor(Theme.danger)
             } else if days <= 30 {
-                Text("Ends in \(days) day\(days == 1 ? "" : "s")").font(.system(size: 11.5, weight: .semibold)).foregroundColor(Theme.warn)
+                Text("Ends in \(days) day\(days == 1 ? "" : "s")").font(.ui(size: 11.5, weight: .semibold)).foregroundColor(Theme.warn)
             }
         }
     }
@@ -226,12 +226,12 @@ struct LicensesTab: View {
 
     private var pasteSheet: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Add a key you gave out before").font(.system(size: 16, weight: .semibold))
+            Text("Add a key you gave out before").font(.ui(size: 16, weight: .semibold))
             Text("Paste a key you made with the Terminal tool. The church's name, plan and dates are read from the key.")
-                .font(.system(size: 12.5)).foregroundColor(.secondary)
-            TextEditor(text: $pasted).font(.system(size: 11.5, design: .monospaced)).frame(height: 110)
+                .font(.ui(size: 12.5)).foregroundColor(.secondary)
+            TextEditor(text: $pasted).font(.ui(size: 11.5, design: .monospaced)).frame(height: 110)
                 .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.3)))
-            if let pasteError { Text(pasteError).font(.system(size: 12)).foregroundColor(.red) }
+            if let pasteError { Text(pasteError).font(.ui(size: 12)).foregroundColor(Theme.danger) }
             HStack {
                 Spacer()
                 Button("Cancel") { pasting = false; pasted = ""; pasteError = nil }
@@ -252,7 +252,7 @@ struct LicensesTab: View {
 
     private func labelled<V: View>(_ title: String, @ViewBuilder _ content: () -> V) -> some View {
         VStack(alignment: .leading, spacing: 5) {
-            Text(title).font(.system(size: 11.5, weight: .semibold)).foregroundColor(Theme.muted)
+            Text(title).font(.ui(size: 11.5, weight: .semibold)).foregroundColor(Theme.muted)
             content()
         }
     }

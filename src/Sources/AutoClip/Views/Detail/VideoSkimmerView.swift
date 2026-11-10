@@ -143,7 +143,7 @@ struct VideoSkimmerView: View {
                             .cornerRadius(5)
                     } else {
                         Image(systemName: "film")
-                            .font(.system(size: 14))
+                            .font(.ui(size: 14))
                             .foregroundColor(Theme.ink.opacity(0.55))
                     }
                 }
@@ -153,7 +153,7 @@ struct VideoSkimmerView: View {
                 )
 
                 Text(formatTimestamp(time))
-                    .font(.system(size: 11.5, design: .monospaced))
+                    .font(.ui(size: 11.5, design: .monospaced))
                     .foregroundColor(Theme.ink)
                     .padding(.horizontal, 5)
                     .padding(.vertical, 2)

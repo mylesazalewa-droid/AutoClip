@@ -99,3 +99,26 @@ final class CostMeter: ObservableObject {
 enum CostTag {
     @TaskLocal static var video: String?
 }
+
+/// Says up front what an AI action is likely to cost, from what recent requests cost.
+@MainActor
+enum AICost {
+    /// "1 AI request (about 2¢)", or "free, on this Mac" when recent requests ran on-device.
+    static func phrase(_ requests: Int = 1) -> String {
+        let recent = CostMeter.shared.entries.suffix(40)
+        let what = requests == 1 ? "1 AI request" : "\(requests) AI requests"
+        guard !recent.isEmpty else { return what }
+        let local = recent.filter { $0.provider == "This Mac" }.count
+        if local * 2 > recent.count { return "\(what), free on this Mac" }
+        let paid = recent.filter { $0.provider != "This Mac" && $0.cost > 0 }
+        guard !paid.isEmpty else { return what }
+        let each = paid.reduce(0) { $0 + $1.cost } / Double(paid.count) * Double(requests)
+        return "\(what) (about \(cents(each)))"
+    }
+
+    static func cents(_ v: Double) -> String {
+        if v < 0.005 { return "under 1¢" }
+        if v < 1 { return "\(Int((v * 100).rounded()))¢" }
+        return String(format: "$%.2f", v)
+    }
+}

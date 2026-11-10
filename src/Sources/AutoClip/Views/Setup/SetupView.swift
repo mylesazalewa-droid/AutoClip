@@ -16,11 +16,11 @@ struct SetupView: View {
                 LogoMark(size: 72)
 
                 Text("AutoClip")
-                    .font(.system(size: 32, weight: .bold))
+                    .font(.ui(size: 32, weight: .bold))
                     .foregroundColor(Theme.ink)
 
                 Text("Sermon clips, ready by Monday")
-                    .font(.system(size: 16))
+                    .font(.ui(size: 16))
                     .foregroundColor(Theme.ink.opacity(0.55))
             }
 
@@ -31,11 +31,11 @@ struct SetupView: View {
             // AI Model setup
             VStack(spacing: 16) {
                 Text("Download AI Transcription Model")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.ui(size: 18, weight: .semibold))
                     .foregroundColor(Theme.ink)
 
                 Text("AutoClip uses on-device AI to transcribe and analyze your videos.\nNo internet connection or API keys required after setup.")
-                    .font(.system(size: 14))
+                    .font(.ui(size: 14))
                     .foregroundColor(Theme.ink.opacity(0.55))
                     .multilineTextAlignment(.center)
                     .lineSpacing(4)
@@ -49,7 +49,7 @@ struct SetupView: View {
 
                 // Model size info
                 Text("Model: Whisper Small (English) · ~230 MB")
-                    .font(.system(size: 13))
+                    .font(.ui(size: 13))
                     .foregroundColor(Theme.ink.opacity(0.55))
 
                 if isDownloading {
@@ -59,13 +59,13 @@ struct SetupView: View {
                             .frame(maxWidth: 360)
 
                         Text(statusText)
-                            .font(.system(size: 13))
+                            .font(.ui(size: 13))
                             .foregroundColor(Theme.ink.opacity(0.55))
                     }
                 } else {
                     if let error = downloadError {
                         Text(error)
-                            .font(.system(size: 13))
+                            .font(.ui(size: 13))
                             .foregroundColor(Theme.danger)
                             .padding(.horizontal, 40)
                             .multilineTextAlignment(.center)
@@ -74,9 +74,9 @@ struct SetupView: View {
                     Button(action: startDownload) {
                         HStack(spacing: 8) {
                             Image(systemName: "arrow.down.circle.fill")
-                                .font(.system(size: 16))
+                                .font(.ui(size: 16))
                             Text("Download AI Model")
-                                .font(.system(size: 16, weight: .semibold))
+                                .font(.ui(size: 16, weight: .semibold))
                         }
                         .foregroundColor(Theme.onSand)
                         .padding(.horizontal, 32)
@@ -91,7 +91,7 @@ struct SetupView: View {
                             AppState.shared.showOnboarding = false
                             SampleSermon.open()
                         }
-                        .buttonStyle(.plain).font(.system(size: 13)).foregroundColor(Theme.sand)
+                        .buttonStyle(.plain).font(.ui(size: 13)).foregroundColor(Theme.sand)
                     }
                 }
             }
@@ -106,10 +106,10 @@ struct SetupView: View {
     func modelFeature(icon: String, text: String) -> some View {
         VStack(spacing: 6) {
             Image(systemName: icon)
-                .font(.system(size: 20))
+                .font(.ui(size: 20))
                 .foregroundColor(Theme.sand)
             Text(text)
-                .font(.system(size: 13))
+                .font(.ui(size: 13))
                 .foregroundColor(Theme.ink.opacity(0.6))
         }
     }

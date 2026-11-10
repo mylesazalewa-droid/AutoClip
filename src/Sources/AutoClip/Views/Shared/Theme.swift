@@ -40,8 +40,8 @@ enum Theme {
     // Text, with enough contrast to read comfortably
     static let cream = pair(ns(0xF1E9DC), ns(0x2B241D))
     static let text = ink.opacity(0.92)
-    static let muted = pair(NSColor.white.withAlphaComponent(0.70), ns(0x1F1C19, 0.66))
-    static let faint = pair(NSColor.white.withAlphaComponent(0.52), ns(0x1F1C19, 0.5))
+    static let muted = pair(NSColor.white.withAlphaComponent(0.76), ns(0x1F1C19, 0.72))
+    static let faint = pair(NSColor.white.withAlphaComponent(0.6), ns(0x1F1C19, 0.58))
 
     /// Text on sand: dark on the light sand of dark mode, light on the deeper sand of light mode
     static let onSand = pair(ns(0x141517), ns(0xFBF7F0))
@@ -62,7 +62,25 @@ enum Theme {
     }
 
     /// Small spaced capitals for section labels.
-    static func label(_ size: CGFloat = 11) -> Font { .system(size: size, weight: .semibold) }
+    static func label(_ size: CGFloat = 11) -> Font { .ui(size: size, weight: .semibold) }
+}
+
+/// How big the app's text is. Standard is a touch larger than the old sizes; exported
+/// graphics and captions never change with it.
+enum TextSize: String, CaseIterable, Identifiable {
+    case standard, larger, largest
+    var id: String { rawValue }
+    var label: String { self == .standard ? "Standard" : self == .larger ? "Larger" : "Largest" }
+    var scale: CGFloat { self == .standard ? 1.07 : self == .larger ? 1.18 : 1.3 }
+    static let key = "text_size"
+    static var current: TextSize { TextSize(rawValue: UserDefaults.standard.string(forKey: key) ?? "") ?? .standard }
+}
+
+extension Font {
+    /// Text on screen, at the size chosen in Settings.
+    static func ui(size: CGFloat, weight: Font.Weight = .regular, design: Font.Design = .default) -> Font {
+        .system(size: (size * TextSize.current.scale * 2).rounded() / 2, weight: weight, design: design)
+    }
 }
 
 /// Light, dark, or whatever the Mac is set to.
@@ -87,8 +105,10 @@ enum AppAppearance: String, CaseIterable, Identifiable {
 /// Puts a window in the chosen appearance, and the house button style on every plain button.
 struct AppLook: ViewModifier {
     @AppStorage(AppAppearance.key) private var raw = AppAppearance.dark.rawValue
+    @AppStorage(TextSize.key) private var textSize = TextSize.standard.rawValue
     func body(content: Content) -> some View {
         content
+            .id(textSize)
             .preferredColorScheme((AppAppearance(rawValue: raw) ?? .dark).scheme)
             .buttonStyle(QuietButtonStyle())
             .onAppear { AppAppearance.applyToApp() }
@@ -112,7 +132,7 @@ struct QuietButtonStyle: ButtonStyle {
         var body: some View {
             let small = size == .small || size == .mini
             configuration.label
-                .font(.system(size: small ? 12 : 13, weight: .medium))
+                .font(.ui(size: small ? 12 : 13, weight: .medium))
                 .foregroundColor(Theme.text)
                 .padding(.horizontal, small ? 10 : 14).padding(.vertical, small ? 4 : 7)
                 .background(RoundedRectangle(cornerRadius: small ? 7 : 9, style: .continuous)
@@ -139,7 +159,7 @@ struct PrimaryButtonStyle: ButtonStyle {
         @State private var hover = false
         var body: some View {
             configuration.label
-                .font(.system(size: compact ? 12 : 13, weight: .semibold))
+                .font(.ui(size: compact ? 12 : 13, weight: .semibold))
                 .foregroundColor(Theme.onColor)
                 .padding(.horizontal, compact ? 12 : 18).padding(.vertical, compact ? 6 : 9)
                 .background(Capsule().fill(Theme.terracotta.opacity(configuration.isPressed ? 0.8 : hover ? 1 : 0.92)))
@@ -165,7 +185,7 @@ struct SecondaryButtonStyle: ButtonStyle {
         @State private var hover = false
         var body: some View {
             configuration.label
-                .font(.system(size: compact ? 12 : 13, weight: .medium))
+                .font(.ui(size: compact ? 12 : 13, weight: .medium))
                 .foregroundColor(Theme.sand)
                 .padding(.horizontal, compact ? 12 : 16).padding(.vertical, compact ? 6 : 9)
                 .background(Capsule().fill(Theme.ink.opacity(configuration.isPressed ? 0.1 : hover ? 0.07 : 0.03)))
@@ -184,7 +204,7 @@ struct DisplayTitle: View {
     var size: CGFloat = 22
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: "diamond").font(.system(size: 10)).foregroundColor(Theme.sand.opacity(0.8))
+            Image(systemName: "diamond").font(.ui(size: 10)).foregroundColor(Theme.sand.opacity(0.8))
             Text(text.uppercased()).font(Theme.display(size)).tracking(size * 0.12).foregroundColor(Theme.cream)
         }
     }

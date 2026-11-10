@@ -12,9 +12,9 @@ struct SpeakersSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Speakers").font(.system(size: 18, weight: .semibold)).foregroundColor(Theme.ink)
+            Text("Speakers").font(.ui(size: 18, weight: .semibold)).foregroundColor(Theme.ink)
             Text("Give each preacher their own progress charts. Right-click a video in the list to say whose message it is.")
-                .font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.6)).fixedSize(horizontal: false, vertical: true)
+                .font(.ui(size: 13)).foregroundColor(Theme.ink.opacity(0.6)).fixedSize(horizontal: false, vertical: true)
 
             VStack(spacing: 6) {
                 ForEach(Array(profiles.speakers.enumerated()), id: \.element.id) { i, s in
@@ -23,10 +23,10 @@ struct SpeakersSheet: View {
                         TextField("Name", text: Binding(get: { s.name }, set: { profiles.rename(s.id, to: $0) }))
                             .textFieldStyle(.roundedBorder).frame(width: 200)
                         let n = reports.filter { !$0.isPractice && profiles.speaker(for: $0.videoPath).id == s.id }.count
-                        Text("\(n) message\(n == 1 ? "" : "s")").font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.55))
+                        Text("\(n) message\(n == 1 ? "" : "s")").font(.ui(size: 12)).foregroundColor(Theme.ink.opacity(0.55))
                         Spacer()
                         if i == 0 {
-                            Text("Default").font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
+                            Text("Default").font(.ui(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
                                 .help("Videos you haven't assigned belong to this speaker")
                         } else {
                             Button { profiles.remove(s.id) } label: { Image(systemName: "trash") }
@@ -73,13 +73,13 @@ struct SpeakerCompareCard: View {
                         Text($0).frame(width: 84, alignment: .trailing)
                     }
                 }
-                .font(.system(size: 11.5, weight: .semibold)).foregroundColor(Theme.ink.opacity(0.55))
+                .font(.ui(size: 11.5, weight: .semibold)).foregroundColor(Theme.ink.opacity(0.55))
                 ForEach(rows, id: \.speaker.id) { row in
                     Button { pick(row.speaker) } label: {
                         HStack {
                             HStack(spacing: 7) {
                                 Circle().fill(row.color).frame(width: 9, height: 9)
-                                Text(row.speaker.name).font(.system(size: 13, weight: .medium)).foregroundColor(Theme.ink).lineLimit(1)
+                                Text(row.speaker.name).font(.ui(size: 13, weight: .medium)).foregroundColor(Theme.ink).lineLimit(1)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             cell("\(row.reports.count)")
@@ -119,6 +119,6 @@ struct SpeakerCompareCard: View {
 
     private func cell(_ v: Double?, _ fmt: String) -> some View { cell(v.map { String(format: fmt, $0) } ?? "–") }
     private func cell(_ s: String) -> some View {
-        Text(s).font(.system(size: 13, weight: .semibold, design: .rounded)).foregroundColor(gold).frame(width: 84, alignment: .trailing)
+        Text(s).font(.ui(size: 13, weight: .semibold, design: .rounded)).foregroundColor(gold).frame(width: 84, alignment: .trailing)
     }
 }

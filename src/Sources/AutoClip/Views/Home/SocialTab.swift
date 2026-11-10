@@ -73,7 +73,7 @@ struct SocialGraphicsTab: View {
                         Button { hiddenRaw = "" } label: {
                             Label("Show \(removed) removed sermon\(removed == 1 ? "" : "s")", systemImage: "eye")
                         }
-                        .buttonStyle(.link).font(.system(size: 12))
+                        .buttonStyle(.link).font(.ui(size: 12))
                     }
                 }
                 .padding(.horizontal, 32).padding(.bottom, 40)
@@ -84,7 +84,7 @@ struct SocialGraphicsTab: View {
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .stroke(Theme.sand, style: StrokeStyle(lineWidth: 2, dash: [8, 6]))
                     .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Theme.sand.opacity(0.06)))
-                    .overlay(Label("Drop a sermon video or audio file", systemImage: "waveform").font(.system(size: 15, weight: .semibold)).foregroundColor(Theme.sand))
+                    .overlay(Label("Drop a sermon video or audio file", systemImage: "waveform").font(.ui(size: 15, weight: .semibold)).foregroundColor(Theme.sand))
                     .padding(16).allowsHitTesting(false)
             }
         }
@@ -115,7 +115,7 @@ struct SocialGraphicsTab: View {
             Button("Make it") { if let r = confirmMake { jobs.make(r) }; confirmMake = nil }
             Button("Cancel", role: .cancel) { confirmMake = nil }
         } message: {
-            Text("AI reads the whole sermon and writes a carousel and a week of single posts. Uses one AI request. You can keep working while they're made.")
+            Text("AI reads the whole sermon and writes a carousel and a week of single posts. Uses \(AICost.phrase()). You can keep working while they're made.")
         }
     }
 
@@ -140,7 +140,7 @@ struct SocialGraphicsTab: View {
                 .drawingGroup()
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .shadow(color: .black.opacity(0.25), radius: 8, y: 4)
-            Text("\(i + 1). " + c.postList[i].kind.label).font(.system(size: 11.5)).foregroundColor(Theme.muted).lineLimit(1)
+            Text("\(i + 1). " + c.postList[i].kind.label).font(.ui(size: 11.5)).foregroundColor(Theme.muted).lineLimit(1)
         }
         .frame(width: w)
         .overlay(alignment: .topLeading) {
@@ -151,7 +151,7 @@ struct SocialGraphicsTab: View {
         .help("Open and edit this post")
         .overlay(alignment: .topTrailing) {
             Button { deletePost(rec, c.postList[i].id) } label: {
-                Image(systemName: "trash").font(.system(size: 11, weight: .semibold)).foregroundColor(.white)
+                Image(systemName: "trash").font(.ui(size: 11, weight: .semibold)).foregroundColor(.white)
                     .frame(width: 26, height: 26)
                     .background(Circle().fill(hoveredPost == c.postList[i].id ? Theme.danger : Color.black.opacity(0.55)))
             }
@@ -208,7 +208,7 @@ struct SocialGraphicsTab: View {
             HStack(spacing: 12) {
                 Button { withAnimation(.easeInOut(duration: 0.2)) { setOpen(rec, !open) } } label: {
                     HStack(spacing: 10) {
-                        Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundColor(Theme.sand)
+                        Image(systemName: "chevron.right").font(.ui(size: 12, weight: .bold)).foregroundColor(Theme.sand)
                             .rotationEffect(.degrees(open ? 90 : 0))
                         if !open, let first = c.slides.first {
                             ScaledSlide(carousel: c, index: 0, images: photos.images(first, c), scale: 44 / c.shape.size.height)
@@ -217,7 +217,7 @@ struct SocialGraphicsTab: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(rec.title).font(Theme.display(18, weight: .medium)).foregroundColor(Theme.cream).lineLimit(1)
                             Text("\(Date(timeIntervalSince1970: rec.dateCreated).formatted(date: .abbreviated, time: .omitted)) · \(rec.drafts?.count ?? 0) clips · \(c.slides.count) slides · \(c.postList.count) posts")
-                                .font(.system(size: 12)).foregroundColor(Theme.muted)
+                                .font(.ui(size: 12)).foregroundColor(Theme.muted)
                         }
                     }
                     .contentShape(Rectangle())
@@ -270,19 +270,19 @@ struct SocialGraphicsTab: View {
                             let pc: SermonCarousel = isCarousel ? p.c : p.c.post(d.post!)
                             let caption = isCarousel ? p.c.captionWithTags : (p.c.postList[d.post!].caption ?? "")
                             VStack(alignment: .leading, spacing: 6) {
-                                Text(d.day).font(.system(size: 12, weight: .semibold)).foregroundColor(Theme.sand)
+                                Text(d.day).font(.ui(size: 12, weight: .semibold)).foregroundColor(Theme.sand)
                                 ScaledSlide(carousel: pc, index: 0, images: photos.images(pc.slides[0], pc), scale: 150 / pc.shape.size.width)
                                     .drawingGroup().clipShape(RoundedRectangle(cornerRadius: 6))
                                     .onTapGesture { open(p.rec, posts: !isCarousel, index: isCarousel ? 0 : d.post!) }
-                                Text(isCarousel ? "Carousel" : p.c.postList[d.post!].kind.label).font(.system(size: 11)).foregroundColor(Theme.muted)
+                                Text(isCarousel ? "Carousel" : p.c.postList[d.post!].kind.label).font(.ui(size: 11)).foregroundColor(Theme.muted)
                                 Button { copy(caption); copiedDay = d.day } label: {
                                     Label(copiedDay == d.day ? "Copied" : "Copy caption", systemImage: copiedDay == d.day ? "checkmark" : "doc.on.doc")
                                         .lineLimit(1).fixedSize()
                                 }
-                                .buttonStyle(.link).font(.system(size: 11.5))
+                                .buttonStyle(.link).font(.ui(size: 11.5))
                                 if let i = d.post, i >= 0 {
                                     Button { deletePost(p.rec, p.c.postList[i].id) } label: { Label("Delete", systemImage: "trash").lineLimit(1).fixedSize() }
-                                        .buttonStyle(.link).font(.system(size: 11.5)).foregroundColor(Theme.danger)
+                                        .buttonStyle(.link).font(.ui(size: 11.5)).foregroundColor(Theme.danger)
                                         .help("Delete this post")
                                 }
                             }
@@ -291,7 +291,7 @@ struct SocialGraphicsTab: View {
                     }
                 }
                 Text("From \(p.rec.title). Tap a day to edit it, copy its caption, then post.")
-                    .font(.system(size: 11.5)).foregroundColor(Theme.faint)
+                    .font(.ui(size: 11.5)).foregroundColor(Theme.faint)
             }
         }
     }
@@ -327,7 +327,7 @@ struct SocialGraphicsTab: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 8) {
                 Text(title).font(Theme.display(20, weight: .medium)).foregroundColor(Theme.cream)
-                Text("\(count)").font(.system(size: 12, weight: .semibold)).foregroundColor(Theme.muted)
+                Text("\(count)").font(.ui(size: 12, weight: .semibold)).foregroundColor(Theme.muted)
                     .padding(.horizontal, 7).padding(.vertical, 2).background(Capsule().fill(Theme.ink.opacity(0.07)))
             }
             content()
@@ -342,10 +342,10 @@ struct SocialGraphicsTab: View {
 
     private var empty: some View {
         VStack(spacing: 12) {
-            Image(systemName: "rectangle.split.3x1").font(.system(size: 34)).foregroundColor(Theme.sand)
+            Image(systemName: "rectangle.split.3x1").font(.ui(size: 34)).foregroundColor(Theme.sand)
             Text("Add a sermon first").font(Theme.display(22, weight: .medium)).foregroundColor(Theme.cream)
             Text("Choose the sermon video, or just the audio if there's no video (MP3, M4A, WAV). You can also drop it here.")
-                .font(.system(size: 13)).foregroundColor(Theme.muted).multilineTextAlignment(.center)
+                .font(.ui(size: 13)).foregroundColor(Theme.muted).multilineTextAlignment(.center)
             Button(action: addSermon) { Label("Choose a video or audio file", systemImage: "plus") }
                 .buttonStyle(PrimaryButtonStyle())
         }
@@ -384,9 +384,9 @@ struct SocialGraphicsTab: View {
             }
             .frame(width: 96, height: 54)
             VStack(alignment: .leading, spacing: 5) {
-                Text(job.title).font(.system(size: 13.5, weight: .semibold)).foregroundColor(Theme.ink).lineLimit(1)
+                Text(job.title).font(.ui(size: 13.5, weight: .semibold)).foregroundColor(Theme.ink).lineLimit(1)
                 ProgressView(value: min(1, max(0, job.progress))).tint(Theme.sand)
-                Text(job.statusMsg).font(.system(size: 12)).foregroundColor(Theme.muted).lineLimit(1)
+                Text(job.statusMsg).font(.ui(size: 12)).foregroundColor(Theme.muted).lineLimit(1)
             }
             Spacer(minLength: 0)
         }
@@ -425,11 +425,11 @@ struct SocialGraphicsTab: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 8) {
-                    Text(rec.title).font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.ink).lineLimit(1)
+                    Text(rec.title).font(.ui(size: 14, weight: .semibold)).foregroundColor(Theme.ink).lineLimit(1)
                     if let r = reviews.latest(rec.id, kind: .carousel) { ReviewBadge(item: r) }
                 }
                 Text("\(c.slides.count) slides · \(c.postList.count) posts · \(c.style.label)")
-                    .font(.system(size: 12)).foregroundColor(Theme.muted)
+                    .font(.ui(size: 12)).foregroundColor(Theme.muted)
             }
             ViewThatFits(in: .horizontal) {
                 cardButtons(rec, c, labels: true)
@@ -453,7 +453,7 @@ struct SocialGraphicsTab: View {
             if c.postList.isEmpty {
                 Button { jobs.makePosts(rec) } label: { cardLabel("Write posts", "sparkles", labels) }
                     .buttonStyle(SecondaryButtonStyle(compact: true))
-                    .help("Write posts: a week of single posts from this sermon (one AI request)")
+                    .help("Write posts: a week of single posts from this sermon (uses \(AICost.phrase()))")
             }
             Button { graphicsFor = rec } label: { cardLabel("Thumbnail", "photo", labels) }
                 .buttonStyle(SecondaryButtonStyle(compact: true))
@@ -487,7 +487,7 @@ struct SocialGraphicsTab: View {
                 }
                 VStack(spacing: 8) {
                     ProgressView().controlSize(.small)
-                    Text(jobs.status[rec.id] ?? "Working…").font(.system(size: 12)).foregroundColor(Theme.muted)
+                    Text(jobs.status[rec.id] ?? "Working…").font(.ui(size: 12)).foregroundColor(Theme.muted)
                         .multilineTextAlignment(.center).frame(width: 170)
                 }
             }
@@ -495,8 +495,8 @@ struct SocialGraphicsTab: View {
             .contentShape(Rectangle())
             .onTapGesture { openWindow(id: "carousel-window", value: rec.id) }
             VStack(alignment: .leading, spacing: 4) {
-                Text(rec.title).font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.ink).lineLimit(1)
-                Text("Writing the graphics. You can leave this page.").font(.system(size: 12)).foregroundColor(Theme.muted)
+                Text(rec.title).font(.ui(size: 14, weight: .semibold)).foregroundColor(Theme.ink).lineLimit(1)
+                Text("Writing the graphics. You can leave this page.").font(.ui(size: 12)).foregroundColor(Theme.muted)
             }
         }
         .padding(16)
@@ -510,12 +510,12 @@ struct SocialGraphicsTab: View {
                 .frame(width: 96, height: 54).clipShape(RoundedRectangle(cornerRadius: 6))
                 .environment(\.colorScheme, .dark)
             VStack(alignment: .leading, spacing: 3) {
-                Text(rec.title).font(.system(size: 13.5, weight: .semibold)).foregroundColor(Theme.ink).lineLimit(1)
+                Text(rec.title).font(.ui(size: 13.5, weight: .semibold)).foregroundColor(Theme.ink).lineLimit(1)
                 if let e = jobs.errors[rec.id] {
-                    Text(e).font(.system(size: 12)).foregroundColor(Theme.danger).lineLimit(2)
+                    Text(e).font(.ui(size: 12)).foregroundColor(Theme.danger).lineLimit(2)
                 } else {
                     Text("Added \(Date(timeIntervalSince1970: rec.dateCreated).formatted(.relative(presentation: .named)))")
-                        .font(.system(size: 12)).foregroundColor(Theme.muted)
+                        .font(.ui(size: 12)).foregroundColor(Theme.muted)
                 }
             }
             Spacer()

@@ -27,7 +27,7 @@ struct ProjectCard: View {
                         .frame(height: 160)
                         .overlay(
                             Image(systemName: "film")
-                                .font(.system(size: 32))
+                                .font(.ui(size: 32))
                                 .foregroundColor(Theme.ink.opacity(0.55))
                         )
                 }
@@ -39,15 +39,15 @@ struct ProjectCard: View {
                         VStack(spacing: 4) {
                             HStack(spacing: 4) {
                                 Image(systemName: "waveform")
-                                    .font(.system(size: 11.5))
+                                    .font(.ui(size: 11.5))
                                     .foregroundColor(gold)
                                 Text(appState.analyzeStatus)
-                                    .font(.system(size: 11.5))
+                                    .font(.ui(size: 11.5))
                                     .foregroundColor(Theme.ink.opacity(0.7))
                                     .lineLimit(1)
                                 Spacer()
                                 Text("\(Int(appState.analyzeProgress * 100))%")
-                                    .font(.system(size: 11.5, design: .monospaced))
+                                    .font(.ui(size: 11.5, design: .monospaced))
                                     .foregroundColor(gold)
                             }
                             GeometryReader { geo in
@@ -77,9 +77,9 @@ struct ProjectCard: View {
                             Button(action: { AppState.shared.reanalyzeProject(project) }) {
                                 HStack(spacing: 4) {
                                     Image(systemName: "arrow.clockwise")
-                                        .font(.system(size: 11.5, weight: .semibold))
+                                        .font(.ui(size: 11.5, weight: .semibold))
                                     Text("Reanalyze")
-                                        .font(.system(size: 12, weight: .medium))
+                                        .font(.ui(size: 12, weight: .medium))
                                 }
                                 .foregroundColor(Theme.ink)
                                 .padding(.horizontal, 8)
@@ -92,9 +92,9 @@ struct ProjectCard: View {
                             Button(action: { LibraryService.shared.deleteProject(project) }) {
                                 HStack(spacing: 4) {
                                     Image(systemName: "trash")
-                                        .font(.system(size: 11.5, weight: .semibold))
+                                        .font(.ui(size: 11.5, weight: .semibold))
                                     Text("Delete")
-                                        .font(.system(size: 12, weight: .medium))
+                                        .font(.ui(size: 12, weight: .medium))
                                 }
                                 .foregroundColor(Theme.danger)
                                 .padding(.horizontal, 8)
@@ -115,23 +115,23 @@ struct ProjectCard: View {
             // Info
             VStack(alignment: .leading, spacing: 4) {
                 Text(project.title)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.ui(size: 13, weight: .medium))
                     .foregroundColor(Theme.ink)
                     .lineLimit(1)
 
                 HStack(spacing: 4) {
                     Text(project.formattedDuration)
-                        .font(.system(size: 12))
+                        .font(.ui(size: 12))
                         .foregroundColor(Theme.ink.opacity(0.55))
                     Circle()
                         .fill(Theme.ink.opacity(0.3))
                         .frame(width: 2.5, height: 2.5)
                     Text("\(project.clipCount) clips")
-                        .font(.system(size: 12))
+                        .font(.ui(size: 12))
                         .foregroundColor(Theme.ink.opacity(0.55))
                     Spacer()
                     Text(project.relativeDate)
-                        .font(.system(size: 12))
+                        .font(.ui(size: 12))
                         .foregroundColor(Theme.ink.opacity(0.55))
                 }
             }

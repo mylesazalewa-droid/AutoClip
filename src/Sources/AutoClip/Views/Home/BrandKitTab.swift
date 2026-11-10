@@ -17,7 +17,7 @@ struct BrandKitTab: View {
             PageHeader(eyebrow: "Manage", title: "Brand kit",
                        subtitle: "Your church's look, set once. New carousels, posts and clips use it.") {
                 if saved != nil && !dirty {
-                    Label("Saved", systemImage: "checkmark").font(.system(size: 12.5, weight: .semibold)).foregroundColor(Theme.good)
+                    Label("Saved", systemImage: "checkmark").font(.ui(size: 12.5, weight: .semibold)).foregroundColor(Theme.good)
                 }
                 Button { save() } label: { Label("Save brand kit", systemImage: "checkmark.circle") }
                     .buttonStyle(PrimaryButtonStyle(compact: true))
@@ -54,7 +54,7 @@ struct BrandKitTab: View {
             field("Instagram handle", "@gracecommunity", $kit.handle)
             field("Website", "gracecommunity.church", $kit.website)
             field("Service times", "Sundays at 9 and 11am", $kit.serviceTimes)
-            Text("Invite posts mention your service times.").font(.system(size: 11.5)).foregroundColor(Theme.faint)
+            Text("Invite posts mention your service times.").font(.ui(size: 11.5)).foregroundColor(Theme.faint)
         }
     }
 
@@ -67,8 +67,8 @@ struct BrandKitTab: View {
                         Image(decorative: img, scale: 1).resizable().scaledToFit().padding(14)
                     } else {
                         VStack(spacing: 6) {
-                            Image(systemName: "photo.badge.plus").font(.system(size: 22))
-                            Text("Drop a logo").font(.system(size: 11.5))
+                            Image(systemName: "photo.badge.plus").font(.ui(size: 22))
+                            Text("Drop a logo").font(.ui(size: 11.5))
                         }.foregroundColor(.white.opacity(0.6))
                     }
                     if dropping { RoundedRectangle(cornerRadius: 10).stroke(Theme.sand, style: StrokeStyle(lineWidth: 2, dash: [6])) }
@@ -84,18 +84,18 @@ struct BrandKitTab: View {
                     HStack {
                         Button(kit.hasLogo ? "Change…" : "Choose a logo…") { chooseLogo() }.buttonStyle(SecondaryButtonStyle(compact: true))
                         if kit.hasLogo {
-                            Button("Remove") { kit.logoPath = nil }.buttonStyle(.link).font(.system(size: 12))
+                            Button("Remove") { kit.logoPath = nil }.buttonStyle(.link).font(.ui(size: 12))
                         }
                     }
                     if kit.hasLogo {
                         HStack {
-                            Text("Colour").font(.system(size: 12)).foregroundColor(Theme.muted)
+                            Text("Colour").font(.ui(size: 12)).foregroundColor(Theme.muted)
                             Picker("", selection: $kit.logoColour) {
                                 ForEach(BrandKit.LogoColour.allCases) { Text($0.label).tag($0) }
                             }.labelsHidden().frame(width: 170)
                         }
                         Button { colourFromLogo() } label: { Label("Take the colour from the logo", systemImage: "eyedropper") }
-                            .buttonStyle(.link).font(.system(size: 12))
+                            .buttonStyle(.link).font(.ui(size: 12))
                     }
                 }
             }
@@ -110,10 +110,10 @@ struct BrandKitTab: View {
                 colourWell("Main", Binding(get: { kit.primaryHex }, set: { kit.primaryHex = $0 }))
                 if let second = kit.secondaryHex {
                     colourWell("Second", Binding(get: { second }, set: { kit.secondaryHex = $0 }))
-                    Button("Remove") { kit.secondaryHex = nil }.buttonStyle(.link).font(.system(size: 12))
+                    Button("Remove") { kit.secondaryHex = nil }.buttonStyle(.link).font(.ui(size: 12))
                 } else {
                     Button { kit.secondaryHex = "F1E9DC" } label: { Label("Add a second colour", systemImage: "plus") }
-                        .buttonStyle(.link).font(.system(size: 12))
+                        .buttonStyle(.link).font(.ui(size: 12))
                 }
                 Spacer()
             }
@@ -126,7 +126,7 @@ struct BrandKitTab: View {
                 }
             }
             HStack {
-                Text("Headline type").font(.system(size: 12)).foregroundColor(Theme.muted)
+                Text("Headline type").font(.ui(size: 12)).foregroundColor(Theme.muted)
                 Picker("", selection: $kit.font) {
                     ForEach(SermonCarousel.TypeChoice.allCases) { t in
                         Text(t == .auto ? "Each style's own" : t.label).tag(t)
@@ -148,7 +148,7 @@ struct BrandKitTab: View {
                 .buttonStyle(SecondaryButtonStyle(compact: true))
                 .disabled(dirty)
                 .help(dirty ? "Save the brand kit first" : "")
-            if let note { Text(note).font(.system(size: 12.5)).foregroundColor(Theme.good) }
+            if let note { Text(note).font(.ui(size: 12.5)).foregroundColor(Theme.good) }
         }
     }
 
@@ -156,14 +156,14 @@ struct BrandKitTab: View {
 
     private var preview: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("PREVIEW").font(.system(size: 11.5, weight: .semibold)).tracking(1.6).foregroundColor(Theme.sand.opacity(0.85))
+            Text("PREVIEW").font(.ui(size: 11.5, weight: .semibold)).tracking(1.6).foregroundColor(Theme.sand.opacity(0.85))
             HStack(spacing: 12) {
                 sample(.bold, kind: .bigIdea, headline: "Grace meets you where you are", emphasis: "Grace", accent: kit.primaryHex)
                 sample(.editorial, kind: .question, headline: "Where do you need rest this week?", emphasis: "rest",
                        accent: kit.secondaryHex ?? kit.primaryHex)
             }
             captionSample
-            Text("Graphics show your logo and handle in the bottom corner.").font(.system(size: 11.5)).foregroundColor(Theme.faint)
+            Text("Graphics show your logo and handle in the bottom corner.").font(.ui(size: 11.5)).foregroundColor(Theme.faint)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -205,7 +205,7 @@ struct BrandKitTab: View {
 
     private func field(_ label: String, _ prompt: String, _ text: Binding<String>) -> some View {
         HStack {
-            Text(label).font(.system(size: 12)).foregroundColor(Theme.muted).frame(width: 120, alignment: .leading)
+            Text(label).font(.ui(size: 12)).foregroundColor(Theme.muted).frame(width: 120, alignment: .leading)
             TextField(prompt, text: text).textFieldStyle(.roundedBorder)
         }
     }
@@ -216,8 +216,8 @@ struct BrandKitTab: View {
                                                set: { hex.wrappedValue = NSColor($0).hexString }), supportsOpacity: false)
                 .labelsHidden()
             VStack(alignment: .leading, spacing: 1) {
-                Text(label).font(.system(size: 12, weight: .semibold)).foregroundColor(Theme.ink)
-                Text("#" + hex.wrappedValue).font(.system(size: 11).monospaced()).foregroundColor(Theme.faint)
+                Text(label).font(.ui(size: 12, weight: .semibold)).foregroundColor(Theme.ink)
+                Text("#" + hex.wrappedValue).font(.ui(size: 11).monospaced()).foregroundColor(Theme.faint)
             }
         }
     }

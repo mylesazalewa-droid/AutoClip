@@ -23,7 +23,7 @@ struct VolunteerHome: View {
                     Text("Thanks for serving today").font(Theme.display(34, weight: .medium)).foregroundColor(Theme.ink)
                     Text(mode.style.map { "Using \($0.name), so your clips will match without changing anything." }
                          ?? "Follow the three steps. Everything is already set up.")
-                        .font(.system(size: 13)).foregroundColor(Theme.muted)
+                        .font(.ui(size: 13)).foregroundColor(Theme.muted)
                 }
                 HStack(alignment: .top, spacing: 16) {
                     step(1, "Add the sermon", detail: working ? (auto.status ?? "Working on it. You can leave this open.") : "Choose this week's video. AutoClip finds the clips for you.",
@@ -42,14 +42,14 @@ struct VolunteerHome: View {
                 }
                 if store.reels.count > 1 {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Earlier sermons").font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.cream)
+                        Text("Earlier sermons").font(.ui(size: 13, weight: .semibold)).foregroundColor(Theme.cream)
                         ForEach(store.reels.prefix(8)) { r in
                             Button { openWindow(id: "reel-window", value: r.id) } label: {
                                 HStack {
                                     Image(systemName: "film").foregroundColor(Theme.sand)
-                                    Text(r.title).font(.system(size: 13)).foregroundColor(Theme.text).lineLimit(1)
+                                    Text(r.title).font(.ui(size: 13)).foregroundColor(Theme.text).lineLimit(1)
                                     Spacer()
-                                    Text("\(r.drafts?.count ?? r.paths.count) clips").font(.system(size: 12)).foregroundColor(Theme.muted)
+                                    Text("\(r.drafts?.count ?? r.paths.count) clips").font(.ui(size: 12)).foregroundColor(Theme.muted)
                                 }
                                 .padding(10).background(RoundedRectangle(cornerRadius: 8).fill(Theme.surface)).contentShape(Rectangle())
                             }
@@ -68,7 +68,7 @@ struct VolunteerHome: View {
             Text("\(n)").font(Theme.display(26, weight: .medium)).foregroundColor(primary ? Theme.bg : Theme.sand)
                 .frame(width: 44, height: 44).background(Circle().fill(primary ? Theme.sand : Theme.sand.opacity(0.14)))
             Text(title).font(Theme.display(21, weight: .medium)).foregroundColor(Theme.cream)
-            Text(detail).font(.system(size: 13)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
+            Text(detail).font(.ui(size: 13)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
             if let button {
                 if primary {
@@ -104,8 +104,8 @@ struct VolunteerChip: View {
     var body: some View {
         Button { show.toggle() } label: {
             HStack(spacing: 6) {
-                Image(systemName: mode.enabled ? "lock.fill" : "person.2").font(.system(size: 12))
-                Text(mode.enabled ? "Volunteer mode" : "Volunteer mode").font(.system(size: 13, weight: .medium))
+                Image(systemName: mode.enabled ? "lock.fill" : "person.2").font(.ui(size: 12))
+                Text(mode.enabled ? "Volunteer mode" : "Volunteer mode").font(.ui(size: 13, weight: .medium))
             }
             .foregroundColor(mode.enabled ? Theme.sand : Theme.muted)
             .padding(.horizontal, 12).padding(.vertical, 6)
@@ -133,8 +133,8 @@ private struct VolunteerSettings: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 7) {
-                Image(systemName: "diamond.fill").font(.system(size: 5)).foregroundColor(Theme.sand)
-                Text("VOLUNTEER MODE").font(.system(size: 11.5, weight: .semibold)).tracking(2).foregroundColor(Theme.sand)
+                Image(systemName: "diamond.fill").font(.ui(size: 5)).foregroundColor(Theme.sand)
+                Text("VOLUNTEER MODE").font(.ui(size: 11.5, weight: .semibold)).tracking(2).foregroundColor(Theme.sand)
             }
             if mode.enabled { leaving } else { setup }
         }
@@ -146,9 +146,9 @@ private struct VolunteerSettings: View {
             Text("Leave Volunteer Mode").font(Theme.display(22)).foregroundColor(Theme.cream)
             if mode.hasPIN {
                 SecureField("PIN", text: $exitPIN).textFieldStyle(.roundedBorder).onSubmit { leave() }
-                if wrong { Text("That PIN isn't right.").font(.system(size: 12)).foregroundColor(Theme.danger) }
+                if wrong { Text("That PIN isn't right.").font(.ui(size: 12)).foregroundColor(Theme.danger) }
             } else {
-                Text("This brings back every page and setting.").font(.system(size: 13)).foregroundColor(Theme.muted)
+                Text("This brings back every page and setting.").font(.ui(size: 13)).foregroundColor(Theme.muted)
             }
             Button("Leave Volunteer Mode") { leave() }.buttonStyle(PrimaryButtonStyle(compact: true))
         }
@@ -162,15 +162,15 @@ private struct VolunteerSettings: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("One style. Three buttons.").font(Theme.display(22)).foregroundColor(Theme.cream)
             Text("Set up your captions, size and length the way you like them in Clips. Save that as your church's style here. Volunteers then see only three steps, and their clips match.")
-                .font(.system(size: 12)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                .font(.ui(size: 12)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
             HStack {
-                TextField("Style name, like Grace Church", text: $name).textFieldStyle(.roundedBorder).font(.system(size: 13))
+                TextField("Style name, like Grace Church", text: $name).textFieldStyle(.roundedBorder).font(.ui(size: 13))
                 Button(mode.style == nil ? "Save style" : "Update style") {
                     mode.saveCurrentStyle(name: name); note = "Saved from your current Clips settings."
                 }.controlSize(.small)
             }
             if let s = mode.style {
-                Text(s.summary).font(.system(size: 12)).foregroundColor(Theme.text)
+                Text(s.summary).font(.ui(size: 12)).foregroundColor(Theme.text)
             }
             HStack {
                 Button("Share style…") { share() }.controlSize(.small).disabled(mode.style == nil)
@@ -179,13 +179,13 @@ private struct VolunteerSettings: View {
                 Spacer()
             }
             VStack(alignment: .leading, spacing: 4) {
-                Text("PIN TO LEAVE (OPTIONAL)").font(.system(size: 11, weight: .semibold)).tracking(1).foregroundColor(Theme.faint)
-                SecureField(mode.hasPIN ? "Keep the current PIN" : "No PIN", text: $pin).textFieldStyle(.roundedBorder).font(.system(size: 13))
-                Text("Stops accidental changes. It isn't a password, so don't reuse one.").font(.system(size: 11.5)).foregroundColor(Theme.faint)
+                Text("PIN TO LEAVE (OPTIONAL)").font(.ui(size: 11, weight: .semibold)).tracking(1).foregroundColor(Theme.faint)
+                SecureField(mode.hasPIN ? "Keep the current PIN" : "No PIN", text: $pin).textFieldStyle(.roundedBorder).font(.ui(size: 13))
+                Text("Stops accidental changes. It isn't a password, so don't reuse one.").font(.ui(size: 11.5)).foregroundColor(Theme.faint)
             }
-            if let note { Text(note).font(.system(size: 12)).foregroundColor(Theme.good).fixedSize(horizontal: false, vertical: true) }
+            if let note { Text(note).font(.ui(size: 12)).foregroundColor(Theme.good).fixedSize(horizontal: false, vertical: true) }
             if !License.shared.has(.volunteerMode) {
-                Text("Volunteer Mode is on the Church and Lifetime plans.").font(.system(size: 12)).foregroundColor(Theme.warn)
+                Text("Volunteer Mode is on the Church and Lifetime plans.").font(.ui(size: 12)).foregroundColor(Theme.warn)
             }
             Button {
                 if !pin.isEmpty { mode.setPIN(pin) }

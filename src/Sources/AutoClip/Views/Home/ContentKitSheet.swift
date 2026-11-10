@@ -16,12 +16,12 @@ struct ContentKitSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(spacing: 7) {
-                Image(systemName: "diamond.fill").font(.system(size: 5)).foregroundColor(Theme.sand)
-                Text("ONE VIDEO, A WEEK OF POSTS").font(.system(size: 11.5, weight: .semibold)).tracking(2).foregroundColor(Theme.sand)
+                Image(systemName: "diamond.fill").font(.ui(size: 5)).foregroundColor(Theme.sand)
+                Text("ONE VIDEO, A WEEK OF POSTS").font(.ui(size: 11.5, weight: .semibold)).tracking(2).foregroundColor(Theme.sand)
             }
             VStack(alignment: .leading, spacing: 4) {
                 Text("Content kit").font(Theme.display(28)).foregroundColor(Theme.cream)
-                Text(record?.title ?? "").font(.system(size: 13)).foregroundColor(Theme.muted).lineLimit(1)
+                Text(record?.title ?? "").font(.ui(size: 13)).foregroundColor(Theme.muted).lineLimit(1)
             }
 
             if let r = result {
@@ -36,12 +36,12 @@ struct ContentKitSheet: View {
                     item($options.transcript, "captions.bubble", "Transcript & captions file", "Text with times, plus an .srt for the full video")
                 }
                 Text("Includes a posting plan. Clips you've already exported are copied, not rendered again.")
-                    .font(.system(size: 12)).foregroundColor(Theme.faint)
-                if let e = error { Text(e).font(.system(size: 12)).foregroundColor(Theme.danger) }
+                    .font(.ui(size: 12)).foregroundColor(Theme.faint)
+                if let e = error { Text(e).font(.ui(size: 12)).foregroundColor(Theme.danger) }
                 HStack {
                     if let s = status {
                         ProgressView().scaleEffect(0.6)
-                        Text(s).font(.system(size: 13)).foregroundColor(Theme.muted).lineLimit(1)
+                        Text(s).font(.ui(size: 13)).foregroundColor(Theme.muted).lineLimit(1)
                     }
                     Spacer()
                     Button("Cancel") { dismiss() }.buttonStyle(SecondaryButtonStyle()).disabled(status != nil)
@@ -59,15 +59,15 @@ struct ContentKitSheet: View {
     private func item(_ on: Binding<Bool>, _ icon: String, _ title: String, _ detail: String) -> some View {
         Button { on.wrappedValue.toggle() } label: {
             HStack(spacing: 12) {
-                Image(systemName: icon).font(.system(size: 14)).foregroundColor(Theme.sand).frame(width: 34, height: 34)
+                Image(systemName: icon).font(.ui(size: 14)).foregroundColor(Theme.sand).frame(width: 34, height: 34)
                     .background(Circle().fill(Theme.sand.opacity(0.08)))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.cream)
-                    Text(detail).font(.system(size: 12)).foregroundColor(Theme.muted)
+                    Text(title).font(.ui(size: 13, weight: .semibold)).foregroundColor(Theme.cream)
+                    Text(detail).font(.ui(size: 12)).foregroundColor(Theme.muted)
                 }
                 Spacer()
                 Image(systemName: on.wrappedValue ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 18)).foregroundColor(on.wrappedValue ? Theme.sand : Theme.faint)
+                    .font(.ui(size: 18)).foregroundColor(on.wrappedValue ? Theme.sand : Theme.faint)
             }
             .padding(10)
             .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(on.wrappedValue ? Theme.raised : Theme.ink.opacity(0.02)))
@@ -82,11 +82,11 @@ struct ContentKitSheet: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
                 Image(systemName: "checkmark.seal.fill").foregroundColor(Theme.good)
-                Text("Your kit is ready").font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.cream)
+                Text("Your kit is ready").font(.ui(size: 14, weight: .semibold)).foregroundColor(Theme.cream)
             }
-            Text(r.folder.path).font(.system(size: 12)).foregroundColor(Theme.muted).textSelection(.enabled)
+            Text(r.folder.path).font(.ui(size: 12)).foregroundColor(Theme.muted).textSelection(.enabled)
             ForEach(r.skipped, id: \.self) { s in
-                Label(s, systemImage: "exclamationmark.triangle").font(.system(size: 12)).foregroundColor(Theme.warn)
+                Label(s, systemImage: "exclamationmark.triangle").font(.ui(size: 12)).foregroundColor(Theme.warn)
                     .fixedSize(horizontal: false, vertical: true)
             }
             HStack {

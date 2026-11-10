@@ -101,13 +101,13 @@ struct ProcessingOverlayView: View {
 
                 // Title
                 Text(phaseTitle)
-                    .font(.system(size: 26, weight: .bold))
+                    .font(.ui(size: 26, weight: .bold))
                     .foregroundColor(Theme.ink)
                     .animation(.easeInOut(duration: 0.3), value: phase.rawValue)
 
                 // Rotating subtitle
                 Text(currentSubtitle)
-                    .font(.system(size: 15))
+                    .font(.ui(size: 15))
                     .foregroundColor(Theme.ink.opacity(0.55))
                     .padding(.top, 6)
                     .id(subtitleIndex)
@@ -134,7 +134,7 @@ struct ProcessingOverlayView: View {
                     .frame(width: 340)
 
                     Text("\(Int(appState.analyzeProgress * 100))%")
-                        .font(.system(size: 13, design: .monospaced))
+                        .font(.ui(size: 13, design: .monospaced))
                         .foregroundColor(Theme.ink.opacity(0.55))
                 }
                 .padding(.top, 24)
@@ -157,9 +157,9 @@ struct ProcessingOverlayView: View {
                     }) {
                         HStack(spacing: 6) {
                             Image(systemName: "xmark")
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.ui(size: 13, weight: .semibold))
                             Text("Cancel")
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(.ui(size: 14, weight: .semibold))
                         }
                         .foregroundColor(Theme.ink)
                         .padding(.horizontal, 28)
@@ -174,9 +174,9 @@ struct ProcessingOverlayView: View {
                     }) {
                         HStack(spacing: 6) {
                             Image(systemName: "arrow.down.circle")
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.ui(size: 13, weight: .semibold))
                             Text("Background")
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(.ui(size: 14, weight: .semibold))
                         }
                         .foregroundColor(gold)
                         .padding(.horizontal, 28)
@@ -221,11 +221,11 @@ struct ProcessingOverlayView: View {
                     .fill(isDone ? gold : (isActive ? gold.opacity(0.2) : Theme.ink.opacity(0.07)))
                     .frame(width: 34, height: 34)
                 Image(systemName: isDone ? "checkmark" : icon)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.ui(size: 13, weight: .semibold))
                     .foregroundColor(isDone ? .black : (isActive ? gold : Theme.ink.opacity(0.3)))
             }
             Text(label)
-                .font(.system(size: 12, weight: isActive ? .semibold : .regular))
+                .font(.ui(size: 12, weight: isActive ? .semibold : .regular))
                 .foregroundColor(isActive ? .white : Theme.ink.opacity(0.35))
         }
     }

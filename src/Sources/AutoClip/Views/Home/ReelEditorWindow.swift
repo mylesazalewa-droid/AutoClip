@@ -124,7 +124,7 @@ struct EditTimeline: View {
                 ForEach(pieceSpans, id: \.index) { s in
                     ZStack(alignment: .leading) {
                         RoundedRectangle(cornerRadius: 4).fill(s.index % 2 == 0 ? Theme.ink.opacity(0.16) : Theme.ink.opacity(0.1))
-                        Text("\(s.index + 1)").font(.system(size: 11, weight: .semibold)).foregroundColor(Theme.ink.opacity(0.55)).padding(.leading, 4)
+                        Text("\(s.index + 1)").font(.ui(size: 11, weight: .semibold)).foregroundColor(Theme.ink.opacity(0.55)).padding(.leading, 4)
                     }
                     .frame(width: max(2, x(s.end) - x(s.start) - 1), height: 22).offset(x: x(s.start), y: 9)
                 }

@@ -145,7 +145,7 @@ struct AssessTab: View {
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if let status {
-                    VStack(spacing: 10) { ProgressView().controlSize(.small); Text(status).font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.6)) }
+                    VStack(spacing: 10) { ProgressView().controlSize(.small); Text(status).font(.ui(size: 13)).foregroundColor(Theme.ink.opacity(0.6)) }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if let error {
                     placeholder("Couldn't assess this video", error)
@@ -246,9 +246,9 @@ struct AssessTab: View {
                     .foregroundColor(activeSpeaker.map(profiles.color) ?? gold)
                 Text(activeSpeaker?.name ?? "Everyone").foregroundColor(Theme.ink)
                 Spacer()
-                Image(systemName: "chevron.up.chevron.down").font(.system(size: 11)).foregroundColor(Theme.ink.opacity(0.55))
+                Image(systemName: "chevron.up.chevron.down").font(.ui(size: 11)).foregroundColor(Theme.ink.opacity(0.55))
             }
-            .font(.system(size: 13, weight: .medium))
+            .font(.ui(size: 13, weight: .medium))
             .padding(.horizontal, 12).padding(.vertical, 7)
             .background(Capsule().fill(Theme.ink.opacity(0.05))).overlay(Capsule().stroke(Theme.line, lineWidth: 1))
             .contentShape(Rectangle())
@@ -342,9 +342,9 @@ struct AssessTab: View {
     private var youTubeField: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
-                Image(systemName: "link").font(.system(size: 12)).foregroundColor(gold)
+                Image(systemName: "link").font(.ui(size: 12)).foregroundColor(gold)
                 TextField("Paste a YouTube link to add a sermon", text: $ytURL)
-                    .textFieldStyle(.plain).font(.system(size: 13)).foregroundColor(Theme.text)
+                    .textFieldStyle(.plain).font(.ui(size: 13)).foregroundColor(Theme.text)
                     .onSubmit { importYouTube() }
                 Button("Import") { importYouTube() }
                     .buttonStyle(SecondaryButtonStyle(compact: true))
@@ -354,9 +354,9 @@ struct AssessTab: View {
             .background(Capsule().fill(Theme.ink.opacity(0.05))).overlay(Capsule().stroke(Theme.line, lineWidth: 1))
             if let ytStatus {
                 HStack(spacing: 5) { ProgressView().scaleEffect(0.45).frame(width: 12, height: 12)
-                    Text(ytStatus).font(.system(size: 11.5)).foregroundColor(Theme.muted) }
+                    Text(ytStatus).font(.ui(size: 11.5)).foregroundColor(Theme.muted) }
             } else if let ytError {
-                Text(ytError).font(.system(size: 11.5)).foregroundColor(Theme.danger).fixedSize(horizontal: false, vertical: true)
+                Text(ytError).font(.ui(size: 11.5)).foregroundColor(Theme.danger).fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -370,8 +370,8 @@ struct AssessTab: View {
                 mode = .fillers
             } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: "chevron.left").font(.system(size: 12, weight: .semibold))
-                    Text("All sermons").font(.system(size: 13, weight: .medium))
+                    Image(systemName: "chevron.left").font(.ui(size: 12, weight: .semibold))
+                    Text("All sermons").font(.ui(size: 13, weight: .medium))
                 }
                 .foregroundColor(Theme.sand)
             }
@@ -592,8 +592,8 @@ struct AssessTab: View {
                 HStack(alignment: .bottom) {
                     VStack(alignment: .leading, spacing: 6) {
                         HStack(spacing: 7) {
-                            Image(systemName: "diamond.fill").font(.system(size: 5)).foregroundColor(Theme.sand)
-                            Text(report?.isPractice == true ? "PRACTICE RUN" : ContentKind.current == .sermon ? "SERMON ASSESSMENT" : "TALK ASSESSMENT").font(.system(size: 11.5, weight: .semibold)).tracking(2).foregroundColor(Theme.sand)
+                            Image(systemName: "diamond.fill").font(.ui(size: 5)).foregroundColor(Theme.sand)
+                            Text(report?.isPractice == true ? "PRACTICE RUN" : ContentKind.current == .sermon ? "SERMON ASSESSMENT" : "TALK ASSESSMENT").font(.ui(size: 11.5, weight: .semibold)).tracking(2).foregroundColor(Theme.sand)
                         }
                         Text(YTDLP.title(fromFile: URL(fileURLWithPath: selected ?? "")))
                             .font(Theme.display(28)).foregroundColor(Theme.cream).lineLimit(2)
@@ -651,7 +651,7 @@ struct AssessTab: View {
                     } else {
                         AssessCard(title: "Delivery") {
                             HStack(spacing: 8) { ProgressView().controlSize(.small)
-                                Text(deliveryStatus ?? "Starting…").font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.7)) }
+                                Text(deliveryStatus ?? "Starting…").font(.ui(size: 13)).foregroundColor(Theme.ink.opacity(0.7)) }
                         }
                     }
                 case .coach:
@@ -692,43 +692,43 @@ struct AssessTab: View {
 
     private var summary: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("\(shown.count)").font(.system(size: 44, weight: .bold, design: .rounded)).foregroundColor(gold)
+            Text("\(shown.count)").font(.ui(size: 44, weight: .bold, design: .rounded)).foregroundColor(gold)
             Text(hidden.isEmpty ? "filler words" : "filler words (filtered)")
-                .font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.7))
+                .font(.ui(size: 13)).foregroundColor(Theme.ink.opacity(0.7))
             let perMin = Double(shown.count) / speakingMinutes
             Text(String(format: "%.1f per minute of speaking", perMin))
-                .font(.system(size: 13, weight: .medium)).foregroundColor(Theme.ink)
+                .font(.ui(size: 13, weight: .medium)).foregroundColor(Theme.ink)
             Text(perMin < 2 ? "Very clean delivery" : perMin < 4 ? "Typical for live preaching" : "Noticeable — worth working on")
-                .font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.55))
+                .font(.ui(size: 12)).foregroundColor(Theme.ink.opacity(0.55))
             if report != nil {
                 DatePicker("Preached on", selection: Binding(get: { report?.videoDate ?? Date() },
                                                              set: { report?.videoDate = $0
                                                                     if let r = report { SpeakerReportStore.save(r); allReports = SpeakerReportStore.all() } }),
                            displayedComponents: .date)
-                    .font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.6)).fixedSize()
+                    .font(.ui(size: 12)).foregroundColor(Theme.ink.opacity(0.6)).fixedSize()
                     .help("Used to chart your progress over time")
             }
             HStack(spacing: 14) {
                 if let d = report?.delivery {
-                    Text(String(format: "%.0f wpm", d.averageWPM)).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.ink)
+                    Text(String(format: "%.0f wpm", d.averageWPM)).font(.ui(size: 13, weight: .semibold)).foregroundColor(Theme.ink)
                 }
                 if let c = report?.coach {
-                    Text("Coach \(c.score)/10").font(.system(size: 13, weight: .semibold)).foregroundColor(gold)
+                    Text("Coach \(c.score)/10").font(.ui(size: 13, weight: .semibold)).foregroundColor(gold)
                 }
                 if deliveryStatus != nil || stageStatus != nil {
                     HStack(spacing: 4) { ProgressView().scaleEffect(0.4).frame(width: 10, height: 10)
-                        Text(deliveryStatus ?? stageStatus ?? "").font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55)) }
+                        Text(deliveryStatus ?? stageStatus ?? "").font(.ui(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55)) }
                 }
             }
             Text("Transcription drops some \"um\"s and \"uh\"s, so those counts may be low.")
-                .font(.system(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55)).fixedSize(horizontal: false, vertical: true)
+                .font(.ui(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55)).fixedSize(horizontal: false, vertical: true)
         }
     }
 
     /// One line for the whole video with a dot for each filler word.
     private var chips: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("BY WORD — click to show or hide").font(.system(size: 11.5, weight: .semibold)).foregroundColor(Theme.ink.opacity(0.55)).tracking(1)
+            Text("BY WORD — click to show or hide").font(.ui(size: 11.5, weight: .semibold)).foregroundColor(Theme.ink.opacity(0.55)).tracking(1)
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 8)], alignment: .leading, spacing: 8) {
                 ForEach(FillerReport.kinds, id: \.self) { k in
                     let n = hits.filter { $0.kind == k }.count
@@ -737,9 +737,9 @@ struct AssessTab: View {
                     } label: {
                         HStack(spacing: 6) {
                             Circle().fill(color(k)).frame(width: 9, height: 9)
-                            Text("\"\(k)\"").font(.system(size: 13)).foregroundColor(Theme.ink)
+                            Text("\"\(k)\"").font(.ui(size: 13)).foregroundColor(Theme.ink)
                             Spacer(minLength: 4)
-                            Text("\(n)").font(.system(size: 13, weight: .bold, design: .rounded)).foregroundColor(color(k))
+                            Text("\(n)").font(.ui(size: 13, weight: .bold, design: .rounded)).foregroundColor(color(k))
                         }
                         .padding(.horizontal, 10).padding(.vertical, 7)
                         .background(Theme.ink.opacity(hidden.contains(k) ? 0.02 : 0.07)).cornerRadius(7)
@@ -753,15 +753,15 @@ struct AssessTab: View {
 
     private var occurrences: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("EVERY ONE — click to play").font(.system(size: 11.5, weight: .semibold)).foregroundColor(Theme.ink.opacity(0.55)).tracking(1)
+            Text("EVERY ONE — click to play").font(.ui(size: 11.5, weight: .semibold)).foregroundColor(Theme.ink.opacity(0.55)).tracking(1)
             LazyVStack(alignment: .leading, spacing: 2) {
                 ForEach(shown) { h in
                     Button { play(h) } label: {
                         HStack(alignment: .firstTextBaseline, spacing: 10) {
-                            Text(fmt(h.time)).font(.system(size: 12, design: .monospaced)).foregroundColor(Theme.ink.opacity(0.55))
+                            Text(fmt(h.time)).font(.ui(size: 12, design: .monospaced)).foregroundColor(Theme.ink.opacity(0.55))
                                 .frame(width: 52, alignment: .leading)
                             Circle().fill(color(h.kind)).frame(width: 7, height: 7)
-                            Text(h.context).font(.system(size: 13)).foregroundColor(Theme.ink.opacity(0.85)).lineLimit(1)
+                            Text(h.context).font(.ui(size: 13)).foregroundColor(Theme.ink.opacity(0.85)).lineLimit(1)
                             Spacer()
                         }
                         .padding(.vertical, 4).padding(.horizontal, 6)
@@ -805,7 +805,7 @@ private struct SermonCard: View {
                 Group {
                     if audioOnly {
                         LinearGradient(colors: [Theme.olive, Theme.charcoal], startPoint: .topLeading, endPoint: .bottomTrailing)
-                            .overlay(Image(systemName: "mic.fill").font(.system(size: 34)).foregroundColor(Theme.sand.opacity(0.5)))
+                            .overlay(Image(systemName: "mic.fill").font(.ui(size: 34)).foregroundColor(Theme.sand.opacity(0.5)))
                     } else {
                         Color.clear.overlay(ReelThumbnailView(path: path, faceAspect: 9 / 16))
                     }
@@ -816,17 +816,17 @@ private struct SermonCard: View {
                 LinearGradient(colors: [.black.opacity(0.45), .clear, .clear, .black.opacity(0.65)], startPoint: .top, endPoint: .bottom)
                 HStack(spacing: 6) {
                     if let r = report {
-                        Text("\(r.fillerCount) FILLERS").font(.system(size: 11, weight: .bold)).tracking(1).foregroundColor(Theme.onSand)
+                        Text("\(r.fillerCount) FILLERS").font(.ui(size: 11, weight: .bold)).tracking(1).foregroundColor(Theme.onSand)
                             .padding(.horizontal, 7).padding(.vertical, 3).background(Capsule().fill(Theme.sand))
                     } else {
-                        Text(PracticeRecorder.isPractice(path) ? "PRACTICE" : "NOT ASSESSED").font(.system(size: 11, weight: .bold)).tracking(1)
+                        Text(PracticeRecorder.isPractice(path) ? "PRACTICE" : "NOT ASSESSED").font(.ui(size: 11, weight: .bold)).tracking(1)
                             .foregroundColor(Theme.cream).padding(.horizontal, 7).padding(.vertical, 3)
                             .background(Capsule().fill(Color.black.opacity(0.55)))
                     }
                     Spacer()
                     if hover {
                         Button(action: delete) {
-                            Image(systemName: "trash").font(.system(size: 11.5)).foregroundColor(Theme.danger)
+                            Image(systemName: "trash").font(.ui(size: 11.5)).foregroundColor(Theme.danger)
                                 .frame(width: 24, height: 24).background(Circle().fill(Color.black.opacity(0.6)))
                         }
                         .buttonStyle(.plain).help("Delete or remove from the list")
@@ -838,14 +838,14 @@ private struct SermonCard: View {
                         Spacer()
                         HStack {
                             Text("\(Int(Double(r.wordCount) / r.speakingMinutes)) wpm · \(String(format: "%.1f", Double(r.fillerCount) / r.speakingMinutes))/min")
-                                .font(.system(size: 11.5, weight: .semibold)).foregroundColor(Theme.cream)
+                                .font(.ui(size: 11.5, weight: .semibold)).foregroundColor(Theme.cream)
                             Spacer()
                         }
                         .padding(10)
                     }
                 }
                 if hover {
-                    Image(systemName: "chart.bar.doc.horizontal").font(.system(size: 17)).foregroundColor(Theme.onColor)
+                    Image(systemName: "chart.bar.doc.horizontal").font(.ui(size: 17)).foregroundColor(Theme.onColor)
                         .frame(width: 46, height: 46).background(Circle().fill(Theme.terracotta.opacity(0.95)))
                         .shadow(color: .black.opacity(0.4), radius: 8, y: 3)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -855,10 +855,10 @@ private struct SermonCard: View {
             .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(hover ? Theme.sand.opacity(0.6) : Theme.line, lineWidth: hover ? 1.5 : 1))
             .shadow(color: .black.opacity(hover ? 0.45 : 0.25), radius: hover ? 16 : 8, y: hover ? 8 : 4)
             VStack(alignment: .leading, spacing: 3) {
-                Text(title).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.text)
+                Text(title).font(.ui(size: 13, weight: .semibold)).foregroundColor(Theme.text)
                     .lineLimit(2).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
                 Text([speaker, report.map { $0.videoDate.formatted(date: .abbreviated, time: .omitted) }].compactMap { $0 }.joined(separator: " · ").ifEmpty("Click to assess"))
-                    .font(.system(size: 11.5)).foregroundColor(Theme.muted)
+                    .font(.ui(size: 11.5)).foregroundColor(Theme.muted)
             }
             .padding(.horizontal, 2)
         }
