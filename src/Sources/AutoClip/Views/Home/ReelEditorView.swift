@@ -34,6 +34,8 @@ struct ReelDraftsView: View {
     @State private var showReview = false
     @State private var showCleanup = false
     @State private var showAudio = false
+    @State private var showUseFor = false
+    @State private var hoveredTool: String?
     @AppStorage("message_pane") private var pane: MessagePane = .clips
     @State private var confirmDelete = false
     @State private var celebrating: Set<UUID> = []
@@ -68,6 +70,14 @@ struct ReelDraftsView: View {
             case .captions:
                 Divider().background(Theme.ink.opacity(0.08))
                 MessageCaptionsPane(recordID: recordID)
+            case .audio:
+                Divider().background(Theme.ink.opacity(0.08))
+                if let rec = record, let src = sourcePath {
+                    ScrollView { CleanAudioSheet(path: src, title: rec.title, embedded: true).id(src) }
+                } else {
+                    Text("The recording for this message can't be found.").font(.system(size: 13)).foregroundColor(Theme.muted)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             }
         }
         .frame(minWidth: 560, minHeight: 520)
@@ -133,22 +143,21 @@ struct ReelDraftsView: View {
                           help: "Every clip, captions and hashtags, notes, graphics and a posting plan — in one folder") { showKit = true }
             messageButton("Clean up", "scissors", labels, help: "Save a tighter copy of the full video: fillers, false starts and long pauses cut") { showCleanup = true }
             messageButton("Audio", "waveform", labels,
-                          help: "Export clean, levelled audio for podcast sites. Pick the start and end on the waveform") { showAudio = true }
-            Menu {
-                Button { makePodcast() } label: { Label("Make a podcast episode", systemImage: "mic") }
-                Button { if let p = sourcePath { HomeNav.shared.openAssess(p); dismiss() } } label: { Label("Assess the delivery", systemImage: "waveform.badge.magnifyingglass") }
-            } label: {
-                Group {
-                    if labels { Label("Use for", systemImage: "arrow.triangle.branch") } else { Image(systemName: "arrow.triangle.branch") }
+                          help: "Export clean, levelled audio for podcast sites. Pick the start and end on the waveform") { pane = .audio }
+            messageButton("Use for", "arrow.triangle.branch", labels,
+                          help: "Make a podcast episode or assess the delivery from this message, without adding it again") { showUseFor = true }
+                .disabled(sourcePath == nil)
+                .popover(isPresented: $showUseFor, arrowEdge: .bottom) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Use this message for").font(.system(size: 11, weight: .semibold)).foregroundColor(Theme.faint).padding(.bottom, 2)
+                        useForRow("Make a podcast episode", "mic") { showUseFor = false; makePodcast() }
+                        useForRow("Assess the delivery", "waveform.badge.magnifyingglass") {
+                            showUseFor = false
+                            if let p = sourcePath { HomeNav.shared.openAssess(p); dismiss() }
+                        }
+                    }
+                    .padding(12)
                 }
-                .font(.system(size: 13, weight: .semibold)).lineLimit(1).fixedSize()
-                .padding(.horizontal, 10).padding(.vertical, 6)
-                .background(Theme.ink.opacity(0.08)).cornerRadius(7)
-            }
-            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-            .foregroundColor(Theme.ink)
-            .help("Use this sermon somewhere else in AutoClip without adding it again")
-            .disabled(sourcePath == nil)
         }
     }
 
@@ -163,7 +172,33 @@ struct ReelDraftsView: View {
             .background(filled ? Theme.terracotta : Theme.ink.opacity(0.08)).cornerRadius(7)
         }
         .buttonStyle(.plain).foregroundColor(filled ? Theme.onColor : Theme.ink)
-        .help(labels ? help : title + ": " + help)
+        .onHover { inside in
+            if inside { hoveredTool = title } else if hoveredTool == title { hoveredTool = nil }
+        }
+        .overlay(alignment: .topTrailing) {
+            if hoveredTool == title {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title).font(.system(size: 12.5, weight: .semibold)).foregroundColor(Theme.ink)
+                    Text(help).font(.system(size: 11.5)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.horizontal, 10).padding(.vertical, 8)
+                .frame(width: 230, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 8).fill(Theme.raised2).shadow(color: .black.opacity(0.35), radius: 10, y: 4))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.line))
+                .offset(y: 38)
+                .allowsHitTesting(false)
+                .transition(.opacity)
+            }
+        }
+        .zIndex(hoveredTool == title ? 10 : 0)
+    }
+
+    private func useForRow(_ title: String, _ icon: String, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: icon).font(.system(size: 13)).frame(width: 220, alignment: .leading)
+                .padding(.horizontal, 8).padding(.vertical, 6).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain).foregroundColor(Theme.ink)
     }
 
     private var sourcePath: String? {
@@ -211,6 +246,7 @@ struct ReelDraftsView: View {
                     fullMessageButtons(labels: false)
                 }
             }
+            .zIndex(hoveredTool == nil ? 0 : 10)
             .sheet(isPresented: $showKit) { ContentKitSheet(recordID: recordID) }
             .sheet(isPresented: $showCleanup) { CleanupSheet(recordID: recordID) }
             .sheet(isPresented: $showAudio) {

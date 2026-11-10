@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 
 /// What a message's window shows: its clips, its graphics, or every caption to copy.
-enum MessagePane: String, CaseIterable { case clips = "Clips", graphics = "Graphics", captions = "Captions" }
+enum MessagePane: String, CaseIterable { case clips = "Clips", graphics = "Graphics", captions = "Captions", audio = "Audio" }
 
 /// One message's carousel and posts, in its own window.
 struct MessageGraphicsPane: View {

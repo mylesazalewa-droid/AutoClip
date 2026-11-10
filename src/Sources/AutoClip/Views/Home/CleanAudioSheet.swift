@@ -2,12 +2,51 @@ import SwiftUI
 import AVFoundation
 import AppKit
 
+/// Exports keep going (and keep their progress) when you switch tabs or close the window.
+@MainActor
+final class CleanAudioJobs: ObservableObject {
+    static let shared = CleanAudioJobs()
+    struct State { var progress = 0.0; var status: String?; var saved: URL?; var error: String? }
+    @Published var states: [String: State] = [:]
+    private var tasks: [String: Task<Void, Never>] = [:]
+
+    func state(_ path: String) -> State { states[path] ?? State() }
+    func running(_ path: String) -> Bool { states[path]?.status != nil }
+
+    func start(path: String, start: Double, end: Double, options: CleanAudioExport.Options, to url: URL) {
+        states[path] = State(progress: 0, status: "Starting…")
+        tasks[path] = Task {
+            do {
+                try await CleanAudioExport.export(path: path, start: start, end: end, options: options, to: url) { v, msg in
+                    Task { @MainActor in
+                        guard self.states[path]?.status != nil else { return }
+                        self.states[path]?.progress = v; self.states[path]?.status = msg
+                    }
+                }
+                states[path] = State(saved: url)
+            } catch is CancellationError {
+                try? FileManager.default.removeItem(at: url)
+                states[path] = State()
+            } catch {
+                try? FileManager.default.removeItem(at: url)
+                states[path] = State(error: error.localizedDescription)
+            }
+            tasks[path] = nil
+        }
+    }
+
+    func cancel(_ path: String) { tasks[path]?.cancel() }
+}
+
 /// Save a clean, levelled audio file of a recording for podcast hosts: pick where it starts and
 /// ends on the waveform, then export WAV or M4A.
 struct CleanAudioSheet: View {
     let path: String
     let title: String
+    /// Shown as a tab in the message window rather than a pop-up
+    var embedded = false
     @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var jobs = CleanAudioJobs.shared
 
     @State private var duration = 0.0
     @State private var start = 0.0
@@ -19,11 +58,11 @@ struct CleanAudioSheet: View {
     @State private var playing = false
     @State private var stopAt: Double?
     @State private var observer: Any?
-    @State private var job: Task<Void, Never>?
-    @State private var progress = 0.0
-    @State private var status: String?
-    @State private var error: String?
-    @State private var saved: URL?
+    @State private var loadError: String?
+    private var progress: Double { jobs.state(path).progress }
+    private var status: String? { jobs.state(path).status }
+    private var error: String? { jobs.state(path).error ?? loadError }
+    private var saved: URL? { jobs.state(path).saved }
 
     enum Handle { case start, end }
     private let gold = Theme.sand
@@ -37,7 +76,7 @@ struct CleanAudioSheet: View {
                     Text(title).font(.system(size: 13)).foregroundColor(Theme.muted).lineLimit(1)
                 }
                 Spacer()
-                Button("Close") { close() }.keyboardShortcut(.cancelAction)
+                if !embedded { Button("Close") { close() }.keyboardShortcut(.cancelAction) }
             }
 
             // The whole recording
@@ -67,7 +106,7 @@ struct CleanAudioSheet: View {
                 if let status {
                     ProgressView(value: progress).frame(width: 160).tint(gold)
                     Text(status).font(.system(size: 12.5)).foregroundColor(Theme.muted)
-                    Button("Stop") { job?.cancel() }.buttonStyle(SecondaryButtonStyle(compact: true))
+                    Button("Stop") { jobs.cancel(path) }.buttonStyle(SecondaryButtonStyle(compact: true))
                 } else if let saved {
                     Label("Saved \(saved.lastPathComponent)", systemImage: "checkmark.circle.fill").font(.system(size: 12.5, weight: .semibold)).foregroundColor(Theme.good)
                     Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([saved]) }.buttonStyle(SecondaryButtonStyle(compact: true))
@@ -80,9 +119,10 @@ struct CleanAudioSheet: View {
                     .disabled(status != nil || duration == 0 || end - start < 1)
             }
         }
-        .padding(24)
-        .frame(width: 760)
-        .background(Theme.bg)
+        .padding(embedded ? 16 : 24)
+        .frame(width: embedded ? nil : 760)
+        .frame(maxWidth: embedded ? .infinity : nil, alignment: .leading)
+        .background(embedded ? Color.clear : Theme.bg)
         .task { await load() }
         .onDisappear { teardown() }
         .onChange(of: start) { _ in remember() }
@@ -209,7 +249,7 @@ struct CleanAudioSheet: View {
     private func load() async {
         let asset = AVURLAsset(url: URL(fileURLWithPath: path))
         let d = (try? await asset.load(.duration).seconds) ?? 0
-        guard d.isFinite, d > 0 else { error = "Couldn't read this recording."; return }
+        guard d.isFinite, d > 0 else { loadError = "Couldn't read this recording."; return }
         duration = d
         if let saved = UserDefaults.standard.array(forKey: rangeKey) as? [Double], saved.count == 2, saved[1] <= d, saved[0] < saved[1] {
             start = saved[0]; end = saved[1]
@@ -238,25 +278,10 @@ struct CleanAudioSheet: View {
         panel.allowedContentTypes = [options.format == .wav ? .wav : .mpeg4Audio]
         panel.message = "Save the clean audio"
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        error = nil; saved = nil; progress = 0; status = "Starting…"
-        let o = options, s = start, e = end, p = path
-        job = Task {
-            do {
-                try await CleanAudioExport.export(path: p, start: s, end: e, options: o, to: url) { v, msg in
-                    Task { @MainActor in progress = v; if status != nil { status = msg } }
-                }
-                saved = url
-            } catch is CancellationError {
-                try? FileManager.default.removeItem(at: url)
-            } catch {
-                self.error = error.localizedDescription
-                try? FileManager.default.removeItem(at: url)
-            }
-            status = nil; job = nil
-        }
+        jobs.start(path: path, start: start, end: end, options: options, to: url)
     }
 
-    private func close() { job?.cancel(); dismiss() }
+    private func close() { dismiss() }
 
     private func teardown() {
         player.pause()
