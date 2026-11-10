@@ -8,6 +8,10 @@ struct ImproveShortTab: View {
     @ObservedObject private var model = ShortDoctorModel.shared
     @State private var dropping = false
     @State private var confirmDelete: ShortReview?
+    @AppStorage("improve_mode") private var mode = "video"
+    @State private var link = ""
+    @State private var ytStatus: String?
+    @State private var ytError: String?
 
     var body: some View {
         Group {
@@ -30,6 +34,15 @@ struct ImproveShortTab: View {
     private var landing: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 26) {
+                PillTabs(selection: $mode, items: [("video", "Improve a video"), ("script", "Write a Shorts script")])
+                if mode == "script" {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Write a Shorts script").font(Theme.display(28, weight: .medium)).foregroundColor(Theme.cream)
+                        Text("Write or paste a script before you film. AutoClip checks the hook, length, turns and ending as you type, and AI can rewrite it in your voice.")
+                            .font(.system(size: 13)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                    }
+                    ShortScriptView()
+                } else {
                 CinematicHero(path: nil, eyebrow: "Create", title: "Improve a Clip",
                               detail: "Drop in a video you've already made. AutoClip looks for a stronger hook, silences to cut and a better order, and you choose what to keep. Your original file isn't changed.",
                               height: 400, icon: "wand.and.stars") {
@@ -44,6 +57,15 @@ struct ImproveShortTab: View {
                     }
                     return true
                 }
+                HStack(spacing: 8) {
+                    Image(systemName: "link").foregroundColor(Theme.sand)
+                    TextField("Or paste a YouTube or Shorts link", text: $link).textFieldStyle(.roundedBorder).frame(maxWidth: 420)
+                        .onSubmit(download)
+                    Button("Get it", action: download).buttonStyle(SecondaryButtonStyle(compact: true))
+                        .disabled(link.trimmingCharacters(in: .whitespaces).isEmpty || ytStatus != nil)
+                    if let ytStatus { ProgressView().controlSize(.small); Text(ytStatus).font(.system(size: 12)).foregroundColor(Theme.muted).lineLimit(1) }
+                }
+                if let ytError { Text(ytError).font(.system(size: 13)).foregroundColor(Theme.danger).fixedSize(horizontal: false, vertical: true) }
                 if let e = model.error {
                     Text(e).font(.system(size: 13)).foregroundColor(Theme.danger).fixedSize(horizontal: false, vertical: true)
                 }
@@ -52,6 +74,8 @@ struct ImproveShortTab: View {
                 if !model.reviews.isEmpty {
                     SectionTitle(title: "Your reviews", count: model.reviews.count)
                     ForEach(model.reviews) { r in row(r) }
+                }
+                ImproveExamples()
                 }
             }
             .padding(.horizontal, 32).padding(.vertical, 28)
@@ -85,6 +109,19 @@ struct ImproveShortTab: View {
             .buttonStyle(.plain)
             Button { confirmDelete = r } label: { Image(systemName: "trash").font(.system(size: 13)) }
                 .buttonStyle(.plain).foregroundColor(Theme.muted).padding(8).help("Delete this review")
+        }
+    }
+
+    private func download() {
+        let l = link.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !l.isEmpty else { return }
+        ytError = nil; ytStatus = "Starting download…"
+        Task {
+            do {
+                let f = try await YTDLP.download(l) { _, msg in Task { @MainActor in ytStatus = msg } }
+                link = ""; ytStatus = nil
+                model.start(f)
+            } catch { ytError = error.localizedDescription; ytStatus = nil }
         }
     }
 
@@ -475,5 +512,76 @@ private struct ShortReviewPage: View {
                 Text(assessTime(lines[i].start)).font(.system(size: 11.5, design: .monospaced)).foregroundColor(Theme.faint)
             }
         }
+    }
+}
+
+
+/// Before-and-after examples of what usually makes a Short better.
+struct ImproveExamples: View {
+    private struct Example: Identifiable {
+        var id: String { title }
+        var title: String
+        var icon: String
+        var before: String
+        var after: String
+        var why: String
+    }
+
+    private let examples: [Example] = [
+        .init(title: "Open on the strongest line", icon: "bolt.fill",
+              before: "“So today I want to talk a little bit about worry…”",
+              after: "“Worry is a prayer to the wrong god.”",
+              why: "People decide in about a second. A warm-up loses most of them before the point."),
+        .init(title: "Cut the dead air", icon: "scissors",
+              before: "A pause to find the next note, an “um”, a restart of the sentence.",
+              after: "Line to line with no gaps. The same words, ten seconds shorter.",
+              why: "Pauses that feel natural in a room feel slow on a phone."),
+        .init(title: "Turns, not lists", icon: "arrow.triangle.turn.up.right.diamond",
+              before: "“I prayed, and then I waited, and then I prayed again…”",
+              after: "“I prayed for a year. But the answer came the day I stopped asking.”",
+              why: "“But” and “so” make something change. “And then” just adds."),
+        .init(title: "One idea per clip", icon: "1.circle",
+              before: "Forgiveness, then a story about the car park, then a verse about patience.",
+              after: "Just forgiveness, from the hook to the last line.",
+              why: "Two ideas means neither lands. Make the second one its own clip."),
+        .init(title: "End on a line that loops", icon: "repeat",
+              before: "“…anyway, that's what I wanted to share. God bless.”",
+              after: "“…and that's why I stopped asking.” (The first line is about prayer.)",
+              why: "If the end leads back into the start, people watch it twice."),
+        .init(title: "Words on screen in the first 3 seconds", icon: "textformat",
+              before: "No text until the captions start.",
+              after: "A bold 3–5 word hook on screen: “You're praying wrong.”",
+              why: "Most people scroll with the sound off. The text is the hook for them.")
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionTitle(title: "What usually makes a Short better", count: examples.count)
+            Text("These are the same things AutoClip looks for when it reviews your video.")
+                .font(.system(size: 12.5)).foregroundColor(Theme.muted)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: 14, alignment: .top)], alignment: .leading, spacing: 14) {
+                ForEach(examples) { e in card(e) }
+            }
+        }
+    }
+
+    private func card(_ e: Example) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(e.title, systemImage: e.icon).font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.cream)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .top, spacing: 6) {
+                    Text("BEFORE").font(.system(size: 10, weight: .bold)).foregroundColor(Theme.danger).frame(width: 46, alignment: .leading)
+                    Text(e.before).font(.system(size: 12.5)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                }
+                HStack(alignment: .top, spacing: 6) {
+                    Text("AFTER").font(.system(size: 10, weight: .bold)).foregroundColor(Theme.good).frame(width: 46, alignment: .leading)
+                    Text(e.after).font(.system(size: 12.5, weight: .medium)).foregroundColor(Theme.ink).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Text(e.why).font(.system(size: 11.5)).foregroundColor(Theme.faint).fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(14).frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.surface))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Theme.line))
     }
 }
