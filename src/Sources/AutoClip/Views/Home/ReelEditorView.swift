@@ -36,6 +36,9 @@ struct ReelDraftsView: View {
     @State private var showAudio = false
     @State private var showUseFor = false
     @State private var hoveredTool: String?
+    @State private var showMore = false
+    @AppStorage("clips_filter") private var filter: ClipListFilter = .all
+    @AppStorage("clips_sort") private var byStrength = false
     @AppStorage("message_pane") private var pane: MessagePane = .clips
     @State private var confirmDelete = false
     @State private var celebrating: Set<UUID> = []
@@ -56,11 +59,16 @@ struct ReelDraftsView: View {
                 TipView(QuickReviewTip()).padding(.horizontal, 16).padding(.bottom, 8)
                 if !volunteer.enabled { generateBar }
                 Divider().background(Theme.ink.opacity(0.08))
+                listBar
                 ScrollView {
                     VStack(spacing: 8) {
-                        ForEach(Array(drafts.enumerated()), id: \.element.id) { i, d in row(i, d) }
+                        ForEach(shown, id: \.d.id) { item in row(item.i, item.d) }
+                        if shown.isEmpty && !drafts.isEmpty {
+                            Text(filter == .todo ? "Every clip is exported." : "No clips here yet.")
+                                .font(.system(size: 13)).foregroundColor(Theme.muted).padding(.top, 30)
+                        }
                     }
-                    .padding(16)
+                    .padding(.horizontal, 16).padding(.bottom, 16).padding(.top, 4)
                 }
                 Divider().background(Theme.ink.opacity(0.08))
                 footer
@@ -114,6 +122,25 @@ struct ReelDraftsView: View {
             .sheet(isPresented: $showReview) {
                 ReviewModeView(recordID: recordID, selected: $selected, onToss: { notForMe($0) }, onExport: { export($0) })
             }
+            if !volunteer.enabled {
+                Button { showKit = true } label: {
+                    Label("Content kit", systemImage: "shippingbox").font(.system(size: 13, weight: .semibold))
+                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .background(Theme.terracotta).cornerRadius(6)
+                }
+                .buttonStyle(.plain).foregroundColor(Theme.onColor)
+                .help("Every clip, its captions and hashtags, notes, graphics and a posting plan, in one folder")
+                .sheet(isPresented: $showKit) { ContentKitSheet(recordID: recordID) }
+                Button { showMore = true } label: {
+                    Label("More", systemImage: "ellipsis.circle").font(.system(size: 13, weight: .medium))
+                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .background(Theme.ink.opacity(0.08)).cornerRadius(6)
+                }
+                .buttonStyle(.plain).foregroundColor(Theme.ink)
+                .help("Clean up the full video, make a podcast episode, or assess the delivery")
+                .popover(isPresented: $showMore, arrowEdge: .bottom) { moreMenu }
+                .sheet(isPresented: $showCleanup) { CleanupSheet(recordID: recordID) }
+            }
             Button(role: .destructive) { confirmDelete = true } label: {
                 Image(systemName: "trash").foregroundColor(Theme.ink.opacity(0.55))
             }
@@ -132,71 +159,37 @@ struct ReelDraftsView: View {
 
     // MARK: From the full message
 
-    private func fullMessageButtons(labels: Bool) -> some View {
-        HStack(spacing: 8) {
-            messageButton("Graphics", "photo.on.rectangle.angled", labels, help: "Quote cards and a thumbnail for the full message") { showGraphics = true }
-            messageButton("Carousel", "rectangle.split.3x1", labels,
-                          help: "The whole message as an Instagram carousel: big idea, main points, Scripture and a question for the week") {
-                openWindow(id: "carousel-window", value: recordID)
+    /// Less-used things made from the whole message, in one place.
+    private var moreMenu: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("From the full message").font(.system(size: 11, weight: .semibold)).foregroundColor(Theme.faint).padding(.bottom, 4)
+            useForRow("Clean up the full video", "scissors", detail: "A tighter copy with fillers, false starts and long pauses cut") {
+                showMore = false; showCleanup = true
             }
-            messageButton("Content kit", "shippingbox", labels, filled: true,
-                          help: "Every clip, captions and hashtags, notes, graphics and a posting plan — in one folder") { showKit = true }
-            messageButton("Clean up", "scissors", labels, help: "Save a tighter copy of the full video: fillers, false starts and long pauses cut") { showCleanup = true }
-            messageButton("Audio", "waveform", labels,
-                          help: "Export clean, levelled audio for podcast sites. Pick the start and end on the waveform") { pane = .audio }
-            messageButton("Use for", "arrow.triangle.branch", labels,
-                          help: "Make a podcast episode or assess the delivery from this message, without adding it again") { showUseFor = true }
+            useForRow("Make a podcast episode", "mic", detail: "Starts an episode from this recording") { showMore = false; makePodcast() }
                 .disabled(sourcePath == nil)
-                .popover(isPresented: $showUseFor, arrowEdge: .bottom) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Use this message for").font(.system(size: 11, weight: .semibold)).foregroundColor(Theme.faint).padding(.bottom, 2)
-                        useForRow("Make a podcast episode", "mic") { showUseFor = false; makePodcast() }
-                        useForRow("Assess the delivery", "waveform.badge.magnifyingglass") {
-                            showUseFor = false
-                            if let p = sourcePath { HomeNav.shared.openAssess(p); dismiss() }
-                        }
-                    }
-                    .padding(12)
-                }
+            useForRow("Assess the delivery", "waveform.badge.magnifyingglass", detail: "Filler words, pace, pauses and an AI coach") {
+                showMore = false
+                if let p = sourcePath { HomeNav.shared.openAssess(p); dismiss() }
+            }
+            .disabled(sourcePath == nil)
+            Divider().padding(.vertical, 4)
+            Text("Graphics, captions and podcast audio are in the tabs above.").font(.system(size: 11)).foregroundColor(Theme.faint)
         }
+        .padding(12).frame(width: 300)
     }
 
-    private func messageButton(_ title: String, _ icon: String, _ labels: Bool, filled: Bool = false, help: String,
-                               _ action: @escaping () -> Void) -> some View {
+    private func useForRow(_ title: String, _ icon: String, detail: String, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Group {
-                if labels { Label(title, systemImage: icon) } else { Image(systemName: icon) }
-            }
-            .font(.system(size: 13, weight: .semibold)).lineLimit(1).fixedSize()
-            .padding(.horizontal, 10).padding(.vertical, 6)
-            .background(filled ? Theme.terracotta : Theme.ink.opacity(0.08)).cornerRadius(7)
-        }
-        .buttonStyle(.plain).foregroundColor(filled ? Theme.onColor : Theme.ink)
-        .onHover { inside in
-            if inside { hoveredTool = title } else if hoveredTool == title { hoveredTool = nil }
-        }
-        .overlay(alignment: .topTrailing) {
-            if hoveredTool == title {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(title).font(.system(size: 12.5, weight: .semibold)).foregroundColor(Theme.ink)
-                    Text(help).font(.system(size: 11.5)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: icon).frame(width: 18).foregroundColor(Theme.sand)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title).font(.system(size: 13, weight: .semibold))
+                    Text(detail).font(.system(size: 11.5)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(.horizontal, 10).padding(.vertical, 8)
-                .frame(width: 230, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 8).fill(Theme.raised2).shadow(color: .black.opacity(0.35), radius: 10, y: 4))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.line))
-                .offset(y: 38)
-                .allowsHitTesting(false)
-                .transition(.opacity)
+                Spacer(minLength: 0)
             }
-        }
-        .zIndex(hoveredTool == title ? 10 : 0)
-    }
-
-    private func useForRow(_ title: String, _ icon: String, _ action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Label(title, systemImage: icon).font(.system(size: 13)).frame(width: 220, alignment: .leading)
-                .padding(.horizontal, 8).padding(.vertical, 6).contentShape(Rectangle())
+            .padding(.horizontal, 6).padding(.vertical, 6).contentShape(Rectangle())
         }
         .buttonStyle(.plain).foregroundColor(Theme.ink)
     }
@@ -236,24 +229,6 @@ struct ReelDraftsView: View {
                 }
                 .buttonStyle(.plain).foregroundColor(Theme.onColor).disabled(genStatus != nil)
                 .help("One teaser clip with a title, description and hashtags, built to end on a cliffhanger")
-            }
-            // Things made from the whole message. Labels drop to icons when the window is narrow.
-            HStack(spacing: 8) {
-                Text("From the full message").font(.system(size: 12)).foregroundColor(Theme.muted).lineLimit(1)
-                Spacer(minLength: 6)
-                ViewThatFits(in: .horizontal) {
-                    fullMessageButtons(labels: true)
-                    fullMessageButtons(labels: false)
-                }
-            }
-            .zIndex(hoveredTool == nil ? 0 : 10)
-            .sheet(isPresented: $showKit) { ContentKitSheet(recordID: recordID) }
-            .sheet(isPresented: $showCleanup) { CleanupSheet(recordID: recordID) }
-            .sheet(isPresented: $showAudio) {
-                if let rec = record, let src = ReelGenerator.sourceVideoPath(for: rec) { CleanAudioSheet(path: src, title: rec.title) }
-            }
-            .sheet(isPresented: $showGraphics) {
-                if let rec = record { SocialGraphicsView(record: rec, gold: gold) }
             }
             // Chat: ask for a short about something the talk covers
             HStack(spacing: 8) {
@@ -391,6 +366,49 @@ struct ReelDraftsView: View {
         }
     }
 
+    // MARK: Which clips to show
+
+    private static func done(_ d: ReelDraft) -> Bool {
+        d.exportedPath.map { FileManager.default.fileExists(atPath: $0) } == true && !d.editedSinceExport
+    }
+    private var notDone: [ReelDraft] { drafts.filter { !Self.done($0) } }
+
+    /// The clips in view, with their number in the full list.
+    private var shown: [(i: Int, d: ReelDraft)] {
+        var list = Array(drafts.enumerated()).map { (i: $0.offset, d: $0.element) }
+        switch filter {
+        case .all: break
+        case .todo: list = list.filter { !Self.done($0.d) }
+        case .done: list = list.filter { Self.done($0.d) }
+        }
+        if byStrength { list.sort { ClipStrength.score($0.d) > ClipStrength.score($1.d) } }
+        return list
+    }
+
+    /// The three strongest clips, when there are enough to choose from.
+    private var best: Set<UUID> {
+        guard drafts.count >= 4 else { return [] }
+        return Set(drafts.sorted { ClipStrength.score($0) > ClipStrength.score($1) }.prefix(3).map(\.id))
+    }
+
+    private var listBar: some View {
+        HStack(spacing: 10) {
+            PillTabs(selection: $filter, items: [
+                (ClipListFilter.all, "All \(drafts.count)"),
+                (ClipListFilter.todo, "Not exported \(notDone.count)"),
+                (ClipListFilter.done, "Exported \(drafts.count - notDone.count)")
+            ], compact: true)
+            Spacer()
+            Picker("", selection: $byStrength) {
+                Text("In order made").tag(false)
+                Text("Strongest first").tag(true)
+            }
+            .labelsHidden().pickerStyle(.menu).fixedSize()
+            .help("Strongest first puts the clips with the best openings and the least dead air at the top")
+        }
+        .padding(.horizontal, 16).padding(.vertical, 10)
+    }
+
     private func row(_ i: Int, _ d: ReelDraft) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             rowMain(i, d)
@@ -407,15 +425,29 @@ struct ReelDraftsView: View {
             }.buttonStyle(.plain)
 
             ScrubThumb(draft: d, path: d.pieces.first?.sourceVideoPath ?? "", faceAspect: 9 / 16)
-                .frame(width: 42, height: 74).clipShape(RoundedRectangle(cornerRadius: 5))
+                .frame(width: 56, height: 100).clipShape(RoundedRectangle(cornerRadius: 6))
                 .environment(\.colorScheme, .dark)
                 .draggableClip(d.editedSinceExport ? nil : d.exportedPath)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("\(i + 1). \(d.title)").font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.ink).lineLimit(1)
+                HStack(spacing: 8) {
+                    Text("\(i + 1). \(d.title)").font(.system(size: 13.5, weight: .semibold)).foregroundColor(Theme.ink).lineLimit(1)
+                    if best.contains(d.id) {
+                        Label("Best", systemImage: "star.fill").font(.system(size: 10.5, weight: .bold)).foregroundColor(Theme.onSand)
+                            .padding(.horizontal, 6).padding(.vertical, 2).background(Capsule().fill(gold))
+                            .help("One of the three strongest clips: a strong opening line and little dead air")
+                    }
+                }
+                if let line = ClipStrength.firstLine(d) {
+                    Text("“\(line)”").font(.system(size: 12).italic()).foregroundColor(Theme.ink.opacity(0.7)).lineLimit(1)
+                        .help("How the clip opens")
+                }
                 HStack(spacing: 8) {
                     Text(formatDur(d.duration)).font(.system(size: 12, design: .monospaced)).foregroundColor(gold)
-                    Text("\(d.pieces.count) moment\(d.pieces.count == 1 ? "" : "s")").font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.55))
+                    if d.pieces.count > 1 {
+                        Label("\(d.pieces.count) parts", systemImage: "square.stack.3d.up").font(.system(size: 12)).foregroundColor(Theme.ink.opacity(0.55))
+                            .help("Made from \(d.pieces.count) parts of the sermon joined together")
+                    }
                     statusPill(d)
                     GuardBadge(draft: d)
                 }
@@ -426,42 +458,10 @@ struct ReelDraftsView: View {
                 }
             }
             Spacer()
-            if let path = d.exportedPath, FileManager.default.fileExists(atPath: path) {
-                if ShareOut.canAirDrop {
-                    Button { ShareOut.airDrop(path) } label: { Image(systemName: "iphone.and.arrow.forward") }
-                        .buttonStyle(.plain).foregroundColor(Theme.ink.opacity(0.6)).help("Send to iPhone with AirDrop")
-                        .accessibilityLabel("Send to iPhone")
-                }
-                Button { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)]) } label: {
-                    Image(systemName: "folder")
-                }.buttonStyle(.plain).foregroundColor(Theme.ink.opacity(0.6)).help("Show in Finder").accessibilityLabel("Show in Finder")
+            ViewThatFits(in: .horizontal) {
+                rowActions(d, labels: true)
+                rowActions(d, labels: false)
             }
-            if !volunteer.enabled {
-                Button { notForMe(d) } label: { Image(systemName: "hand.thumbsdown") }
-                    .buttonStyle(.plain).foregroundColor(Theme.ink.opacity(0.55))
-                    .help("Not for me — remove this clip, and AutoClip learns to pick fewer like it")
-            }
-            Button { openWindow(id: "reel-editor", value: EditorTarget(record: recordID, draft: d.id)) } label: {
-                Label("Edit", systemImage: "slider.horizontal.3").font(.system(size: 13, weight: .medium))
-                    .padding(.horizontal, 10).padding(.vertical, 5)
-                    .background(Theme.ink.opacity(0.08)).cornerRadius(6)
-            }.buttonStyle(.plain).foregroundColor(Theme.ink)
-            Button { export([d.id]) } label: {
-                Text(d.exportedPath == nil ? "Export" : "Re-export").font(.system(size: 13, weight: .semibold))
-                    .padding(.horizontal, 10).padding(.vertical, 5)
-                    .background(gold).cornerRadius(6)
-            }.buttonStyle(.plain).foregroundColor(Theme.onSand).disabled(exporting[d.id] != nil)
-            Menu {
-                Section("Also export as") {
-                    ForEach(ReelEditorView.sizes.filter { $0.0.rawValue != d.formatRaw }, id: \.0) { f, label in
-                        Button(label) { exportSize(d, f) }
-                    }
-                }
-            } label: { Image(systemName: "aspectratio") }
-            .menuStyle(.borderlessButton).fixedSize()
-            .help("Export a copy in another size (4:5, 1:1, original…)")
-            .disabled(exporting[d.id] != nil)
-            .opacity(volunteer.enabled ? 0 : 1)
         }
         .padding(12)
         .background(previewingID == d.id ? gold.opacity(0.12) : Theme.ink.opacity(isSel ? 0.07 : 0.04))
@@ -472,6 +472,77 @@ struct ReelDraftsView: View {
         }
         .contentShape(Rectangle())
         .onTapGesture { onPreview?(d.id) }
+    }
+
+    private func rowActions(_ d: ReelDraft, labels: Bool) -> some View {
+        let file = d.exportedPath.flatMap { FileManager.default.fileExists(atPath: $0) ? $0 : nil }
+        let isDone = Self.done(d)
+        return HStack(spacing: 6) {
+            if let path = file {
+                if ShareOut.canAirDrop {
+                    smallAction(labels ? "AirDrop" : nil, "iphone.and.arrow.forward", help: "Send the finished clip to your iPhone with AirDrop") { ShareOut.airDrop(path) }
+                }
+                smallAction(labels ? "Show file" : nil, "folder", help: "Show the exported video in Finder") {
+                    NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
+                }
+            }
+            if !volunteer.enabled {
+                smallAction(nil, "hand.thumbsdown", help: "Not for me: remove this clip, and AutoClip learns to pick fewer like it") { notForMe(d) }
+            }
+            Button { openWindow(id: "reel-editor", value: EditorTarget(record: recordID, draft: d.id)) } label: {
+                Label("Edit", systemImage: "slider.horizontal.3").font(.system(size: 13, weight: .medium))
+                    .padding(.horizontal, 10).padding(.vertical, 5)
+                    .background(Theme.ink.opacity(0.08)).cornerRadius(6)
+            }.buttonStyle(.plain).foregroundColor(Theme.ink)
+            if isDone {
+                Menu {
+                    Button("Export again") { export([d.id]) }
+                    Section("Also export as") {
+                        ForEach(ReelEditorView.sizes.filter { $0.0.rawValue != d.formatRaw }, id: \.0) { f, label in
+                            Button(label) { exportSize(d, f) }
+                        }
+                    }
+                } label: {
+                    Label("Exported", systemImage: "checkmark").font(.system(size: 13, weight: .semibold))
+                }
+                .menuStyle(.borderlessButton).fixedSize()
+                .foregroundColor(Theme.good)
+                .help("Exported and up to date. Click to export again or in another size")
+                .disabled(exporting[d.id] != nil)
+            } else {
+                Button { export([d.id]) } label: {
+                    Text(d.exportedPath == nil ? "Export" : "Re-export").font(.system(size: 13, weight: .semibold))
+                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .background(gold).cornerRadius(6)
+                }.buttonStyle(.plain).foregroundColor(Theme.onSand).disabled(exporting[d.id] != nil)
+                .help(d.exportedPath == nil ? "Save this clip as a video" : "It's changed since you exported it. Save the new version over the old file")
+                Menu {
+                    Section("Also export as") {
+                        ForEach(ReelEditorView.sizes.filter { $0.0.rawValue != d.formatRaw }, id: \.0) { f, label in
+                            Button(label) { exportSize(d, f) }
+                        }
+                    }
+                } label: { Image(systemName: "aspectratio") }
+                .menuStyle(.borderlessButton).fixedSize()
+                .help("Export a copy in another size (4:5, 1:1, original…)")
+                .disabled(exporting[d.id] != nil)
+                .opacity(volunteer.enabled ? 0 : 1)
+            }
+        }
+    }
+
+    private func smallAction(_ title: String?, _ icon: String, help: String, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Group {
+                if let title { Label(title, systemImage: icon) } else { Image(systemName: icon) }
+            }
+            .font(.system(size: 12, weight: .medium)).lineLimit(1).fixedSize()
+            .padding(.horizontal, title == nil ? 6 : 8).padding(.vertical, 5)
+            .background(Theme.ink.opacity(0.05)).cornerRadius(6)
+        }
+        .buttonStyle(.plain).foregroundColor(Theme.ink.opacity(0.75))
+        .help(help)
+        .accessibilityLabel(title ?? help)
     }
 
     @ViewBuilder private func statusPill(_ d: ReelDraft) -> some View {
@@ -491,13 +562,26 @@ struct ReelDraftsView: View {
                 selected = selected.count == drafts.count ? [] : Set(drafts.map(\.id))
             }.buttonStyle(.plain).foregroundColor(Theme.ink.opacity(0.6)).font(.system(size: 13))
             Spacer()
-            Button { export(Array(selected)) } label: {
-                Text("Export selected (\(selected.count))").font(.system(size: 13, weight: .semibold))
-                    .padding(.horizontal, 16).padding(.vertical, 8)
-                    .background(selected.isEmpty ? Theme.ink.opacity(0.08) : gold).cornerRadius(8)
+            if !selected.isEmpty {
+                Button { export(Array(selected)) } label: {
+                    Text("Export selected (\(selected.count))").font(.system(size: 13, weight: .semibold))
+                        .padding(.horizontal, 16).padding(.vertical, 8)
+                        .background(gold).cornerRadius(8)
+                }
+                .buttonStyle(.plain).foregroundColor(.black)
+            } else if !notDone.isEmpty {
+                Button { export(notDone.map(\.id)) } label: {
+                    Text(notDone.count == drafts.count ? "Export all \(drafts.count)" : "Export the \(notDone.count) not done yet")
+                        .font(.system(size: 13, weight: .semibold))
+                        .padding(.horizontal, 16).padding(.vertical, 8)
+                        .background(gold).cornerRadius(8)
+                }
+                .buttonStyle(.plain).foregroundColor(.black)
+                .help("Exports every clip that hasn't been exported, or has changed since")
+            } else if !drafts.isEmpty {
+                Label("All \(drafts.count) clips exported", systemImage: "checkmark.circle.fill")
+                    .font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.good)
             }
-            .buttonStyle(.plain).foregroundColor(selected.isEmpty ? Theme.ink.opacity(0.3) : .black)
-            .disabled(selected.isEmpty)
         }
         .padding(16)
     }
@@ -2020,5 +2104,32 @@ private struct WordFlowLayout: Layout {
             maxX = max(maxX, x - spacing)
         }
         return (positions, CGSize(width: min(maxX, width), height: y + lineH))
+    }
+}
+
+
+enum ClipListFilter: String { case all, todo, done }
+
+/// A quick, offline guess at how strong a clip is: a gripping first line and little dead air.
+enum ClipStrength {
+    static func firstLine(_ d: ReelDraft) -> String? {
+        for p in d.pieces {
+            for s in p.sentences where s.included {
+                let t = s.keptWords.map(\.word).joined(separator: " ").trimmingCharacters(in: .whitespaces)
+                if !t.isEmpty { return t }
+            }
+        }
+        return nil
+    }
+
+    static func score(_ d: ReelDraft) -> Int {
+        let hook = HookLab.wordScore(firstLine(d) ?? "")
+        let words = d.pieces.flatMap { $0.sentences.flatMap(\.keptWords) }
+        let talk = words.reduce(0.0) { $0 + max(0, $1.endTime - $1.startTime) }
+        let share = d.duration > 0 ? min(1, talk / d.duration) : 0.7
+        let pace = Int((share * 100).rounded())
+        // 20–75 seconds suits Shorts and Reels best
+        let fit = (20...75).contains(d.duration) ? 100 : 70
+        return (hook * 5 + pace * 3 + fit * 2) / 10
     }
 }

@@ -59,7 +59,7 @@ struct GuardBadge: View {
                     .foregroundColor(Theme.warn)
                     .help("Context Guard: this clip might say something the speaker didn't mean. Open it to see why.")
             } else if minor > 0 {
-                Image(systemName: "shield").foregroundColor(Theme.ink.opacity(0.55)).help("Context Guard has \(minor) small note\(minor == 1 ? "" : "s"). Open the clip to see.")
+                Label("\(minor) note\(minor == 1 ? "" : "s")", systemImage: "shield").foregroundColor(Theme.ink.opacity(0.55)).help("Context Guard has \(minor) small note\(minor == 1 ? "" : "s"). Open the clip to see.")
             }
         }
         .font(.system(size: 11.5, weight: .medium))
