@@ -113,6 +113,9 @@ struct MessagesTab: View {
     @State private var statuses: [UUID: MessageStatus] = [:]
     @State private var search = ""
     @State private var reviewFor: AutoReelRecord?
+    @ObservedObject private var seriesStore = SeriesStore.shared
+    @AppStorage("messages_by_series") private var bySeries = true
+    @AppStorage("messages_closed_series") private var closedRaw = ""
 
     private var messages: [AutoReelRecord] {
         let all = reels.reels.filter { ReelGenerator.sourceVideoPath(for: $0) != nil || !($0.drafts ?? []).isEmpty }
@@ -129,8 +132,11 @@ struct MessagesTab: View {
                     .buttonStyle(PrimaryButtonStyle(compact: true))
             }
             if !reels.reels.isEmpty {
-                TextField("Find a message", text: $search).textFieldStyle(.roundedBorder).frame(maxWidth: 320)
-                    .padding(.horizontal, 32).padding(.bottom, 14)
+                HStack(spacing: 14) {
+                    TextField("Find a message", text: $search).textFieldStyle(.roundedBorder).frame(maxWidth: 320)
+                    Toggle("Group by series", isOn: $bySeries).toggleStyle(.checkbox).font(.ui(size: 13))
+                }
+                .padding(.horizontal, 32).padding(.bottom, 14)
             }
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
@@ -142,7 +148,11 @@ struct MessagesTab: View {
                         .padding(14).frame(maxWidth: .infinity, alignment: .leading)
                         .background(RoundedRectangle(cornerRadius: 14).fill(Theme.surface))
                     }
-                    ForEach(messages) { rec in card(rec) }
+                    if bySeries {
+                        ForEach(groups, id: \.key) { g in seriesGroup(g) }
+                    } else {
+                        ForEach(messages) { rec in card(rec) }
+                    }
                     if messages.isEmpty && reels.activeJobs.isEmpty {
                         EmptyState(icon: "rectangle.stack", title: search.isEmpty ? "No messages yet" : "Nothing matches",
                                    message: search.isEmpty ? "Add a sermon video or audio file. AutoClip makes the clips, then everything else for that message lives here." : "Try another word from the title.") {
@@ -248,6 +258,89 @@ struct MessagesTab: View {
         if rec.duration >= 60 { parts.append("\(Int(rec.duration / 60)) min") }
         parts.append("\(rec.drafts?.count ?? 0) clips")
         return parts.joined(separator: " · ")
+    }
+
+    // MARK: Series
+
+    struct SeriesGroup { var key: String; var name: String; var saved: SermonSeries?; var items: [AutoReelRecord] }
+
+    /// Messages grouped by saved series first, then by a series spotted in their titles ("Supply | Pt. 2").
+    private var groups: [SeriesGroup] {
+        var out: [SeriesGroup] = []
+        func src(_ r: AutoReelRecord) -> String { ReelGenerator.sourceVideoPath(for: r) ?? r.path }
+        for r in messages {
+            if let s = seriesStore.series(containing: src(r)) {
+                if let i = out.firstIndex(where: { $0.key == s.id }) { out[i].items.append(r) }
+                else { out.append(SeriesGroup(key: s.id, name: s.name, saved: s, items: [r])) }
+                continue
+            }
+            let name = SeriesStore.seriesName(r.title)
+            let k = SeriesStore.key(name)
+            if name != r.title, let i = out.firstIndex(where: { $0.saved == nil && SeriesStore.sameSeries($0.key, k) }) {
+                out[i].items.append(r)
+            } else {
+                out.append(SeriesGroup(key: name != r.title ? k : "single-" + r.id.uuidString, name: name != r.title ? name : "", saved: nil, items: [r]))
+            }
+        }
+        // Parts in order inside a series
+        for i in out.indices where out[i].items.count > 1 {
+            out[i].items.sort { (SeriesStore.partNumber($0.title) ?? 0, $0.dateCreated) > (SeriesStore.partNumber($1.title) ?? 0, $1.dateCreated) }
+        }
+        return out
+    }
+
+    private func isClosed(_ key: String) -> Bool { closedRaw.split(separator: ",").contains(Substring(key)) }
+    private func toggle(_ key: String) {
+        var set = Set(closedRaw.split(separator: ",").map(String.init))
+        if set.contains(key) { set.remove(key) } else { set.insert(key) }
+        closedRaw = set.sorted().joined(separator: ",")
+    }
+
+    @ViewBuilder private func seriesGroup(_ g: SeriesGroup) -> some View {
+        if g.items.count == 1 && g.saved == nil {
+            card(g.items[0])
+        } else {
+            let closed = isClosed(g.key)
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 10) {
+                    Button { withAnimation(.easeInOut(duration: 0.2)) { toggle(g.key) } } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "chevron.right").font(.ui(size: 12, weight: .bold)).foregroundColor(Theme.sand)
+                                .rotationEffect(.degrees(closed ? 0 : 90))
+                            Image(systemName: "books.vertical").foregroundColor(Theme.sand)
+                            Text(g.name.isEmpty ? "Series" : g.name).font(Theme.display(22, weight: .medium)).foregroundColor(Theme.cream)
+                            Text("\(g.items.count) message\(g.items.count == 1 ? "" : "s")").font(.ui(size: 12, weight: .semibold)).foregroundColor(Theme.muted)
+                                .padding(.horizontal, 8).padding(.vertical, 2).background(Capsule().fill(Theme.ink.opacity(0.07)))
+                            let done = g.items.reduce(0) { $0 + (statuses[$1.id]?.doneCount ?? 0) }
+                            Text("\(done) of \(g.items.count * MessageStatus.Step.allCases.count) done").font(.ui(size: 12)).foregroundColor(Theme.faint)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    Spacer()
+                    if g.saved == nil {
+                        Button { saveSeries(g) } label: { Label("Save as a series", systemImage: "plus.square.on.square").lineLimit(1).fixedSize() }
+                            .buttonStyle(SecondaryButtonStyle(compact: true))
+                            .help("Keeps these together for good, and lets the series share one clip look and graphic. Assess can then check the series holds together")
+                    } else {
+                        Label("Series", systemImage: "checkmark.seal").font(.ui(size: 12, weight: .semibold)).foregroundColor(Theme.good)
+                            .help("Saved as a series. Edit it in Assess → Series")
+                    }
+                }
+                if !closed {
+                    VStack(spacing: 10) { ForEach(g.items) { card($0) } }
+                        .padding(.leading, 18)
+                        .overlay(alignment: .leading) { Rectangle().fill(Theme.sand.opacity(0.35)).frame(width: 2).padding(.leading, 4) }
+                }
+            }
+        }
+    }
+
+    private func saveSeries(_ g: SeriesGroup) {
+        let paths = g.items.sorted { (SeriesStore.partNumber($0.title) ?? 0, $0.dateCreated) < (SeriesStore.partNumber($1.title) ?? 0, $1.dateCreated) }
+            .compactMap { ReelGenerator.sourceVideoPath(for: $0) }
+        guard !paths.isEmpty else { return }
+        seriesStore.upsert(SermonSeries(name: g.name.isEmpty ? (g.items.first?.title ?? "Series") : g.name, videos: paths))
     }
 
     // MARK: Going to each part

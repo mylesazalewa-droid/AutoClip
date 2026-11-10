@@ -38,6 +38,7 @@ struct LicensesTab: View {
                           systemImage: "exclamationmark.triangle.fill")
                         .font(.ui(size: 12.5)).foregroundColor(Theme.warn)
                 }
+                if !soon.isEmpty { soonCard }
                 newCard
                 listCard
             }
@@ -109,6 +110,43 @@ struct LicensesTab: View {
     }
 
     // MARK: List
+
+    // MARK: Running out
+
+    /// Keys that end in the next 30 days, or ended in the last 30 and haven't been renewed.
+    private var soon: [IssuedLicense] {
+        let now = Date()
+        return store.issued.filter { item in
+            guard let end = item.expires else { return false }
+            let days = end.timeIntervalSince(now) / 86400
+            guard days <= 30 && days > -30 else { return false }
+            // Renewed already: a newer key for the same church that ends later
+            return !store.issued.contains { $0.id != item.id && $0.name == item.name && ($0.expires ?? .distantFuture) > end && $0.issued > item.issued }
+        }
+        .sorted { ($0.expires ?? .distantFuture) < ($1.expires ?? .distantFuture) }
+    }
+
+    private var soonCard: some View {
+        AssessCard(title: "Running out soon", subtitle: "Renew makes a new key that starts when the old one ends, then you can email it.") {
+            ForEach(soon) { item in
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 8) {
+                            Text(item.name).font(.ui(size: 13.5, weight: .semibold)).foregroundColor(Theme.ink)
+                            status(item)
+                        }
+                        Text(detail(item)).font(.ui(size: 12)).foregroundColor(Theme.muted).lineLimit(1)
+                    }
+                    Spacer()
+                    Button { renew(item) } label: { Label("Renew", systemImage: "arrow.clockwise").lineLimit(1).fixedSize() }
+                        .buttonStyle(PrimaryButtonStyle(compact: true))
+                    Button { mail(item) } label: { Label("Email", systemImage: "envelope").lineLimit(1).fixedSize() }
+                        .buttonStyle(SecondaryButtonStyle(compact: true))
+                        .help("Start an email to them about renewing. You check it and press Send.")
+                }
+            }
+        }
+    }
 
     private var listCard: some View {
         AssessCard(title: "Keys you've given out", subtitle: store.issued.isEmpty ? nil : "\(store.issued.count) in all. Lost key? Find them here and copy it again. It works on any Mac.") {

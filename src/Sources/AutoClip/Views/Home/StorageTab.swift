@@ -12,6 +12,8 @@ struct StorageTab: View {
     @State private var pending: [StorageItem] = []
     @State private var note: String?
     @State private var problem: String?
+    @AppStorage("storage_old_months") private var months = 3
+    @State private var confirmOld = false
 
     private let lowSpace: Int64 = 10_000_000_000
 
@@ -27,6 +29,7 @@ struct StorageTab: View {
                 if let report {
                     disk(report)
                     clearCard(report)
+                    oldCard
                     if let note { Text(note).font(.ui(size: 13)).foregroundColor(Theme.good).fixedSize(horizontal: false, vertical: true) }
                     if let problem { Text(problem).font(.ui(size: 13)).foregroundColor(Theme.warn).fixedSize(horizontal: false, vertical: true) }
                     ForEach(report.groups) { groupCard($0) }
@@ -183,6 +186,99 @@ struct StorageTab: View {
         if !canClear && i.usedBy.isEmpty { return "Kept by AutoClip" + when }
         if i.usedBy.isEmpty { return (i.isPartial ? "Unfinished download" : "Not used") + when }
         return "Used by \(i.usedBy.joined(separator: ", "))" + when
+    }
+
+    // MARK: Old messages
+
+    private struct Old: Identifiable {
+        var id: UUID { rec.id }
+        var rec: AutoReelRecord
+        var source: String
+        var bytes: Int64
+    }
+
+    /// Messages older than the chosen age whose clips are all exported, so the original can go.
+    private var old: (ready: [Old], waiting: Int) {
+        let cutoff = Calendar.current.date(byAdding: .month, value: -months, to: Date())?.timeIntervalSince1970 ?? 0
+        let fm = FileManager.default
+        var ready: [Old] = [], waiting = 0
+        for r in reels.reels where r.dateCreated < cutoff {
+            guard let src = ReelGenerator.sourceVideoPath(for: r), fm.fileExists(atPath: src) else { continue }
+            let drafts = r.drafts ?? []
+            let allDone = !drafts.isEmpty && drafts.allSatisfy { d in
+                d.exportedPath.map { fm.fileExists(atPath: $0) && $0 != src } == true && !d.editedSinceExport
+            }
+            guard allDone else { waiting += 1; continue }
+            let bytes = (try? fm.attributesOfItem(atPath: src)[.size] as? Int64) ?? 0
+            ready.append(Old(rec: r, source: src, bytes: bytes))
+        }
+        return (ready.sorted { $0.bytes > $1.bytes }, waiting)
+    }
+
+    private var oldCard: some View {
+        let o = old
+        let total = o.ready.reduce(Int64(0)) { $0 + $1.bytes }
+        return AssessCard(title: "Old messages", subtitle: "The original sermon videos take the most room. Once every clip is exported, the original can go. Clips, graphics, captions and reports stay.") {
+            HStack(spacing: 10) {
+                Text("Older than").font(.ui(size: 13)).foregroundColor(Theme.muted)
+                Picker("", selection: $months) {
+                    Text("1 month").tag(1); Text("3 months").tag(3); Text("6 months").tag(6); Text("1 year").tag(12)
+                }
+                .labelsHidden().pickerStyle(.segmented).frame(width: 320)
+            }
+            if o.ready.isEmpty {
+                Text(o.waiting > 0
+                     ? "Nothing to clear yet. \(o.waiting) older message\(o.waiting == 1 ? " has" : "s have") clips that aren't exported; export them first so nothing is lost."
+                     : "No messages that old with their original video still here.")
+                    .font(.ui(size: 12.5)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
+            } else {
+                ForEach(o.ready.prefix(6)) { item in
+                    HStack {
+                        Text(item.rec.title).font(.ui(size: 13)).foregroundColor(Theme.ink).lineLimit(1)
+                        Text(Date(timeIntervalSince1970: item.rec.dateCreated).formatted(date: .abbreviated, time: .omitted))
+                            .font(.ui(size: 12)).foregroundColor(Theme.faint)
+                        Spacer()
+                        Text(size(item.bytes)).font(.ui(size: 12.5).monospacedDigit()).foregroundColor(Theme.muted)
+                    }
+                }
+                if o.ready.count > 6 { Text("and \(o.ready.count - 6) more").font(.ui(size: 12)).foregroundColor(Theme.faint) }
+                if o.waiting > 0 {
+                    Text("\(o.waiting) more \(o.waiting == 1 ? "has" : "have") clips not exported yet, so \(o.waiting == 1 ? "it's" : "they're") left alone.")
+                        .font(.ui(size: 12)).foregroundColor(Theme.faint)
+                }
+                Button { confirmOld = true } label: { Label("Remove \(o.ready.count) original video\(o.ready.count == 1 ? "" : "s") (\(size(total)))", systemImage: "trash") }
+                    .buttonStyle(SecondaryButtonStyle(compact: true))
+            }
+        }
+        .confirmationDialog("Move \(o.ready.count) original video\(o.ready.count == 1 ? "" : "s") to the Trash?", isPresented: $confirmOld, titleVisibility: .visible) {
+            Button("Move to Trash", role: .destructive) { trashOld(o.ready) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("\(size(total)). Exported clips, graphics, captions and reports stay. You won't be able to edit these clips or make new ones from these messages unless you put the videos back from the Trash.")
+        }
+    }
+
+    private func trashOld(_ items: [Old]) {
+        note = nil; problem = nil
+        guard !TabActivity.shared.anythingRunning else {
+            problem = "AutoClip started working on something, so nothing was moved. Try again when it finishes."
+            return
+        }
+        var freed: Int64 = 0, failed: [String] = []
+        for i in items {
+            // Keep the message listed: point it at an exported clip instead of the original
+            if var rec = reels.reels.first(where: { $0.id == i.rec.id }) {
+                let exported = (rec.drafts ?? []).compactMap(\.exportedPath)
+                if let first = exported.first, rec.path == i.source { rec.path = first; rec.paths = exported; reels.update(rec) }
+            }
+            do {
+                try FileManager.default.trashItem(at: URL(fileURLWithPath: i.source), resultingItemURL: nil)
+                freed += i.bytes
+            } catch { failed.append(i.rec.title) }
+        }
+        if freed > 0 { note = "Moved \(size(freed)) of original videos to the Trash. Empty the Trash to get the space back." }
+        if !failed.isEmpty { problem = "Couldn't move: \(failed.joined(separator: ", "))." }
+        Task { await scan() }
     }
 
     private func scan() async {

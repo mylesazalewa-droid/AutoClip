@@ -490,11 +490,14 @@ struct ReelDraftsView: View {
             if !volunteer.enabled {
                 smallAction(nil, "hand.thumbsdown", help: "Not for me: remove this clip, and AutoClip learns to pick fewer like it") { notForMe(d) }
             }
+            let sourceGone = !(d.pieces.first.map { FileManager.default.fileExists(atPath: $0.sourceVideoPath) } ?? false)
             Button { openWindow(id: "reel-editor", value: EditorTarget(record: recordID, draft: d.id)) } label: {
                 Label("Edit", systemImage: "slider.horizontal.3").font(.ui(size: 13, weight: .medium))
                     .padding(.horizontal, 10).padding(.vertical, 5)
                     .background(Theme.ink.opacity(0.08)).cornerRadius(6)
             }.buttonStyle(.plain).foregroundColor(Theme.ink)
+            .disabled(sourceGone)
+            .help(sourceGone ? "The original sermon video was removed to save space, so this clip can't be edited. The exported file is still here." : "Open this clip in the editor")
             if isDone {
                 Menu {
                     Button("Export again") { export([d.id]) }

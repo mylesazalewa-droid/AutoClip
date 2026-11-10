@@ -66,6 +66,9 @@ private struct GeneralSettings: View {
                         .pickerStyle(.segmented).labelsHidden().frame(width: 240)
                 }
             }
+            SettingsSection(title: "Backup") {
+                BackupRows()
+            }
             SettingsSection(title: "App") {
                 Row(title: "Open AutoClip when this Mac starts", detail: auto.loginNote) {
                     Toggle("", isOn: Binding(get: { auto.opensAtLogin }, set: { auto.setOpensAtLogin($0) })).labelsHidden().toggleStyle(.switch)
@@ -231,5 +234,87 @@ private struct PlanSettings: View {
         }
         .padding(24).frame(maxWidth: .infinity, alignment: .leading)
         .sheet(isPresented: $show) { ActivationSheet() }
+    }
+}
+
+
+/// Back up everything to one file, or restore from one (for a new Mac or after a problem).
+private struct BackupRows: View {
+    @State private var includeVideos = false
+    @State private var sizes: (small: Int64, withVideos: Int64)?
+    @State private var status: String?
+    @State private var done: String?
+    @State private var error: String?
+    @State private var confirmRestore: URL?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Row(title: "Back up AutoClip", detail: "One file with your sermons, edits, brand kit, graphics, reviews and settings. Keep it on a drive or in iCloud.") {
+                Button("Back up…") { backUp() }.buttonStyle(SecondaryButtonStyle(compact: true)).disabled(status != nil)
+            }
+            Toggle(isOn: $includeVideos) {
+                Text(sizeText).font(.ui(size: 12)).foregroundColor(Theme.muted)
+            }
+            .toggleStyle(.checkbox)
+            Row(title: "Restore from a backup", detail: "For a new Mac. What's here now goes to the Trash first. Your AI key isn't in backups, so add it again in Settings → AI.") {
+                Button("Restore…") { pickRestore() }.buttonStyle(SecondaryButtonStyle(compact: true)).disabled(status != nil)
+            }
+            if let status { HStack(spacing: 8) { ProgressView().controlSize(.small); Text(status).font(.ui(size: 12)).foregroundColor(Theme.muted) } }
+            if let done { Label(done, systemImage: "checkmark.circle.fill").font(.ui(size: 12)).foregroundColor(Theme.good) }
+            if let error { Text(error).font(.ui(size: 12)).foregroundColor(Theme.danger).fixedSize(horizontal: false, vertical: true) }
+        }
+        .task { sizes = await Backup.estimate() }
+        .alert("Replace everything in AutoClip with this backup?", isPresented: Binding(get: { confirmRestore != nil }, set: { if !$0 { confirmRestore = nil } })) {
+            Button("Restore", role: .destructive) { if let u = confirmRestore { restore(u) }; confirmRestore = nil }
+            Button("Cancel", role: .cancel) { confirmRestore = nil }
+        } message: {
+            Text("Your current sermons, graphics and settings go to the Trash, then AutoClip restarts with the backup.")
+        }
+    }
+
+    private var sizeText: String {
+        guard let s = sizes else { return "Include sermon videos (bigger, but nothing to find again)" }
+        let f = ByteCountFormatter.string(fromByteCount:countStyle:)
+        return "Include sermon videos: \(f(s.withVideos, .file)) instead of \(f(s.small, .file))"
+    }
+
+    private func backUp() {
+        let p = NSSavePanel()
+        p.nameFieldStringValue = "AutoClip Backup \(Date().formatted(.iso8601.year().month().day())).zip"
+        p.allowedContentTypes = [.zip]
+        guard p.runModal() == .OK, let url = p.url else { return }
+        error = nil; done = nil; status = "Starting…"
+        Task {
+            do {
+                try await Backup.make(to: url, includeVideos: includeVideos) { msg in Task { @MainActor in status = msg } }
+                done = "Saved \(url.lastPathComponent)"
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+            } catch { self.error = error.localizedDescription }
+            status = nil
+        }
+    }
+
+    private func pickRestore() {
+        let p = NSOpenPanel()
+        p.allowedContentTypes = [.zip]
+        p.message = "Choose an AutoClip backup"
+        guard p.runModal() == .OK, let url = p.url else { return }
+        confirmRestore = url
+    }
+
+    private func restore(_ url: URL) {
+        error = nil; done = nil; status = "Starting…"
+        Task {
+            do {
+                try await Backup.restore(from: url) { msg in Task { @MainActor in status = msg } }
+                status = "Restarting…"
+                let app = Bundle.main.bundleURL
+                let task = Process()
+                task.executableURL = URL(fileURLWithPath: "/bin/sh")
+                task.arguments = ["-c", "sleep 1; /usr/bin/open \"\(app.path)\""]
+                try? task.run()
+                NSApp.terminate(nil)
+            } catch { self.error = error.localizedDescription; status = nil }
+        }
     }
 }
