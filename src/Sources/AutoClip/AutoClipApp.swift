@@ -48,7 +48,7 @@ struct AutoClipApp: App {
 
         // The whole message as an Instagram carousel
         WindowGroup("Carousel", id: "carousel-window", for: UUID.self) { $id in
-            if let id { CarouselWindow(recordID: id).tint(Theme.action).appLook() }
+            if let id { CarouselWindow(recordID: id).tint(Theme.action).appLook(live: false) }
         }
         .defaultSize(width: 1240, height: 860)
 

@@ -603,7 +603,7 @@ struct AutoReelsTab: View {
             let displayCount = reelSearch.isEmpty ? store.reels.count
                 : store.reels.filter { $0.title.localizedCaseInsensitiveContains(reelSearch) }.count
             PageHeader(eyebrow: "Clips", title: "My Clips",
-                       subtitle: "\(displayCount) project\(displayCount == 1 ? "" : "s") · short vertical clips cut from your messages") {
+                       subtitle: "\(displayCount) message\(displayCount == 1 ? "" : "s") · short vertical clips cut from your messages") {
                 SearchPill(text: $reelSearch, placeholder: "Search clips", width: 200)
                 Button(action: {
                     pickedVideoURL = nil
@@ -616,7 +616,7 @@ struct AutoReelsTab: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     if reelSearch.isEmpty, let latest = store.reels.first {
-                        CinematicHero(path: latest.sourceVideoPath ?? latest.path, eyebrow: "Latest project", title: latest.title,
+                        CinematicHero(path: latest.sourceVideoPath ?? latest.path, eyebrow: "Latest message", title: latest.title,
                                       detail: "\(latest.drafts?.count ?? latest.paths.count) clips ready to review", height: 400) {
                             Button { selectedReel = latest } label: { Label("Open", systemImage: "play.fill") }.buttonStyle(PrimaryButtonStyle())
                             Button {
@@ -624,7 +624,7 @@ struct AutoReelsTab: View {
                             } label: { Label("New clip", systemImage: "plus") }.buttonStyle(SecondaryButtonStyle())
                         }
                         .padding(.horizontal, 32)
-                        SectionTitle(title: "All projects", count: store.reels.count).padding(.horizontal, 32)
+                        SectionTitle(title: "All messages", count: store.reels.count).padding(.horizontal, 32)
                     }
                     // Active jobs + finished reels, as posters
                     LazyVGrid(

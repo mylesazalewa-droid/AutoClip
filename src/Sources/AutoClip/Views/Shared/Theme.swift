@@ -74,12 +74,15 @@ enum TextSize: String, CaseIterable, Identifiable {
     var scale: CGFloat { self == .standard ? 1.07 : self == .larger ? 1.18 : 1.3 }
     static let key = "text_size"
     static var current: TextSize { TextSize(rawValue: UserDefaults.standard.string(forKey: key) ?? "") ?? .standard }
+    /// Read once and kept, so every piece of text doesn't look the setting up again.
+    nonisolated(unsafe) static var liveScale: CGFloat = current.scale
+    static func sync(_ raw: String) { liveScale = (TextSize(rawValue: raw) ?? .standard).scale }
 }
 
 extension Font {
     /// Text on screen, at the size chosen in Settings.
     static func ui(size: CGFloat, weight: Font.Weight = .regular, design: Font.Design = .default) -> Font {
-        .system(size: (size * TextSize.current.scale * 2).rounded() / 2, weight: weight, design: design)
+        .system(size: (size * TextSize.liveScale * 2).rounded() / 2, weight: weight, design: design)
     }
 }
 
@@ -106,9 +109,12 @@ enum AppAppearance: String, CaseIterable, Identifiable {
 struct AppLook: ViewModifier {
     @AppStorage(AppAppearance.key) private var raw = AppAppearance.dark.rawValue
     @AppStorage(TextSize.key) private var textSize = TextSize.standard.rawValue
+    /// False for editors holding unsaved work: they pick up a new text size the next time they open.
+    var live = true
     func body(content: Content) -> some View {
+        let _ = TextSize.sync(textSize)
         content
-            .id(textSize)
+            .id(live ? textSize : "")
             .preferredColorScheme((AppAppearance(rawValue: raw) ?? .dark).scheme)
             .buttonStyle(QuietButtonStyle())
             .onAppear { AppAppearance.applyToApp() }
@@ -117,7 +123,43 @@ struct AppLook: ViewModifier {
 }
 
 extension View {
-    func appLook() -> some View { modifier(AppLook()) }
+    func appLook(live: Bool = true) -> some View { modifier(AppLook(live: live)) }
+
+    /// A small lift on hover, for things you can click that aren't buttons (tiles, thumbnails).
+    func hoverLift(_ scale: CGFloat = 1.02) -> some View { modifier(HoverLift(scale: scale)) }
+}
+
+struct HoverLift: ViewModifier {
+    var scale: CGFloat
+    @State private var hover = false
+    @Environment(\.accessibilityReduceMotion) private var reduce
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(hover && !reduce ? scale : 1)
+            .brightness(hover ? 0.03 : 0)
+            .onHover { hover = $0 }
+            .animation(.spring(response: 0.28, dampingFraction: 0.75), value: hover)
+    }
+}
+
+/// A text link in the app's own colour (the system's blue doesn't belong in this palette).
+struct ThemedLinkStyle: ButtonStyle {
+    var color: Color = Theme.sand
+    func makeBody(configuration: Configuration) -> some View { LinkBody(configuration: configuration, color: color) }
+    private struct LinkBody: View {
+        let configuration: Configuration
+        let color: Color
+        @Environment(\.isEnabled) private var enabled
+        @State private var hover = false
+        var body: some View {
+            configuration.label
+                .foregroundColor(color.opacity(configuration.isPressed ? 0.6 : 1))
+                .underline(hover)
+                .opacity(enabled ? 1 : 0.45)
+                .contentShape(Rectangle())
+                .onHover { hover = $0 }
+        }
+    }
 }
 
 /// The everyday button: a soft rounded pill that matches the rest of the app,
@@ -140,8 +182,10 @@ struct QuietButtonStyle: ButtonStyle {
                 .overlay(RoundedRectangle(cornerRadius: small ? 7 : 9, style: .continuous).stroke(Theme.line, lineWidth: 1))
                 .opacity(enabled ? 1 : 0.45)
                 .contentShape(Rectangle())
+                .scaleEffect(configuration.isPressed ? 0.97 : 1)
                 .onHover { hover = $0 }
                 .animation(.easeOut(duration: 0.12), value: hover)
+                .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
         }
     }
 }
@@ -166,8 +210,10 @@ struct PrimaryButtonStyle: ButtonStyle {
                 .overlay(Capsule().stroke(Color.white.opacity(hover ? 0.18 : 0.08), lineWidth: 1)) // on terracotta, always light
                 .opacity(enabled ? 1 : 0.45)
                 .contentShape(Capsule())
+                .scaleEffect(configuration.isPressed ? 0.97 : 1)
                 .onHover { hover = $0 }
                 .animation(.easeOut(duration: 0.12), value: hover)
+                .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
         }
     }
 }
@@ -192,8 +238,10 @@ struct SecondaryButtonStyle: ButtonStyle {
                 .overlay(Capsule().stroke(Theme.sand.opacity(hover ? 0.6 : 0.35), lineWidth: 1))
                 .opacity(enabled ? 1 : 0.45)
                 .contentShape(Capsule())
+                .scaleEffect(configuration.isPressed ? 0.97 : 1)
                 .onHover { hover = $0 }
                 .animation(.easeOut(duration: 0.12), value: hover)
+                .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
         }
     }
 }

@@ -26,7 +26,7 @@ struct ScoreBadge: View {
                 .rotationEffect(.degrees(-90))
 
             Text("\(Int(score))")
-                .font(.ui(size: size * 0.33, weight: .bold, design: .rounded))
+                .font(.system(size: size * 0.33, weight: .bold, design: .rounded))
                 .foregroundColor(color)
         }
     }

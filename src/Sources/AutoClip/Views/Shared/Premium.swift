@@ -219,6 +219,7 @@ struct AppSidebar: View {
     @ObservedObject private var podcasts = PodcastStore.shared
     @ObservedObject private var shorts = ShortDoctorModel.shared
     @ObservedObject private var volunteer = VolunteerMode.shared
+    @Namespace private var highlight
 
     /// True while this page has work running, so it's clear it carried on when you left.
     private func working(_ tab: HomeTab) -> Bool {
@@ -304,8 +305,8 @@ struct AppSidebar: View {
     }
 
     private func row(_ title: String, _ icon: String, _ tab: HomeTab, also: HomeTab? = nil) -> some View {
-        SidebarLink(title: title, icon: icon, isActive: active == tab || active == also, working: working(tab)) {
-            withAnimation(.easeInOut(duration: 0.15)) { active = tab }
+        SidebarLink(title: title, icon: icon, isActive: active == tab || active == also, working: working(tab), highlight: highlight) {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { active = tab }
         }
     }
 }
@@ -315,6 +316,7 @@ private struct SidebarLink: View {
     let icon: String
     let isActive: Bool
     var working = false
+    var highlight: Namespace.ID
     let action: () -> Void
     @State private var hover = false
 
@@ -331,8 +333,14 @@ private struct SidebarLink: View {
                 }
             }
             .padding(.horizontal, 12).padding(.vertical, 9)
-            .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .fill(Theme.ink.opacity(isActive ? 0.13 : hover ? 0.06 : 0)))
+            .background {
+                if isActive {
+                    RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Theme.ink.opacity(0.13))
+                        .matchedGeometryEffect(id: "active", in: highlight)
+                } else {
+                    RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Theme.ink.opacity(hover ? 0.06 : 0))
+                }
+            }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

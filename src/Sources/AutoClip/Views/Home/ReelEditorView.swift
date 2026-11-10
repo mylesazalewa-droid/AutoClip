@@ -69,15 +69,23 @@ struct ReelDraftsView: View {
                         }
                     }
                     .padding(.horizontal, 16).padding(.bottom, 16).padding(.top, 4)
+                    .animation(.easeInOut(duration: 0.22), value: filter)
+                    .animation(.easeInOut(duration: 0.22), value: byStrength)
                 }
                 Divider().background(Theme.ink.opacity(0.08))
                 footer
+            case .map:
+                Divider().background(Theme.ink.opacity(0.08))
+                SermonMapView(recordID: recordID) { id in onPreview?(id) }
             case .graphics:
                 Divider().background(Theme.ink.opacity(0.08))
                 MessageGraphicsPane(recordID: recordID)
             case .captions:
                 Divider().background(Theme.ink.opacity(0.08))
                 MessageCaptionsPane(recordID: recordID)
+            case .writing:
+                Divider().background(Theme.ink.opacity(0.08))
+                MessageWritingPane(recordID: recordID)
             case .audio:
                 Divider().background(Theme.ink.opacity(0.08))
                 if let rec = record, let src = sourcePath {

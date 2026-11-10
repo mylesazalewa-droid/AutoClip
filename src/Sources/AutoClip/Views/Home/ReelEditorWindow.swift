@@ -53,7 +53,7 @@ struct ReelEditorHost: View {
             }
         }
         .background(Theme.bg)
-        .appLook()
+        .appLook(live: false)
         .tint(Theme.action)
         .background(WindowAccessor { $0.setFrameAutosaveName("AutoClipEditor") })
     }

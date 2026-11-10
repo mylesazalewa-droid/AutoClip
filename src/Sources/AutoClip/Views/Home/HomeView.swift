@@ -18,6 +18,7 @@ struct HomeView: View {
     private let gold = Theme.sand
     @Environment(\.pageVisible) private var homeVisible
     @State private var visited: Set<HomeTab> = []
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Each page's backdrop, to go back to when you return to it
     @State private var backdrops: [HomeTab: String] = [:]
     private static let allTabs: [HomeTab] = [.projects, .autoClips, .autoReels, .social, .improve, .podcast, .rehearse, .assess, .worship, .results, .storage, .search, .brand, .approvals, .licenses, .messages]
@@ -88,6 +89,8 @@ struct HomeView: View {
                         let showing = tab == activeTab
                         page(tab)
                             .opacity(showing ? 1 : 0)
+                            .offset(y: showing || reduceMotion ? 0 : 8)
+                            .animation(showing ? .easeOut(duration: 0.22) : nil, value: activeTab)
                             .allowsHitTesting(showing)
                             .disabled(!showing)
                             .accessibilityHidden(!showing)

@@ -158,7 +158,7 @@ struct CarouselWindow: View {
             if let saved {
                 Button { NSWorkspace.shared.activateFileViewerSelecting([saved]) } label: {
                     Label("Saved – show in Finder", systemImage: "checkmark.circle.fill")
-                }.buttonStyle(.link).foregroundColor(Theme.good)
+                }.buttonStyle(ThemedLinkStyle()).foregroundColor(Theme.good)
             }
             if let c = carousel, !items(c).isEmpty {
                 if isPosts {
@@ -310,7 +310,7 @@ struct CarouselWindow: View {
                 HStack {
                     Text(label.uppercased()).font(.ui(size: 10.5, weight: .semibold)).tracking(1).foregroundColor(Theme.faint)
                     Spacer()
-                    Button("Done") { editingField = nil }.buttonStyle(.link).keyboardShortcut(.defaultAction)
+                    Button("Done") { editingField = nil }.buttonStyle(ThemedLinkStyle()).keyboardShortcut(.defaultAction)
                 }
                 TextField(label, text: itemBinding(kp), axis: .vertical)
                     .textFieldStyle(.plain).font(.ui(size: 15)).foregroundColor(Theme.ink)
@@ -485,11 +485,11 @@ struct CarouselWindow: View {
                     }
                     if isPosts {
                         Button { applyLookToAllPosts() } label: { Label("Use this look for every post", systemImage: "square.on.square") }
-                            .buttonStyle(.link).font(.ui(size: 12))
+                            .buttonStyle(ThemedLinkStyle()).font(.ui(size: 12))
                     }
                     if let b = BrandKit.load() {
                         Button { useBrand(b) } label: { Label("Use our brand colour and type", systemImage: "paintpalette") }
-                            .buttonStyle(.link).font(.ui(size: 12))
+                            .buttonStyle(ThemedLinkStyle()).font(.ui(size: 12))
                             .help("From the Brand kit page")
                     }
                 }
@@ -508,7 +508,7 @@ struct CarouselWindow: View {
                             Label(savedDefault ? "Saved as your default" : "Use this design for new carousels",
                                   systemImage: savedDefault ? "checkmark" : "star")
                         }
-                        .buttonStyle(.link).font(.ui(size: 12))
+                        .buttonStyle(ThemedLinkStyle()).font(.ui(size: 12))
                         .help("New carousels start with this style, colour, type, size and church name")
                     }
                 }
@@ -520,8 +520,8 @@ struct CarouselWindow: View {
                                 Image(nsImage: img).resizable().scaledToFill().frame(width: 72, height: 44).clipped().cornerRadius(5)
                             }
                             VStack(alignment: .leading, spacing: 4) {
-                                Button("Replace…") { pickArt() }.buttonStyle(.link)
-                                Button("Remove") { carousel?.artPath = nil }.buttonStyle(.link).foregroundColor(Theme.danger)
+                                Button("Replace…") { pickArt() }.buttonStyle(ThemedLinkStyle())
+                                Button("Remove") { carousel?.artPath = nil }.buttonStyle(ThemedLinkStyle(color: Theme.danger))
                             }
                             .font(.ui(size: 12))
                         }
@@ -535,7 +535,7 @@ struct CarouselWindow: View {
                                 .disabled(c.style == .split)
                         }
                         Button { matchArtColour() } label: { Label("Match colour to the graphic", systemImage: "eyedropper") }
-                            .buttonStyle(.link).font(.ui(size: 12))
+                            .buttonStyle(ThemedLinkStyle()).font(.ui(size: 12))
                     } else {
                         Text("Add the series artwork. AutoClip recolours or softens it to match each style, and uses it for every sermon in the series.")
                             .font(.ui(size: 12)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
@@ -618,10 +618,10 @@ struct CarouselWindow: View {
                             HStack(spacing: 10) {
                                 Image(nsImage: img).resizable().scaledToFill().frame(width: 60, height: 74).clipped().cornerRadius(5)
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Button("Make another with AI…") { openBG(s, c) }.buttonStyle(.link)
-                                    Button("Choose a photo…") { choosePhoto() }.buttonStyle(.link)
-                                    Button("Use on every \(noun)") { bgOnAll(p) }.buttonStyle(.link)
-                                    Button("Remove") { setBG(nil) }.buttonStyle(.link).foregroundColor(Theme.danger)
+                                    Button("Make another with AI…") { openBG(s, c) }.buttonStyle(ThemedLinkStyle())
+                                    Button("Choose a photo…") { choosePhoto() }.buttonStyle(ThemedLinkStyle())
+                                    Button("Use on every \(noun)") { bgOnAll(p) }.buttonStyle(ThemedLinkStyle())
+                                    Button("Remove") { setBG(nil) }.buttonStyle(ThemedLinkStyle(color: Theme.danger))
                                 }.font(.ui(size: 12))
                             }
                         } else {
@@ -863,7 +863,7 @@ struct CarouselWindow: View {
                         Text("Colour").font(.ui(size: 11.5)).foregroundColor(Theme.muted).frame(width: 46, alignment: .leading)
                         ForEach([("Accent", nil as String?), ("Text", "ink"), ("White", "white")], id: \.0) { item in
                             Button(item.0) { setLayerColour(id, item.1) }
-                                .buttonStyle(.link).font(.ui(size: 12, weight: layer.colour == item.1 ? .bold : .regular))
+                                .buttonStyle(ThemedLinkStyle()).font(.ui(size: 12, weight: layer.colour == item.1 ? .bold : .regular))
                         }
                         ColorPicker("", selection: Binding(get: { Color(nsColor: NSColor(hexString: layer.colour ?? l.accentHex)) },
                                                            set: { setLayerColour(id, NSColor($0).hexString) }), supportsOpacity: false)

@@ -84,7 +84,7 @@ struct BrandKitTab: View {
                     HStack {
                         Button(kit.hasLogo ? "Change…" : "Choose a logo…") { chooseLogo() }.buttonStyle(SecondaryButtonStyle(compact: true))
                         if kit.hasLogo {
-                            Button("Remove") { kit.logoPath = nil }.buttonStyle(.link).font(.ui(size: 12))
+                            Button("Remove") { kit.logoPath = nil }.buttonStyle(ThemedLinkStyle()).font(.ui(size: 12))
                         }
                     }
                     if kit.hasLogo {
@@ -95,7 +95,7 @@ struct BrandKitTab: View {
                             }.labelsHidden().frame(width: 170)
                         }
                         Button { colourFromLogo() } label: { Label("Take the colour from the logo", systemImage: "eyedropper") }
-                            .buttonStyle(.link).font(.ui(size: 12))
+                            .buttonStyle(ThemedLinkStyle()).font(.ui(size: 12))
                     }
                 }
             }
@@ -110,10 +110,10 @@ struct BrandKitTab: View {
                 colourWell("Main", Binding(get: { kit.primaryHex }, set: { kit.primaryHex = $0 }))
                 if let second = kit.secondaryHex {
                     colourWell("Second", Binding(get: { second }, set: { kit.secondaryHex = $0 }))
-                    Button("Remove") { kit.secondaryHex = nil }.buttonStyle(.link).font(.ui(size: 12))
+                    Button("Remove") { kit.secondaryHex = nil }.buttonStyle(ThemedLinkStyle()).font(.ui(size: 12))
                 } else {
                     Button { kit.secondaryHex = "F1E9DC" } label: { Label("Add a second colour", systemImage: "plus") }
-                        .buttonStyle(.link).font(.ui(size: 12))
+                        .buttonStyle(ThemedLinkStyle()).font(.ui(size: 12))
                 }
                 Spacer()
             }

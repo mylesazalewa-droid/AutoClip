@@ -161,7 +161,7 @@ struct ThisWeekCard: View {
                 Button { autoGraphics = true } label: {
                     Label("Make these automatically for every sermon", systemImage: "wand.and.stars")
                 }
-                .buttonStyle(.link).font(.ui(size: 12))
+                .buttonStyle(ThemedLinkStyle()).font(.ui(size: 12))
                 .help("One-click Sunday: when a sermon's clips are ready, the carousel, posts and plan are made too (one more AI request per sermon). Turn off in Settings → Clips.")
             }
         }

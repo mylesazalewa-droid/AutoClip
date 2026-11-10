@@ -59,7 +59,7 @@ struct MenuBarPanel: View {
             HStack {
                 Button("Open AutoClip") { openMain() }
                 Spacer()
-                Button("Hide this icon") { menuBarOn = false }.buttonStyle(.link).font(.ui(size: 12))
+                Button("Hide this icon") { menuBarOn = false }.buttonStyle(ThemedLinkStyle()).font(.ui(size: 12))
             }
         }
         .padding(14)

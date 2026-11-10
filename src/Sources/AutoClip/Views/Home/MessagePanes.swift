@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 
 /// What a message's window shows: its clips, its graphics, or every caption to copy.
-enum MessagePane: String, CaseIterable { case clips = "Clips", graphics = "Graphics", captions = "Captions", audio = "Audio" }
+enum MessagePane: String, CaseIterable { case clips = "Clips", map = "Map", graphics = "Graphics", captions = "Captions", writing = "Writing", audio = "Audio" }
 
 /// One message's carousel and posts, in its own window.
 struct MessageGraphicsPane: View {
@@ -54,6 +54,7 @@ struct MessageGraphicsPane: View {
                                         Text("\(i + 1). " + c.postList[i].kind.label).font(.ui(size: 11)).foregroundColor(Theme.muted)
                                     }
                                     .contentShape(Rectangle())
+                                    .hoverLift()
                                     .onTapGesture { open(posts: true, index: i) }
                                     .help("Open and edit this post")
                                 }
@@ -173,7 +174,7 @@ struct MessageCaptionsPane: View {
                     Button { copy(item.text, item.id) } label: {
                         Label(copied == item.id ? "Copied" : "Copy", systemImage: copied == item.id ? "checkmark" : "doc.on.doc").lineLimit(1).fixedSize()
                     }
-                    .buttonStyle(.link).font(.ui(size: 12))
+                    .buttonStyle(ThemedLinkStyle()).font(.ui(size: 12))
                 }
             }
             Text(item.text.isEmpty ? "No caption yet." : item.text)

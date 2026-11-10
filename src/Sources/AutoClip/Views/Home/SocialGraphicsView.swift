@@ -70,7 +70,7 @@ struct SocialGraphicsView: View {
                             Image(systemName: "checkmark.circle.fill").foregroundColor(Theme.good)
                             Text("Saved to \(saved.lastPathComponent)").font(.ui(size: 13)).foregroundColor(Theme.ink)
                             Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([saved]) }
-                                .buttonStyle(.link)
+                                .buttonStyle(ThemedLinkStyle())
                             Spacer()
                         }.padding(.horizontal, 16).padding(.top, 12)
                     }
@@ -117,10 +117,10 @@ struct SocialGraphicsView: View {
                 .padding(6).background(Theme.ink.opacity(0.06)).cornerRadius(5)
                 .onSubmit { redraw(cards[i]) }
             HStack {
-                Button("Update") { redraw(cards[i]) }.buttonStyle(.link).font(.ui(size: 12))
+                Button("Update") { redraw(cards[i]) }.buttonStyle(ThemedLinkStyle()).font(.ui(size: 12))
                 Spacer()
                 Button { shiftFrame(i) } label: { Label("Other photo", systemImage: "photo") }
-                    .buttonStyle(.link).font(.ui(size: 12))
+                    .buttonStyle(ThemedLinkStyle()).font(.ui(size: 12))
                     .help("Use a different moment from the video as the background")
             }
         }

@@ -86,9 +86,9 @@ struct ApprovalsTab: View {
                 if !r.closed {
                     Button { showLink = r } label: { Label("Show link", systemImage: "qrcode") }
                         .buttonStyle(SecondaryButtonStyle(compact: true))
-                    Button("Stop sharing") { store.close(r.id) }.buttonStyle(.link).font(.ui(size: 12))
+                    Button("Stop sharing") { store.close(r.id) }.buttonStyle(ThemedLinkStyle()).font(.ui(size: 12))
                 } else {
-                    Button("Share again") { store.reopen(r.id) }.buttonStyle(.link).font(.ui(size: 12))
+                    Button("Share again") { store.reopen(r.id) }.buttonStyle(ThemedLinkStyle()).font(.ui(size: 12))
                 }
                 Button { confirmDelete = r } label: { Image(systemName: "trash") }
                     .buttonStyle(SecondaryButtonStyle(compact: true)).help("Delete this review")

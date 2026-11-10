@@ -34,7 +34,11 @@ struct StorageTab: View {
                     if let problem { Text(problem).font(.ui(size: 13)).foregroundColor(Theme.warn).fixedSize(horizontal: false, vertical: true) }
                     ForEach(report.groups) { groupCard($0) }
                 } else {
-                    Text("Adding up your files…").font(.ui(size: 13)).foregroundColor(Theme.muted)
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text("Adding up your files…").font(.ui(size: 13)).foregroundColor(Theme.muted)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
             .padding(.horizontal, 32).padding(.bottom, 28).padding(.top, 8)

@@ -73,7 +73,7 @@ struct SocialGraphicsTab: View {
                         Button { hiddenRaw = "" } label: {
                             Label("Show \(removed) removed sermon\(removed == 1 ? "" : "s")", systemImage: "eye")
                         }
-                        .buttonStyle(.link).font(.ui(size: 12))
+                        .buttonStyle(ThemedLinkStyle()).font(.ui(size: 12))
                     }
                 }
                 .padding(.horizontal, 32).padding(.bottom, 40)
@@ -147,6 +147,7 @@ struct SocialGraphicsTab: View {
             if let r = reviews.latest(c.postList[i].id, kind: .post) { ReviewBadge(item: r).padding(6) }
         }
         .contentShape(Rectangle())
+        .hoverLift()
         .onTapGesture { open(rec, posts: true, index: i) }
         .help("Open and edit this post")
         .overlay(alignment: .topTrailing) {
@@ -279,10 +280,10 @@ struct SocialGraphicsTab: View {
                                     Label(copiedDay == d.day ? "Copied" : "Copy caption", systemImage: copiedDay == d.day ? "checkmark" : "doc.on.doc")
                                         .lineLimit(1).fixedSize()
                                 }
-                                .buttonStyle(.link).font(.ui(size: 11.5))
+                                .buttonStyle(ThemedLinkStyle()).font(.ui(size: 11.5))
                                 if let i = d.post, i >= 0 {
                                     Button { deletePost(p.rec, p.c.postList[i].id) } label: { Label("Delete", systemImage: "trash").lineLimit(1).fixedSize() }
-                                        .buttonStyle(.link).font(.ui(size: 11.5)).foregroundColor(Theme.danger)
+                                        .buttonStyle(ThemedLinkStyle(color: Theme.danger)).font(.ui(size: 11.5))
                                         .help("Delete this post")
                                 }
                             }

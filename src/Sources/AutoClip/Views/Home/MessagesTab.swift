@@ -4,7 +4,7 @@ import AppKit
 /// What's been made from one message, and what could be made next.
 struct MessageStatus {
     enum Step: String, CaseIterable, Identifiable {
-        case clips, graphics, posts, captions, approval, audio, podcast, assess
+        case clips, graphics, posts, captions, writing, approval, audio, podcast, assess
         var id: String { rawValue }
         var title: String {
             switch self {
@@ -12,6 +12,7 @@ struct MessageStatus {
             case .graphics: return "Carousel"
             case .posts: return "Posts"
             case .captions: return "Captions"
+            case .writing: return "Writing"
             case .approval: return "Approval"
             case .audio: return "Podcast audio"
             case .podcast: return "Episode"
@@ -24,6 +25,7 @@ struct MessageStatus {
             case .graphics: return "rectangle.split.3x1"
             case .posts: return "square.grid.2x2"
             case .captions: return "text.quote"
+            case .writing: return "doc.text"
             case .approval: return "checkmark.seal"
             case .audio: return "waveform"
             case .podcast: return "mic"
@@ -37,6 +39,7 @@ struct MessageStatus {
             case .graphics: return "Make the carousel"
             case .posts: return "Write a week of posts"
             case .captions: return "Write the clip captions"
+            case .writing: return "Write a small-group guide"
             case .approval: return "Send it for approval"
             case .audio: return "Export podcast audio"
             case .podcast: return "Make a podcast episode"
@@ -75,6 +78,10 @@ struct MessageStatus {
         let captioned = drafts.filter { $0.seo != nil }.count
         s.states[.captions] = drafts.isEmpty ? .todo : captioned == drafts.count ? .done : captioned > 0 ? .partly : .todo
         s.details[.captions] = drafts.isEmpty ? "No clips yet" : "\(captioned) of \(drafts.count) clips"
+
+        let written = WritingStore.count(for: rec.id)
+        s.states[.writing] = written == 0 ? .todo : written >= WritingKind.allCases.count ? .done : .partly
+        s.details[.writing] = written == 0 ? "Not written" : "\(written) of \(WritingKind.allCases.count) written"
 
         let items = ReviewStore.shared.requests.filter { $0.recordID == rec.id }.flatMap(\.items)
         if items.isEmpty {
@@ -170,6 +177,7 @@ struct MessagesTab: View {
         .onChange(of: jobs.finished) { _, _ in refresh() }
         .onReceive(NotificationCenter.default.publisher(for: CarouselStore.changed)) { _ in refresh() }
         .onReceive(reviews.$requests) { _ in refresh() }
+        .onReceive(NotificationCenter.default.publisher(for: WritingStore.changed)) { _ in refresh() }
         .onReceive(audioJobs.$states) { _ in refresh() }
         .sheet(item: $reviewFor) { ReviewSendSheet(record: $0) }
     }
@@ -190,12 +198,14 @@ struct MessagesTab: View {
                 ScrubThumb(draft: rec.drafts?.first, path: ReelGenerator.sourceVideoPath(for: rec) ?? rec.path, faceAspect: 16 / 9)
                     .frame(width: 176, height: 99).clipShape(RoundedRectangle(cornerRadius: 8))
                     .environment(\.colorScheme, .dark)
+                    .hoverLift()
                     .onTapGesture { open(rec, .clips) }
                 VStack(alignment: .leading, spacing: 6) {
                     Text(rec.title).font(Theme.display(20, weight: .medium)).foregroundColor(Theme.cream).lineLimit(1)
                     Text(meta(rec)).font(.ui(size: 12)).foregroundColor(Theme.muted)
                     HStack(spacing: 8) {
                         ProgressView(value: Double(s.doneCount), total: Double(total)).tint(Theme.sand).frame(width: 140)
+                            .animation(.easeOut(duration: 0.5), value: s.doneCount)
                         Text("\(s.doneCount) of \(total) done").font(.ui(size: 11.5, weight: .semibold)).foregroundColor(Theme.muted)
                     }
                     if let n = s.next {
@@ -250,6 +260,7 @@ struct MessagesTab: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .hoverLift(1.03)
         .help(state == .done ? "Open \(step.title.lowercased())" : step.todo)
     }
 
@@ -356,6 +367,7 @@ struct MessagesTab: View {
         case .clips: open(rec, .clips)
         case .graphics, .posts: open(rec, .graphics)
         case .captions: open(rec, .captions)
+        case .writing: open(rec, .writing)
         case .audio: open(rec, .audio)
         case .approval: reviewFor = rec
         case .podcast:
