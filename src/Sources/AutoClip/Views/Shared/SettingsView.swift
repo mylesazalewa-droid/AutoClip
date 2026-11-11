@@ -55,6 +55,7 @@ private struct GeneralSettings: View {
     @State private var tipsNote: String?
 
     var body: some View {
+        ScrollView {
         VStack(alignment: .leading, spacing: 20) {
             SettingsSection(title: "Look") {
                 Row(title: "Appearance", detail: "Light is easier to read in a bright office") {
@@ -85,6 +86,9 @@ private struct GeneralSettings: View {
                     if let s = updater.status { Text(s).font(.ui(size: 12)).foregroundColor(.secondary) }
                 }
             }
+            SettingsSection(title: "Check setup") {
+                SetupCheckView()
+            }
             SettingsSection(title: "Help") {
                 HStack {
                     Button("Show tips again") { UserDefaults.standard.set(true, forKey: "tips_reset"); tipsNote = "Tips come back the next time AutoClip opens." }
@@ -94,6 +98,8 @@ private struct GeneralSettings: View {
             }
         }
         .padding(24)
+        }
+        .frame(minHeight: 420, idealHeight: 640, maxHeight: 760)
     }
 }
 

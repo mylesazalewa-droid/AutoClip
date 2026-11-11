@@ -196,7 +196,9 @@ class VideoExportService {
         guard let session = AVAssetExportSession(asset: composition, presetName: preset) else {
             throw ExportError.exportFailed("Failed to create export session")
         }
-        session.outputURL = outputURL
+        let workURL = Self.stagingURL(for: outputURL)
+        defer { try? FileManager.default.removeItem(at: workURL) }
+        session.outputURL = workURL
         session.outputFileType = .mp4
         if let vc = builtVideoComposition { session.videoComposition = vc }
         session.timeRange = CMTimeRange(start: .zero, duration: clipDuration)
@@ -211,6 +213,7 @@ class VideoExportService {
             throw ExportError.exportFailed("Export failed: video format not supported. Try 'Original' format or captions off.")
         }
         if let err = session.error { throw ExportError.exportFailed(err.localizedDescription) }
+        try Self.deliver(workURL, to: outputURL)
         progress(1.0)
     }
 
@@ -1971,7 +1974,9 @@ class VideoExportService {
         guard let session = AVAssetExportSession(asset: composition, presetName: preset) else {
             throw ExportError.exportFailed("Could not create export session")
         }
-        session.outputURL   = outputURL
+        let workURL = Self.stagingURL(for: outputURL)
+        defer { try? FileManager.default.removeItem(at: workURL) }
+        session.outputURL   = workURL
         session.outputFileType = .mp4
         session.timeRange   = CMTimeRange(start: .zero, duration: compDurationForExport)
         if let vc = videoComposition { session.videoComposition = vc }
@@ -1989,7 +1994,39 @@ class VideoExportService {
             throw ExportError.exportFailed("Export failed: video format not supported. Try 'Original' format or ensure the video is H.264 (MP4).")
         }
         if let err = session.error { throw ExportError.exportFailed(err.localizedDescription) }
+        await MainActor.run { progress(0.99, "Saving…") }
+        try Self.deliver(workURL, to: outputURL)
         await MainActor.run { progress(1.0, "Done!") }
+    }
+}
+
+extension VideoExportService {
+    /// Where an export is written while it's being made: this Mac's own disk. Writing straight
+    /// to an external drive (especially exFAT) can make the encoder stop partway.
+    static func stagingURL(for final: URL) -> URL {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("AutoClip-exports", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent(UUID().uuidString + "." + (final.pathExtension.isEmpty ? "mp4" : final.pathExtension))
+    }
+
+    /// Moves a finished export into place, replacing an older copy.
+    static func deliver(_ work: URL, to final: URL) throws {
+        let fm = FileManager.default
+        let folder = final.deletingLastPathComponent()
+        guard fm.fileExists(atPath: folder.path) else {
+            throw ExportError.exportFailed("The folder \(folder.lastPathComponent) isn't there. If it's on a drive, plug the drive in and export again.")
+        }
+        let temp = folder.appendingPathComponent(".\(UUID().uuidString).partial.\(final.pathExtension)")
+        do {
+            // Copy next to the final file first, so a full or unplugged drive never leaves the old clip half-replaced
+            try fm.copyItem(at: work, to: temp)
+            // A plain rename, which every drive format supports (swapping files in place isn't on exFAT)
+            if fm.fileExists(atPath: final.path) { try fm.removeItem(at: final) }
+            try fm.moveItem(at: temp, to: final)
+        } catch {
+            try? fm.removeItem(at: temp)
+            throw ExportError.exportFailed("The clip was made, but couldn't be saved to \(folder.lastPathComponent): \(error.localizedDescription)")
+        }
     }
 }
 

@@ -52,6 +52,23 @@ class WhisperService: ObservableObject {
 
     var modelExists: Bool { modelFolder(selectedVariant) != nil }
 
+    /// Where the speech engine keeps its small word list (the "tokenizer"). Older versions used
+    /// ~/Documents/huggingface, so that is kept when it's already there. Otherwise it lives with
+    /// the model, and its folder is made first: the engine's own download fails on a new Mac
+    /// when the folder isn't there yet.
+    private func tokenizerBase(for variant: String) throws -> URL {
+        let repo = "models/" + variant.replacingOccurrences(of: "openai_", with: "openai/")
+        let old = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Documents/huggingface")
+        if FileManager.default.fileExists(atPath: old.appendingPathComponent("\(repo)/tokenizer.json").path) { return old }
+        let folder = modelDir.appendingPathComponent(repo)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        // A half-finished earlier try can leave pieces behind that block the next one
+        for f in (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? [] where f.hasSuffix(".incomplete") {
+            try? FileManager.default.removeItem(at: folder.appendingPathComponent(f))
+        }
+        return modelDir
+    }
+
     func loadModel(progress: ((Double, String) -> Void)? = nil) async throws {
         let variant = selectedVariant
         await MainActor.run {
@@ -65,13 +82,26 @@ class WhisperService: ObservableObject {
             throw NSError(domain: "WhisperService", code: 2, userInfo: [NSLocalizedDescriptionKey:
                 "The speech model didn't finish downloading. Check the internet connection and press Download again."])
         }
-        let config = WhisperKitConfig(
+        var config = WhisperKitConfig(
             model: variant,
             modelFolder: folder.path,
+            tokenizerFolder: try tokenizerBase(for: variant),
             verbose: false
         )
 
-        let kit = try await WhisperKit(config)
+        let kit: WhisperKit
+        do { kit = try await WhisperKit(config) }
+        catch {
+            // One more try: a dropped connection while fetching the word list is the usual cause
+            do {
+                config.tokenizerFolder = try tokenizerBase(for: variant)
+                kit = try await WhisperKit(config)
+            } catch {
+                await MainActor.run { isLoading = false; statusMessage = "" }
+                throw NSError(domain: "WhisperService", code: 3, userInfo: [NSLocalizedDescriptionKey:
+                    "The speech model couldn't finish setting up (\(error.localizedDescription)). Check the internet connection and try again."])
+            }
+        }
 
         await MainActor.run {
             self.whisper = kit
