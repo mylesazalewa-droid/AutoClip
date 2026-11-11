@@ -214,8 +214,28 @@ enum ReelOverlays {
         }
     }
 
+    /// The image at exactly its own size in pixels. Asking AppKit for one gives twice the size on a
+    /// Retina screen, which made hooks and verse cards twice as big (and wider than the video)
+    /// on Retina Macs while they looked right on a standard monitor.
     private static func cg(_ img: NSImage) -> CGImage? {
-        img.cgImage(forProposedRect: nil, context: nil, hints: nil)
+        let w = Int(ceil(img.size.width)), h = Int(ceil(img.size.height))
+        guard w > 0, h > 0,
+              let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
+                                  space: CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
+        img.draw(in: CGRect(x: 0, y: 0, width: w, height: h), from: .zero, operation: .copy, fraction: 1)
+        NSGraphicsContext.restoreGraphicsState()
+        return ctx.makeImage()
+    }
+
+    /// An overlay's size, shrunk to fit inside the frame's width if it would run off the sides.
+    private static func fitted(_ img: CGImage, in size: CGSize) -> (CGFloat, CGFloat) {
+        var w = CGFloat(img.width), h = CGFloat(img.height)
+        let limit = size.width * 0.96
+        if w > limit { h *= limit / w; w = limit }
+        return (w, h)
     }
 
     /// Everything to show, laid out for `size`. Verses that would collide with the hook wait for it.
@@ -231,7 +251,7 @@ enum ReelOverlays {
         }
         if let hook, !hook.trimmingCharacters(in: .whitespaces).isEmpty,
            let img = cg(hookImage(hook, look: look, width: size.width)) {
-            let w = CGFloat(img.width), h = CGFloat(img.height)
+            let (w, h) = fitted(img, in: size)
             out.append(Placed(image: img, frame: CGRect(x: (size.width - w) / 2, y: y(h), width: w, height: h),
                               start: 0, end: min(duration, hookDuration), pop: true, style: hookStyle))
         }
@@ -242,14 +262,14 @@ enum ReelOverlays {
             let start = max(v.start, hookEnd + 0.1, lastEnd + 0.1)
             guard start < duration - 0.5 else { continue }
             let end = min(duration, start + verseDuration)
-            let w = CGFloat(img.width), h = CGFloat(img.height)
+            let (w, h) = fitted(img, in: size)
             out.append(Placed(image: img, frame: CGRect(x: (size.width - w) / 2, y: y(h), width: w, height: h),
                               start: start, end: end, pop: false))
             lastEnd = end
         }
         // The series label sits top right, below the apps' top bar
         if let tag, !tag.isEmpty, let img = cg(tagImage(tag, look: look, width: size.width)) {
-            let w = CGFloat(img.width), h = CGFloat(img.height)
+            let (w, h) = fitted(img, in: size)
             out.append(Placed(image: img, frame: CGRect(x: size.width - w - size.width * 0.04, y: size.height * 0.115, width: w, height: h),
                               start: 0, end: duration, pop: false, still: true))
         }
