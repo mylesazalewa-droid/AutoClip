@@ -72,6 +72,14 @@ struct Clip: Identifiable, Codable {
     /// Stretches (source seconds, [start, end]) shown as the whole wide picture instead of the
     /// close crop, for when the speaker points to the stage screen
     var wide: [[Double]]?
+    /// How far the wide shot zooms in (1 = the whole picture). nil = fit the speaker and screen
+    var wideZoom: Double?
+    /// Where the zoomed wide shot is centred across the picture (0…1). nil = automatic
+    var wideX: Double?
+    /// Wide moments as a split: the speaker on top, the stage screen below
+    var wideSplit: Bool?
+    /// Where the stage screen is in the picture: x, y, width, height (0…1, from the top left)
+    var screenRect: [Double]?
 
     var duration: TimeInterval { endTime - startTime }
 

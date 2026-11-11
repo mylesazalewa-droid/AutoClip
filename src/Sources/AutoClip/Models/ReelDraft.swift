@@ -107,6 +107,14 @@ struct ReelDraft: Identifiable, Codable, Equatable {
     /// Cut to the wide shot when the speaker points to the stage screen (nil = the setting)
     var screenWide: Bool?
     var widensForScreen: Bool { screenWide ?? ScreenCues.onByDefault }
+    /// How screen moments look: nil = the whole stage, "split" = the speaker on top and the screen below
+    var wideStyle: String?
+    /// Wide shot zoom (1 = whole picture … 2). nil = automatic
+    var wideZoom: Double?
+    /// Wide shot position across the picture (0…1). nil = automatic
+    var wideX: Double?
+    /// The stage screen marked by hand: x, y, width, height (0…1). nil = found automatically
+    var screenRect: [Double]?
     /// The caption look with this reel's highlighted words filled in. Bible references are
     /// highlighted too when verse cards are on.
     var styledLook: CaptionLook {
@@ -309,6 +317,10 @@ struct ReelDraft: Identifiable, Codable, Equatable {
                              captionStyleName: "Karaoke", aspectRatio: "9:16", notes: "", thumbnailData: nil)
                 c.sourceVideoPath = piece.sourceVideoPath
                 c.wide = wideWindows(cur.map { ($0.0, $0.1) }, start: start, end: end, split: piece.framing?.mode == "split")
+                if c.wide != nil {
+                    c.wideZoom = wideZoom; c.wideX = wideX; c.screenRect = screenRect
+                    c.wideSplit = wideStyle == "split" ? true : nil
+                }
                 if let f = piece.framing {
                     if f.mode == "fixed" { c.frameX = f.x }
                     if f.mode == "person" { c.trackX = f.x; c.trackT = f.t }
@@ -485,7 +497,7 @@ struct ReelDraft: Identifiable, Codable, Equatable {
         var words: [Word] = []
         var assets: [String: AVURLAsset] = [:]
         // Split-screen clips need the picture twice (top and bottom)
-        let vTrack2 = renderClips.contains { $0.splitX != nil }
+        let vTrack2 = renderClips.contains { $0.splitX != nil || $0.wideSplit == true }
             ? comp.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) : nil
         for clip in renderClips {
             let asset = assets[clip.sourceVideoPath] ?? AVURLAsset(url: URL(fileURLWithPath: clip.sourceVideoPath))
@@ -495,7 +507,7 @@ struct ReelDraft: Identifiable, Codable, Equatable {
             let range = CMTimeRange(start: CMTime(seconds: clip.startTime, preferredTimescale: 600),
                                     end: CMTime(seconds: clip.endTime, preferredTimescale: 600))
             guard (try? vTrack.insertTimeRange(range, of: sv, at: at)) != nil else { continue }
-            if clip.splitX != nil { try? vTrack2?.insertTimeRange(range, of: sv, at: at) }
+            if clip.splitX != nil || clip.wideSplit == true { try? vTrack2?.insertTimeRange(range, of: sv, at: at) }
             if let sa = try? await asset.loadTracks(withMediaType: .audio).first {
                 try? aTrack.insertTimeRange(range, of: sa, at: at)
             }

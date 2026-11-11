@@ -872,6 +872,7 @@ struct ReelEditorView: View {
         .onChange(of: draft.pieces) { _ in reloadToken += 1 }
         .onChange(of: draft.tightenPauses) { _ in reloadToken += 1 }
         .onChange(of: draft.screenWide) { _ in reloadToken += 1 }
+        .onChange(of: WideKey(draft)) { _ in reloadToken += 1 }
         .onChange(of: draft.hookText) { _ in rebuildOverlays() }
         .onChange(of: draft.verseCards) { _ in rebuildOverlays() }
         .onChange(of: draft.look) { _ in rebuildOverlays() }
@@ -1521,7 +1522,7 @@ struct ReelEditorView: View {
         .padding(12).background(Theme.ink.opacity(0.04)).cornerRadius(10)
     }
 
-    enum ApplyPart: CaseIterable { case captions, hookStyle, motion, size, audio, toggles }
+    enum ApplyPart: CaseIterable { case captions, hookStyle, motion, size, audio, toggles, wideShot }
 
     private var otherDraftCount: Int {
         guard let recordID, let rec = AutoReelsStore.shared.reels.first(where: { $0.id == recordID }) else { return 0 }
@@ -1543,6 +1544,9 @@ struct ReelEditorView: View {
                 case .size: o.formatRaw = draft.formatRaw
                 case .audio: o.audio = draft.audio
                 case .toggles: o.verseCards = draft.verseCards; o.tightenPauses = draft.tightenPauses
+                case .wideShot:
+                    o.screenWide = draft.screenWide; o.wideStyle = draft.wideStyle
+                    o.wideZoom = draft.wideZoom; o.wideX = draft.wideX; o.screenRect = draft.screenRect
                 }
             }
             if o != other {
@@ -1761,7 +1765,7 @@ struct ReelEditorView: View {
                 Button { draft.pieces.remove(at: i) } label: { Image(systemName: "trash") }
                     .buttonStyle(.plain).foregroundColor(Theme.danger).help("Remove this moment")
             }
-            framingRow(i)
+            framingRow(i, wideControls: i == 0)
             neighbourButton(i, before: true)
             ForEach(Array(piece.sentences.enumerated()), id: \.element.id) { j, s in
                 // A sentence with every word cut has nothing to adjust, so the row goes to the next one that plays
@@ -1882,7 +1886,7 @@ struct ReelEditorView: View {
     }
 
     /// How the vertical crop follows the speaker in this clip.
-    private func framingRow(_ i: Int) -> some View {
+    private func framingRow(_ i: Int, wideControls: Bool = true) -> some View {
         let f = draft.pieces[i].framing ?? ReelDraft.Framing(mode: "auto")
         let mode = Binding<String>(get: { f.mode }, set: { m in
             var nf = draft.pieces[i].framing ?? ReelDraft.Framing(mode: m)
@@ -1904,6 +1908,10 @@ struct ReelEditorView: View {
                 }
                 .toggleStyle(.checkbox)
                 .help("On lines like “look at the screen”, the clip cuts to the whole picture with bars above and below, then back to the close shot. Use the small rectangle on any sentence to choose by hand.")
+                if draft.widensForScreen && wideControls {
+                    WideShotControls(draft: $draft, gold: gold,
+                                     applyToAll: recordID != nil && otherDraftCount > 0 ? { applyToAll([.wideShot]) } : nil)
+                }
             }
             if f.mode == "careful" {
                 Text("Checks this clip twice as often and catches smaller faces. Use it where the frame drifted off the person.")
@@ -2163,4 +2171,11 @@ enum ClipStrength {
         let fit = (20...75).contains(d.duration) ? 100 : 70
         return (hook * 5 + pace * 3 + fit * 2) / 10
     }
+}
+
+
+/// The wide-shot settings that change the preview.
+private struct WideKey: Equatable {
+    var style: String?, zoom: Double?, x: Double?, screen: [Double]?
+    init(_ d: ReelDraft) { style = d.wideStyle; zoom = d.wideZoom; x = d.wideX; screen = d.screenRect }
 }
