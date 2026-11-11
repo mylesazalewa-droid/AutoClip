@@ -24,6 +24,8 @@ final class Updater: ObservableObject {
     @Published var showSheet = false
 
     private static let autoKey = "updates_auto", lastKey = "updates_last"
+    /// Marks the update dialog's window, so it doesn't count as "something being edited"
+    static let sheetID = "autoclip.update"
     var automatic: Bool {
         get { UserDefaults.standard.object(forKey: Self.autoKey) as? Bool ?? true }
         set { objectWillChange.send(); UserDefaults.standard.set(newValue, forKey: Self.autoKey) }
@@ -87,7 +89,12 @@ final class Updater: ObservableObject {
     var blocker: String? {
         if AutoReelsStore.shared.activeJobs.contains(where: { !$0.isFinished }) { return "Wait for the clips being made to finish." }
         if AutoImport.shared.status != nil { return "Wait for Autopilot to finish what it's doing." }
-        if NSApp.windows.contains(where: { $0.attachedSheet != nil && $0.isVisible && $0.attachedSheet?.title != "Update" }) {
+        // Any open sheet except this update dialog (and the first-run setup screen, which has nothing to save)
+        let mine: Set<String> = [Self.sheetID, "autoclip.setup"]
+        if NSApp.windows.contains(where: { w in
+            guard w.isVisible, let sheet = w.attachedSheet else { return false }
+            return !mine.contains(sheet.identifier?.rawValue ?? "")
+        }) {
             return "Save and close anything you're editing first."
         }
         return nil

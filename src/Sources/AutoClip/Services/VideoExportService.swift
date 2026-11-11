@@ -1919,6 +1919,7 @@ class VideoExportService {
 
         // ── Pass 2b: audio clean-up + background music ───────────────────────
         var audioMix: AVAudioMix? = nil
+        var musicNote: String?
         var cleanedFile: URL? = nil
         defer { if let cleanedFile { try? FileManager.default.removeItem(at: cleanedFile) } }
         if let audio = options.audio, audio.isActive {
@@ -1940,10 +1941,14 @@ class VideoExportService {
                     print("Audio clean-up skipped: \(error.localizedDescription)")
                 }
             }
-            if let music = audio.musicPath, FileManager.default.fileExists(atPath: music) {
-                audioMix = try? await AudioCleaner.addMusic(URL(fileURLWithPath: music), to: composition,
-                                                            duration: reelDuration, words: remappedWords,
-                                                            volume: audio.musicVolume)
+            if audio.musicPath != nil {
+                if let music = AudioSettings.readableMusic(audio.musicPath) {
+                    audioMix = try? await AudioCleaner.addMusic(music, to: composition,
+                                                                duration: reelDuration, words: remappedWords,
+                                                                volume: audio.musicVolume)
+                } else {
+                    musicNote = "Exported without music: AutoClip couldn't open “\(audio.musicName ?? "the song")”. Choose it again under Audio."
+                }
             }
         }
 
@@ -1971,7 +1976,7 @@ class VideoExportService {
             preset = bestExportPreset(for: composition, sourceAsset: primaryAsset)
         }
 
-        guard let session = AVAssetExportSession(asset: composition, presetName: preset) else {
+        guard var session = AVAssetExportSession(asset: composition, presetName: preset) else {
             throw ExportError.exportFailed("Could not create export session")
         }
         let workURL = Self.stagingURL(for: outputURL)
@@ -1982,13 +1987,35 @@ class VideoExportService {
         if let vc = videoComposition { session.videoComposition = vc }
         if let audioMix { session.audioMix = audioMix }
 
-        let timer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { _ in
-            let p = 0.65 + Double(session.progress) * 0.35
-            DispatchQueue.main.async { progress(p, "Exporting clip...") }
+        func run(_ session: AVAssetExportSession) async {
+            let timer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { _ in
+                let p = 0.65 + Double(session.progress) * 0.35
+                DispatchQueue.main.async { progress(p, "Exporting clip...") }
+            }
+            RunLoop.main.add(timer, forMode: .common)
+            await session.export()
+            timer.invalidate()
         }
-        RunLoop.main.add(timer, forMode: .common)
-        await session.export()
-        timer.invalidate()
+        await run(session)
+
+        // If the music made it stop, take the music out and try once more, so there's still a clip
+        if session.status == .failed, let mix = audioMix, let id = mix.inputParameters.first?.trackID,
+           let musicTrack = composition.track(withTrackID: id) {
+            composition.removeTrack(musicTrack)
+            try? FileManager.default.removeItem(at: workURL)
+            if let again = AVAssetExportSession(asset: composition, presetName: preset) {
+                again.outputURL = workURL
+                again.outputFileType = .mp4
+                again.timeRange = session.timeRange
+                again.videoComposition = session.videoComposition
+                await MainActor.run { progress(0.65, "Trying again without the music…") }
+                await run(again)
+                if again.status == .completed {
+                    musicNote = "Exported without music: the song stopped the export (\(session.error?.localizedDescription ?? "unknown")). Try a different song, or an .m4a or .wav copy of it."
+                    session = again
+                }
+            }
+        }
 
         if session.status == .cancelled {
             throw ExportError.exportFailed("Export failed: video format not supported. Try 'Original' format or ensure the video is H.264 (MP4).")
@@ -1996,7 +2023,8 @@ class VideoExportService {
         if let err = session.error { throw ExportError.exportFailed(err.localizedDescription) }
         await MainActor.run { progress(0.99, "Saving…") }
         try Self.deliver(workURL, to: outputURL)
-        await MainActor.run { progress(1.0, "Done!") }
+        if let musicNote { await MainActor.run { ExportNotes.shared.add(musicNote) } }
+        await MainActor.run { progress(1.0, musicNote == nil ? "Done!" : "Done, without music") }
     }
 }
 

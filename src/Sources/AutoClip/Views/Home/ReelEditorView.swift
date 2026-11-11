@@ -1739,7 +1739,7 @@ struct ReelEditorView: View {
         panel.allowedContentTypes = [.audio, .mpeg4Audio, .mp3, .wav, .aiff]
         panel.canChooseDirectories = false
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        audio.wrappedValue.musicPath = url.path
+        audio.wrappedValue.musicPath = AudioSettings.keepCopy(of: url)
     }
 
     // MARK: Clips

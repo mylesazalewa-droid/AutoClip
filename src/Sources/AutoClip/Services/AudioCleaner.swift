@@ -24,6 +24,37 @@ struct AudioSettings: Codable, Equatable {
     func save() {
         if let data = try? JSONEncoder().encode(self) { UserDefaults.standard.set(data, forKey: Self.key) }
     }
+
+    /// AutoClip's own copy of the music, so exports never depend on permission to read
+    /// Downloads or Desktop (which macOS can withdraw when AutoClip updates).
+    static var musicFolder: URL {
+        URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Documents/AutoClip/Music", isDirectory: true)
+    }
+
+    /// Copies a song into AutoClip's music folder and returns the copy's path (or the original if copying fails).
+    static func keepCopy(of url: URL) -> String {
+        let fm = FileManager.default
+        if url.path.hasPrefix(musicFolder.path + "/") { return url.path }
+        try? fm.createDirectory(at: musicFolder, withIntermediateDirectories: true)
+        let dest = musicFolder.appendingPathComponent(url.lastPathComponent)
+        if fm.fileExists(atPath: dest.path),
+           (try? fm.attributesOfItem(atPath: dest.path)[.size] as? Int) == (try? fm.attributesOfItem(atPath: url.path)[.size] as? Int) {
+            return dest.path
+        }
+        try? fm.removeItem(at: dest)
+        return (try? fm.copyItem(at: url, to: dest)) != nil ? dest.path : url.path
+    }
+
+    /// The music to use, only if it can really be read right now. Moves it into AutoClip's
+    /// folder on the way when it still lives elsewhere.
+    static func readableMusic(_ path: String?) -> URL? {
+        guard let path else { return nil }
+        guard let h = FileHandle(forReadingAtPath: path) else { return nil }
+        let ok = ((try? h.read(upToCount: 4096))?.count ?? 0) > 0
+        try? h.close()
+        guard ok else { return nil }
+        return URL(fileURLWithPath: keepCopy(of: URL(fileURLWithPath: path)))
+    }
 }
 
 /// Offline audio clean-up for exports: high-pass → voice isolation → compressor,

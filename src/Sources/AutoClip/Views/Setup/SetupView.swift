@@ -106,6 +106,7 @@ struct SetupView: View {
         }
         .frame(width: 560, height: 500)
         .background(Theme.bg)
+        .background(WindowTag(id: "autoclip.setup"))
     }
 
     func modelFeature(icon: String, text: String) -> some View {

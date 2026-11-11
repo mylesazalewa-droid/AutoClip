@@ -50,6 +50,7 @@ final class SetupCheck: ObservableObject {
         ("export", "Making videos"),
         ("youtube", "YouTube links"),
         ("ffmpeg", "Joining YouTube video and sound"),
+        ("music", "Background music"),
         ("ai", "AI writing")
     ]
 
@@ -82,6 +83,7 @@ final class SetupCheck: ObservableObject {
             await check("ffmpeg") { _ in await Task.detached {
                 Self.toolCheck(path: YTDLP.ffmpegPath(), name: "ffmpeg",
                                need: "Without it, YouTube downloads can come out with no sound.") }.value }
+            await check("music") { _ in Self.musicCheck() }
             await check("ai") { _ in await Self.aiCheck() }
             running = false
             lastRun = Date()
@@ -225,6 +227,19 @@ final class SetupCheck: ObservableObject {
         }
         let version = name == "ffmpeg" ? (first.split(separator: " ").dropFirst(2).first.map(String.init) ?? "") : first
         return (.good, "Installed\(version.isEmpty ? "" : " (\(version))")", nil)
+    }
+
+    private static func musicCheck() -> (State, String, Fix?) {
+        guard let a = AudioSettings.load(), let path = a.musicPath else { return (.good, "No song chosen", nil) }
+        let name = a.musicName ?? "the song"
+        guard let url = AudioSettings.readableMusic(path) else {
+            return (.problem, "AutoClip can't open “\(name)”, so clips would export without it. Choose the song again in a clip's Audio tab.", nil)
+        }
+        if url.path != path {
+            var b = a; b.musicPath = url.path; b.save()
+            return (.good, "“\(name)” is ready. A copy now lives in Documents → AutoClip → Music.", nil)
+        }
+        return (.good, "“\(name)” is ready", nil)
     }
 
     /// Only whether a key is saved. It's never read out, and nothing is sent.

@@ -168,6 +168,22 @@ struct UpdateSheet: View {
             }
         }
         .padding(24).frame(width: 480).background(Theme.bg)
+        .background(WindowTag(id: Updater.sheetID))
+        // What's open elsewhere can change while this is up (and this window is named a moment after it opens)
+        .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { _ in updater.objectWillChange.send() }
+    }
+}
+
+/// Names the window a view sits in, so other code can tell it apart.
+struct WindowTag: NSViewRepresentable {
+    let id: String
+    func makeNSView(context: Context) -> NSView {
+        let v = NSView()
+        DispatchQueue.main.async { v.window?.identifier = NSUserInterfaceItemIdentifier(id) }
+        return v
+    }
+    func updateNSView(_ v: NSView, context: Context) {
+        if v.window?.identifier?.rawValue != id { v.window?.identifier = NSUserInterfaceItemIdentifier(id) }
     }
 }
 
