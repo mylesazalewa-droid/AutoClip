@@ -566,154 +566,24 @@ struct YouTubeURLSheet: View {
         .background(Theme.surface)
     }
 
-    private func ytDlpPath() -> String? {
-        // Check bundled yt-dlp first (copied from 1.4.1 resources)
-        if let bundled = Bundle.main.path(forResource: "yt-dlp", ofType: nil),
-           FileManager.default.fileExists(atPath: bundled) {
-            return bundled
-        }
-        // Also check next to the binary (for the .app bundle layout)
-        let execDir = URL(fileURLWithPath: ProcessInfo.processInfo.arguments[0])
-            .deletingLastPathComponent().path
-        let siblingPath = execDir + "/../Resources/yt-dlp"
-        if FileManager.default.fileExists(atPath: siblingPath) { return siblingPath }
-
-        let candidates = [
-            "/opt/homebrew/bin/yt-dlp",
-            "/usr/local/bin/yt-dlp",
-            "/opt/homebrew/opt/yt-dlp/bin/yt-dlp",
-            "/usr/bin/yt-dlp"
-        ]
-        for path in candidates {
-            if FileManager.default.fileExists(atPath: path) { return path }
-        }
-        let which = Process()
-        which.executableURL = URL(fileURLWithPath: "/usr/bin/which")
-        which.arguments = ["yt-dlp"]
-        let pipe = Pipe()
-        which.standardOutput = pipe
-        which.standardError = Pipe()
-        try? which.run()
-        which.waitUntilExit()
-        let out = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return out.isEmpty ? nil : out
-    }
-
     func startDownload() {
         guard !url.isEmpty else { return }
         error = nil
-
-        guard let ytdlp = ytDlpPath() else {
-            error = "yt-dlp is not installed.\n\nInstall it with:\n  brew install yt-dlp\n\nThen try again."
-            return
-        }
-
         isDownloading = true
         downloadProgress = 0
         statusText = "Starting download…"
-
-        Task.detached(priority: .userInitiated) {
-            let videosDir = URL(fileURLWithPath: NSHomeDirectory())
-                .appendingPathComponent("Documents/AutoClip/Videos")
-            try? FileManager.default.createDirectory(at: videosDir, withIntermediateDirectories: true)
-
-            // Use a temp file to capture the output path
-            let outTemplate = videosDir.appendingPathComponent("%(title)s.%(ext)s").path
-
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: ytdlp)
-            process.arguments = YTDLP.arguments(url: url, outTemplate: outTemplate)
-            process.environment = YTDLP.environment
-            process.currentDirectoryURL = videosDir
-
-            let outPipe = Pipe()
-            let errPipe = Pipe()
-            process.standardOutput = outPipe
-            process.standardError = errPipe
-
-            // Collect stderr for error reporting
-            var stderrBuffer = ""
-
-            errPipe.fileHandleForReading.readabilityHandler = { handle in
-                guard let line = String(data: handle.availableData, encoding: .utf8) else { return }
-                stderrBuffer += line
-                // Parse progress percentage
-                if line.contains("%") {
-                    let parts = line.split(separator: "%")
-                    if let numStr = parts.first?.split(separator: " ").compactMap({ Double($0) }).last {
-                        DispatchQueue.main.async { downloadProgress = numStr / 100.0 }
-                    }
-                }
-                let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !trimmed.isEmpty {
-                    DispatchQueue.main.async { statusText = String(trimmed.prefix(100)) }
-                }
-            }
-
+        let link = url
+        Task {
             do {
-                try process.run()
-                process.waitUntilExit()
-                errPipe.fileHandleForReading.readabilityHandler = nil
-
-                let exitCode = process.terminationStatus
-
-                // Read stdout (filepath printed by --print after_move:filepath)
-                let outData = outPipe.fileHandleForReading.readDataToEndOfFile()
-                let printedPath = String(data: outData, encoding: .utf8)?
-                    .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-
-                guard exitCode == 0 else {
-                    let detail = stderrBuffer.trimmingCharacters(in: .whitespacesAndNewlines)
-                    await MainActor.run {
-                        isDownloading = false
-                        error = detail.isEmpty
-                            ? "Download failed (exit code \(exitCode)). Check that the URL is valid and public."
-                            : String(detail.suffix(300))
-                    }
-                    return
+                let videoURL = try await YTDLP.download(link) { p, msg in
+                    DispatchQueue.main.async { downloadProgress = p; statusText = msg }
                 }
-
-                // Resolve the file
-                var fileURL: URL?
-                if !printedPath.isEmpty && FileManager.default.fileExists(atPath: printedPath) {
-                    fileURL = URL(fileURLWithPath: printedPath)
-                } else {
-                    let files = (try? FileManager.default.contentsOfDirectory(
-                        at: videosDir,
-                        includingPropertiesForKeys: [.creationDateKey],
-                        options: .skipsHiddenFiles)) ?? []
-                    fileURL = files
-                        .filter { $0.pathExtension.lowercased() == "mp4" && !YTDLP.isPartialStream($0) }
-                        .sorted {
-                            let da = (try? $0.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? .distantPast
-                            let db = (try? $1.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? .distantPast
-                            return da > db
-                        }
-                        .first
-                }
-
-                guard let videoURL = fileURL else {
-                    await MainActor.run {
-                        isDownloading = false
-                        error = "Download succeeded but couldn't find the output file. Check ~/Documents/AutoClip/Videos."
-                    }
-                    return
-                }
-
-                // Hand off to AppState which runs the full pipeline:
-                // copy → transcribe → generate clips
-                await MainActor.run {
-                    isDownloading = false
-                    dismiss()
-                    AppState.shared.importVideo(videoURL)
-                }
-
+                isDownloading = false
+                dismiss()
+                AppState.shared.importVideo(videoURL)
             } catch {
-                await MainActor.run {
-                    isDownloading = false
-                    self.error = "Could not launch yt-dlp at \(ytdlp):\n\(error.localizedDescription)"
-                }
+                isDownloading = false
+                self.error = error.localizedDescription
             }
         }
     }

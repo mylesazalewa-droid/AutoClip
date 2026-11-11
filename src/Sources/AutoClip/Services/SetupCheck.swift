@@ -24,6 +24,7 @@ final class SetupCheck: ObservableObject {
         case openAISettings
         case copy(String)
         case openURL(String)
+        case getYouTubeTools
     }
 
     @Published var items: [Item] = []
@@ -49,7 +50,7 @@ final class SetupCheck: ObservableObject {
         ("listen", "Turning speech into text"),
         ("export", "Making videos"),
         ("youtube", "YouTube links"),
-        ("ffmpeg", "Joining YouTube video and sound"),
+        ("ffmpeg", "ffmpeg (optional)"),
         ("music", "Background music"),
         ("ai", "AI writing")
     ]
@@ -77,12 +78,11 @@ final class SetupCheck: ObservableObject {
                 return await Self.listenCheck()
             }
             await check("export") { _ in await Self.exportCheck() }
-            await check("youtube") { _ in await Task.detached {
-                Self.toolCheck(path: YTDLP.executablePath(), name: "yt-dlp",
-                               need: "Needed only for pasting YouTube links. Videos from your Mac work without it.") }.value }
+            await check("youtube") { _ in await Self.youtubeCheck() }
             await check("ffmpeg") { _ in await Task.detached {
-                Self.toolCheck(path: YTDLP.ffmpegPath(), name: "ffmpeg",
-                               need: "Without it, YouTube downloads can come out with no sound.") }.value }
+                YTDLP.ffmpegPath() == nil
+                    ? (.good, "Not installed, and not needed: AutoClip puts YouTube video and sound together itself.", nil)
+                    : Self.toolCheck(path: YTDLP.ffmpegPath(), name: "ffmpeg", need: "") }.value }
             await check("music") { _ in Self.musicCheck() }
             await check("ai") { _ in await Self.aiCheck() }
             running = false
@@ -227,6 +227,17 @@ final class SetupCheck: ObservableObject {
         }
         let version = name == "ffmpeg" ? (first.split(separator: " ").dropFirst(2).first.map(String.init) ?? "") : first
         return (.good, "Installed\(version.isEmpty ? "" : " (\(version))")", nil)
+    }
+
+    private static func youtubeCheck() async -> (State, String, Fix?) {
+        guard YouTubeTools.installed else {
+            return (.warning, "AutoClip gets its own YouTube downloader the first time you paste a link (about 80 MB). You can get it now.", .getYouTubeTools)
+        }
+        let (yt, deno) = await Task.detached { (YouTubeTools.version(of: YouTubeTools.ytdlp), YouTubeTools.version(of: YouTubeTools.deno)) }.value
+        guard let yt, let deno else {
+            return (.problem, "AutoClip's YouTube downloader is there but won't start. Get it again.", .getYouTubeTools)
+        }
+        return (.good, "Ready (downloader \(yt), helper \(deno)). It updates itself.", nil)
     }
 
     private static func musicCheck() -> (State, String, Fix?) {

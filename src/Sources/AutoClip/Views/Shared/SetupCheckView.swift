@@ -8,6 +8,8 @@ struct SetupCheckView: View {
     @State private var downloading = false
     @State private var downloadNote: String?
     @State private var copied: String?
+    @State private var gettingTools = false
+    @State private var toolsNote: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -90,9 +92,30 @@ struct SetupCheckView: View {
                 }
                 .controlSize(.small)
             }
+        case .getYouTubeTools:
+            HStack(spacing: 8) {
+                Button(gettingTools ? "Getting it…" : "Get the YouTube downloader") { getTools() }
+                    .controlSize(.small).disabled(gettingTools)
+                if let toolsNote { Text(toolsNote).font(.ui(size: 11)).foregroundColor(.secondary) }
+            }
         case .openURL(let url):
             Button("Open System Settings") { if let u = URL(string: url) { NSWorkspace.shared.open(u) } }
                 .controlSize(.small)
+        }
+    }
+
+    private func getTools() {
+        gettingTools = true
+        toolsNote = nil
+        Task {
+            do {
+                try await YouTubeTools.shared.ensure(force: true) { msg in Task { @MainActor in toolsNote = msg } }
+                gettingTools = false; toolsNote = nil
+                check.run()
+            } catch {
+                gettingTools = false
+                toolsNote = error.localizedDescription
+            }
         }
     }
 

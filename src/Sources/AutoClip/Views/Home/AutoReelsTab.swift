@@ -2210,10 +2210,6 @@ private extension AutoReelsTab {
     private func startYouTubeDownload() {
         let rawURL = youtubeURL.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !rawURL.isEmpty else { return }
-        guard let ytdlp = ytDlpPath() else {
-            downloadError = "yt-dlp not found.\n\nInstall with: brew install yt-dlp"
-            return
-        }
         downloadError = nil
         let outDir = Self.defaultOutputDir  // folder is chosen when a reel is exported
 
@@ -2236,54 +2232,10 @@ private extension AutoReelsTab {
         report(0, "Starting download…")
 
         let task = Task.detached(priority: .userInitiated) {
-            let videosDir = URL(fileURLWithPath: NSHomeDirectory())
-                .appendingPathComponent("Documents/AutoClip/Videos")
-            try? FileManager.default.createDirectory(at: videosDir, withIntermediateDirectories: true)
-            let outTemplate = videosDir.appendingPathComponent("%(title)s.%(ext)s").path
-
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: ytdlp)
-            process.arguments = YTDLP.arguments(url: rawURL, outTemplate: outTemplate)
-            process.environment = YTDLP.environment
-            process.currentDirectoryURL = videosDir
-
-            let outPipe = Pipe(); let errPipe = Pipe()
-            process.standardOutput = outPipe; process.standardError = errPipe
-            var stderrBuf = ""
-
-            errPipe.fileHandleForReading.readabilityHandler = { h in
-                guard let line = String(data: h.availableData, encoding: .utf8), !line.isEmpty else { return }
-                stderrBuf += line
-                if line.contains("%"),
-                   let n = line.split(separator: "%").first?.split(separator: " ").compactMap({ Double($0) }).last {
-                    // Download is the first 10% of the job; the pipeline takes it from there
-                    report(min(0.1, n / 1000.0), "Downloading video: \(Int(n))%")
-                } else if line.contains("Merger") {
-                    report(0.1, "Combining video and audio…")
-                }
-            }
-
             do {
-                try await withTaskCancellationHandler {
-                    try process.run(); process.waitUntilExit()
-                } onCancel: { process.terminate() }
-                errPipe.fileHandleForReading.readabilityHandler = nil
+                // Download is the first 10% of the job; the pipeline takes it from there
+                let videoURL = try await YTDLP.download(rawURL) { p, msg in report(min(0.1, p / 10), msg) }
                 if Task.isCancelled { return }
-
-                guard process.terminationStatus == 0 else {
-                    let detail = stderrBuf.trimmingCharacters(in: .whitespacesAndNewlines)
-                    report(0, "Download failed", error: detail.isEmpty ? "Download failed (exit \(process.terminationStatus))" : String(detail.suffix(250)))
-                    return
-                }
-
-                let printed = String(data: outPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
-                    .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                guard !printed.isEmpty, FileManager.default.fileExists(atPath: printed),
-                      !YTDLP.isPartialStream(URL(fileURLWithPath: printed)) else {
-                    report(0, "Download failed", error: "Download finished but the video and audio couldn't be combined. Make sure ffmpeg is installed (brew install ffmpeg).")
-                    return
-                }
-                let videoURL = URL(fileURLWithPath: printed)
 
                 var ytParams = AutoReelJobParams(videoURL: videoURL, formatRaw: fmt.rawValue,
                     captions: captions, captionStyleIndex: styleIdx, targetDuration: dur,
@@ -2416,23 +2368,6 @@ private extension AutoReelsTab {
         previewPlayer?.pause(); previewPlayer = nil
         previewURL = nil; showingPreviewFor = nil
         previewCutPoints = []
-    }
-
-    private func ytDlpPath() -> String? {
-        if let b = Bundle.main.path(forResource: "yt-dlp", ofType: nil),
-           FileManager.default.fileExists(atPath: b) { return b }
-        let execDir = URL(fileURLWithPath: ProcessInfo.processInfo.arguments[0]).deletingLastPathComponent().path
-        let sibling = execDir + "/../Resources/yt-dlp"
-        if FileManager.default.fileExists(atPath: sibling) { return sibling }
-        for p in ["/opt/homebrew/bin/yt-dlp", "/usr/local/bin/yt-dlp", "/opt/homebrew/opt/yt-dlp/bin/yt-dlp"] {
-            if FileManager.default.fileExists(atPath: p) { return p }
-        }
-        let w = Process(); w.executableURL = URL(fileURLWithPath: "/usr/bin/which"); w.arguments = ["yt-dlp"]
-        let p = Pipe(); w.standardOutput = p; w.standardError = Pipe()
-        try? w.run(); w.waitUntilExit()
-        let out = String(data: p.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return out.isEmpty ? nil : out
     }
 
     private func fmtLabel(_ f: VideoExportService.ExportFormat) -> String {

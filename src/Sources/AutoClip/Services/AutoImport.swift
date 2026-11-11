@@ -125,7 +125,7 @@ final class AutoImport: ObservableObject {
 
     /// The newest uploads on the channel: (id, title), newest first.
     nonisolated static func latest(channel: String, count: Int = 5) async throws -> [(id: String, title: String)] {
-        guard let ytdlp = YTDLP.executablePath() else { throw YTDLP.Failure(message: "yt-dlp not found. Install with: brew install yt-dlp") }
+        let ytdlp = try await YTDLP.ready()
         var url = channel.trimmingCharacters(in: .whitespacesAndNewlines)
         // A channel's home page lists shelves, not uploads
         if (url.contains("/@") || url.contains("/channel/") || url.contains("/c/")) && !url.contains("/videos")
