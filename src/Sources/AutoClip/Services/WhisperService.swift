@@ -32,11 +32,25 @@ class WhisperService: ObservableObject {
         return "openai_whisper-\(size).en"
     }
 
-    var modelExists: Bool {
-        let modelPath = modelDir
-            .appendingPathComponent("models/argmaxinc/whisperkit-coreml/\(selectedVariant)")
-        return FileManager.default.fileExists(atPath: modelPath.path)
+    /// Where the model's files are. Older versions saved one "models" folder too deep, so both places are checked.
+    private func modelFolder(_ variant: String) -> URL? {
+        let tail = "argmaxinc/whisperkit-coreml/\(variant)"
+        let places = [
+            modelDir.appendingPathComponent("models/\(tail)"),
+            modelDir.appendingPathComponent("models/models/\(tail)"),
+            modelDir.appendingPathComponent(tail)
+        ]
+        return places.first { Self.isComplete($0) }
     }
+
+    /// A model folder is usable once its three parts are there (a stopped download can leave some out).
+    private static func isComplete(_ url: URL) -> Bool {
+        ["AudioEncoder.mlmodelc", "TextDecoder.mlmodelc", "MelSpectrogram.mlmodelc"].allSatisfy {
+            FileManager.default.fileExists(atPath: url.appendingPathComponent($0).path)
+        }
+    }
+
+    var modelExists: Bool { modelFolder(selectedVariant) != nil }
 
     func loadModel(progress: ((Double, String) -> Void)? = nil) async throws {
         let variant = selectedVariant
@@ -46,9 +60,14 @@ class WhisperService: ObservableObject {
             statusMessage = "Loading model..."
         }
 
+        guard let folder = modelFolder(variant) else {
+            await MainActor.run { isLoading = false; statusMessage = "" }
+            throw NSError(domain: "WhisperService", code: 2, userInfo: [NSLocalizedDescriptionKey:
+                "The speech model didn't finish downloading. Check the internet connection and press Download again."])
+        }
         let config = WhisperKitConfig(
             model: variant,
-            modelFolder: modelDir.appendingPathComponent("models/argmaxinc/whisperkit-coreml/\(variant)").path,
+            modelFolder: folder.path,
             verbose: false
         )
 
@@ -75,7 +94,7 @@ class WhisperService: ObservableObject {
 
         _ = try await WhisperKit.download(
             variant: variant,
-            downloadBase: modelDir.appendingPathComponent("models"),
+            downloadBase: modelDir,
             useBackgroundSession: false
         ) { prog in
             DispatchQueue.main.async {

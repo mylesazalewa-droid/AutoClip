@@ -30,11 +30,11 @@ struct SetupView: View {
 
             // AI Model setup
             VStack(spacing: 16) {
-                Text("Download AI Transcription Model")
+                Text("Download the speech model")
                     .font(.ui(size: 18, weight: .semibold))
                     .foregroundColor(Theme.ink)
 
-                Text("AutoClip uses on-device AI to transcribe and analyze your videos.\nNo internet connection or API keys required after setup.")
+                Text("AutoClip turns speech into text right on this Mac, so your sermon audio never leaves it.\nWriting titles, captions and graphics uses online AI, which gets the text only.")
                     .font(.ui(size: 14))
                     .foregroundColor(Theme.ink.opacity(0.55))
                     .multilineTextAlignment(.center)
@@ -42,9 +42,9 @@ struct SetupView: View {
 
                 // Model info
                 HStack(spacing: 20) {
-                    modelFeature(icon: "cpu", text: "On-device")
-                    modelFeature(icon: "lock.fill", text: "Private")
-                    modelFeature(icon: "wifi.slash", text: "Offline")
+                    modelFeature(icon: "cpu", text: "On this Mac")
+                    modelFeature(icon: "lock.fill", text: "Audio stays here")
+                    modelFeature(icon: "wifi.slash", text: "Works offline")
                 }
 
                 // Model size info
@@ -86,13 +86,18 @@ struct SetupView: View {
                     }
                     .buttonStyle(.plain)
 
-                    if SampleSermon.available {
-                        Button("See a finished example first") {
-                            AppState.shared.showOnboarding = false
-                            SampleSermon.open()
+                    HStack(spacing: 18) {
+                        if SampleSermon.available {
+                            Button("See a finished example first") {
+                                AppState.shared.showOnboarding = false
+                                SampleSermon.open()
+                            }
                         }
-                        .buttonStyle(.plain).font(.ui(size: 13)).foregroundColor(Theme.sand)
+                        Button("Not now") { AppState.shared.showOnboarding = false }
+                            .help("Close this. AutoClip downloads the model when you make your first clips.")
+                        Button("Quit AutoClip") { NSApp.terminate(nil) }
                     }
+                    .buttonStyle(.plain).font(.ui(size: 13)).foregroundColor(Theme.sand)
                 }
             }
             .padding(.horizontal, 40)
