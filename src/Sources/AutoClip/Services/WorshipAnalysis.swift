@@ -136,7 +136,7 @@ struct WorshipCoach: Codable, Equatable {
 
 enum WorshipStore {
     static var dir: URL {
-        URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Documents/AutoClip/Worship")
+        AppPaths.folder("Worship")
     }
     private static func file(for path: String) -> URL {
         let name = URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent.replacingOccurrences(of: "/", with: "-")

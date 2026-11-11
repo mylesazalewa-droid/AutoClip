@@ -13,7 +13,7 @@ enum SermonFinder {
     static let minimumService: Double = 30 * 60
 
     private static var file: URL {
-        URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Documents/AutoClip/sermon-ranges.json")
+        AppPaths.folder("sermon-ranges.json")
     }
     private static let lock = NSLock()
 

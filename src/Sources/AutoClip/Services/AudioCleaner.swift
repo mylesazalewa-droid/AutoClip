@@ -28,7 +28,7 @@ struct AudioSettings: Codable, Equatable {
     /// AutoClip's own copy of the music, so exports never depend on permission to read
     /// Downloads or Desktop (which macOS can withdraw when AutoClip updates).
     static var musicFolder: URL {
-        URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Documents/AutoClip/Music", isDirectory: true)
+        AppPaths.folder("Music")
     }
 
     /// Copies a song into AutoClip's music folder and returns the copy's path (or the original if copying fails).

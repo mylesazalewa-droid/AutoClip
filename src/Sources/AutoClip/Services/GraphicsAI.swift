@@ -88,7 +88,7 @@ enum GraphicsAI {
     }
 
     static var folder: URL {
-        URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Documents/AutoClip/Graphics Art")
+        AppPaths.folder("Graphics Art")
     }
 
     static func save(_ data: Data) throws -> String {

@@ -531,7 +531,7 @@ final class ShortDoctorModel: ObservableObject {
     @Published var error: String?
     private var job: Task<Void, Never>?
 
-    private var dir: URL { URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Documents/AutoClip/Shorts") }
+    private var dir: URL { AppPaths.folder("Shorts") }
     private func file(_ path: String) -> URL {
         let name = URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent.replacingOccurrences(of: "/", with: "-")
         return dir.appendingPathComponent(String(name.prefix(120)) + ".json")

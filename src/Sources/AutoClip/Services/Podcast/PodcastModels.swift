@@ -250,7 +250,7 @@ final class PodcastStore: ObservableObject {
     func forgetWords(_ e: PodcastEpisode) { wordCache[e.soundPath] = nil }
 
     nonisolated static var dir: URL {
-        URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Documents/AutoClip/Podcasts")
+        AppPaths.folder("Podcasts")
     }
 
     init() {

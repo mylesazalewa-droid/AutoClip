@@ -60,7 +60,7 @@ final class SeriesStore: ObservableObject {
     @Published var errors: [String: String] = [:]
 
     nonisolated static var file: URL {
-        URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Documents/AutoClip/Series.json")
+        AppPaths.folder("Series.json")
     }
 
     init() {

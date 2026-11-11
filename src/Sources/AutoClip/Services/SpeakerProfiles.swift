@@ -25,7 +25,7 @@ final class SpeakerProfiles: ObservableObject {
     ]
 
     nonisolated static var file: URL {
-        URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Documents/AutoClip/Speakers.json")
+        AppPaths.folder("Speakers.json")
     }
 
     init() {

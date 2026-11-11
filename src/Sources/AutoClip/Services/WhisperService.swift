@@ -14,8 +14,7 @@ class WhisperService: ObservableObject {
     private var loadedVariant: String?
 
     private let modelDir: URL = {
-        URL(fileURLWithPath: NSHomeDirectory())
-            .appendingPathComponent("Documents/AutoClip/WhisperModels")
+        AppPaths.folder("WhisperModels")
     }()
 
     private init() {}
@@ -52,14 +51,11 @@ class WhisperService: ObservableObject {
 
     var modelExists: Bool { modelFolder(selectedVariant) != nil }
 
-    /// Where the speech engine keeps its small word list (the "tokenizer"). Older versions used
-    /// ~/Documents/huggingface, so that is kept when it's already there. Otherwise it lives with
-    /// the model, and its folder is made first: the engine's own download fails on a new Mac
-    /// when the folder isn't there yet.
+    /// Where the speech engine keeps its small word list (the "tokenizer"): with the model. (Older
+    /// versions used ~/Documents/huggingface; DataMove copies it over.) Its folder is made first:
+    /// the engine's own download fails on a new Mac when the folder isn't there yet.
     private func tokenizerBase(for variant: String) throws -> URL {
         let repo = "models/" + variant.replacingOccurrences(of: "openai_", with: "openai/")
-        let old = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Documents/huggingface")
-        if FileManager.default.fileExists(atPath: old.appendingPathComponent("\(repo)/tokenizer.json").path) { return old }
         let folder = modelDir.appendingPathComponent(repo)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         // A half-finished earlier try can leave pieces behind that block the next one

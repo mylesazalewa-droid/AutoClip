@@ -125,7 +125,7 @@ struct SpeakerReport: Codable, Equatable {
 
 enum SpeakerReportStore {
     static var dir: URL {
-        URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Documents/AutoClip/Assess")
+        AppPaths.folder("Assess")
     }
     private static func file(for videoPath: String) -> URL {
         let name = URL(fileURLWithPath: videoPath).deletingPathExtension().lastPathComponent

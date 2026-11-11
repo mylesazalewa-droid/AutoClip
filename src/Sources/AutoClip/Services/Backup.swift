@@ -25,7 +25,10 @@ enum Backup {
 
     static var home: String { NSHomeDirectory() }
     static var support: URL { URL(fileURLWithPath: home).appendingPathComponent("Library/Application Support/AutoClip") }
-    static var documents: URL { URL(fileURLWithPath: home).appendingPathComponent("Documents/AutoClip") }
+    /// Where AutoClip's own files are (its folder in Application Support, or Documents on older setups)
+    static var documents: URL { AppPaths.root }
+    /// True when everything lives in one folder, so the "Documents" part of a backup is empty
+    private static var oneFolder: Bool { documents.standardizedFileURL == support.standardizedFileURL }
     private static var domain: String { Bundle.main.bundleIdentifier ?? "com.autoclip.app.dev" }
 
     /// Big folders that can be downloaded or made again, left out of every backup.
@@ -38,7 +41,7 @@ enum Backup {
     @MainActor
     static func sourceVideos() -> [String] {
         Array(Set(AutoReelsStore.shared.reels.compactMap { ReelGenerator.sourceVideoPath(for: $0) }))
-            .filter { FileManager.default.fileExists(atPath: $0) && !$0.hasPrefix(documents.path) }
+            .filter { FileManager.default.fileExists(atPath: $0) && !$0.hasPrefix(documents.path) && !$0.hasPrefix(support.path) }
     }
 
     static func size(of url: URL, skipping: Set<String> = []) -> Int64 {
@@ -58,7 +61,8 @@ enum Backup {
     static func estimate() async -> (small: Int64, withVideos: Int64) {
         let videos = sourceVideos()
         return await Task.detached {
-            let base = size(of: support, skipping: skipAlways) + size(of: documents, skipping: skipAlways.union(mediaFolders))
+            let base = oneFolder ? size(of: support, skipping: skipAlways.union(mediaFolders))
+                : size(of: support, skipping: skipAlways) + size(of: documents, skipping: skipAlways.union(mediaFolders))
             let media = mediaFolders.reduce(Int64(0)) { $0 + size(of: documents.appendingPathComponent($1)) }
             let outside = videos.reduce(Int64(0)) { $0 + ((try? FileManager.default.attributesOfItem(atPath: $1)[.size] as? Int64) ?? 0) }
             return (base, base + media + outside)
@@ -70,6 +74,7 @@ enum Backup {
     @MainActor
     static func make(to zip: URL, includeVideos: Bool, progress: @escaping (String) -> Void) async throws {
         let videos = includeVideos ? sourceVideos() : []
+        AutoReelsStore.shared.saveNow()   // a change from the last half second is in the backup too
         let settings = UserDefaults.standard.persistentDomain(forName: domain) ?? [:]
         let version = AppInfo.version
         try await Task.detached {
@@ -84,9 +89,12 @@ enum Backup {
             try plist.write(to: root.appendingPathComponent("settings.plist"))
 
             progress("Copying your sermons and graphics…")
-            try copy(support, to: root.appendingPathComponent("Support"), skipping: skipAlways)
-            try copy(documents, to: root.appendingPathComponent("Documents"),
-                     skipping: includeVideos ? skipAlways : skipAlways.union(mediaFolders))
+            try copy(support, to: root.appendingPathComponent("Support"),
+                     skipping: oneFolder ? (includeVideos ? skipAlways : skipAlways.union(mediaFolders)) : skipAlways)
+            if !oneFolder {
+                try copy(documents, to: root.appendingPathComponent("Documents"),
+                         skipping: includeVideos ? skipAlways : skipAlways.union(mediaFolders))
+            }
 
             var media: [String: String] = [:]
             if !videos.isEmpty {
@@ -151,6 +159,8 @@ enum Backup {
             for (old, rel) in m.media {
                 swaps.append((old, videosDir.appendingPathComponent(URL(fileURLWithPath: rel).lastPathComponent).path))
             }
+            // Backups made before AutoClip moved out of Documents point there
+            swaps.append((m.home + "/Documents/AutoClip", documents.path))
             if m.home != home { swaps.append((m.home, home)) }
 
             progress("Putting your current AutoClip data in the Trash…")
@@ -161,8 +171,11 @@ enum Backup {
             for (name, dest) in [("Support", support), ("Documents", documents)] {
                 let src = root.appendingPathComponent(name)
                 guard fm.fileExists(atPath: src.path) else { continue }
-                try fm.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
-                try fm.copyItem(at: src, to: dest)
+                try fm.createDirectory(at: dest, withIntermediateDirectories: true)
+                // Item by item, so a backup's two parts can go into one folder
+                for item in try fm.contentsOfDirectory(atPath: src.path) where !fm.fileExists(atPath: dest.appendingPathComponent(item).path) {
+                    try fm.copyItem(at: src.appendingPathComponent(item), to: dest.appendingPathComponent(item))
+                }
                 rewrite(in: dest, swaps)
             }
             // A model folder we skipped may still be in the Trash copy; it downloads again if not.
@@ -178,7 +191,11 @@ enum Backup {
             progress("Restoring settings…")
             if let d = try? Data(contentsOf: root.appendingPathComponent("settings.plist")),
                let dict = try PropertyListSerialization.propertyList(from: d, format: nil) as? [String: Any] {
-                let fixed = swapValue(dict, swaps) as? [String: Any] ?? dict
+                var fixed = DataMove.fixValue(dict, swaps) as? [String: Any] ?? dict
+                // Where files live on this Mac stays as it is: the backup was just put there
+                let here = UserDefaults.standard.string(forKey: AppPaths.locationKey) ?? "support"
+                fixed[AppPaths.locationKey] = here
+                fixed["owner_mac"] = UserDefaults.standard.bool(forKey: "owner_mac")
                 UserDefaults.standard.setPersistentDomain(fixed, forName: domain)
                 UserDefaults.standard.synchronize()
             }

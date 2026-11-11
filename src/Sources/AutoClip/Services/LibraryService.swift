@@ -12,8 +12,7 @@ class LibraryService: ObservableObject {
     private let historyURL: URL
 
     private init() {
-        let appDir = URL(fileURLWithPath: NSHomeDirectory())
-            .appendingPathComponent("Documents/AutoClip")
+        let appDir = AppPaths.root
         try? FileManager.default.createDirectory(at: appDir, withIntermediateDirectories: true)
         libraryURL = appDir.appendingPathComponent("library.json")
         historyURL = appDir.appendingPathComponent("history.json")
@@ -89,8 +88,7 @@ class LibraryService: ObservableObject {
     // MARK: - Video Import
 
     func importVideoFile(_ url: URL, progress: @escaping (Double, String) -> Void, completion: @escaping (Result<Project, Error>) -> Void) {
-        let videosDir = URL(fileURLWithPath: NSHomeDirectory())
-            .appendingPathComponent("Documents/AutoClip/Videos")
+        let videosDir = AppPaths.folder("Videos")
         try? FileManager.default.createDirectory(at: videosDir, withIntermediateDirectories: true)
 
         let destID = UUID()

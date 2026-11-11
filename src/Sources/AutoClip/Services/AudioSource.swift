@@ -16,7 +16,7 @@ enum AudioSource {
     private static let barCount = 25
 
     static var dir: URL {
-        URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Documents/AutoClip/Audio")
+        AppPaths.folder("Audio")
     }
 
     static func isAudioFile(_ url: URL) -> Bool { types.contains(url.pathExtension.lowercased()) }

@@ -4,7 +4,7 @@ import Foundation
 /// ("Generate more", 🔥 Fire Short) without re-transcribing.
 enum TranscriptCache {
     private static var dir: URL {
-        let d = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Documents/AutoClip/Transcripts")
+        let d = AppPaths.folder("Transcripts")
         try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
         return d
     }

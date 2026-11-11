@@ -282,10 +282,24 @@ class AutoReelsStore: ObservableObject {
         save()
     }
 
+    private var pendingSave: DispatchWorkItem?
+    private static let saveQueue = DispatchQueue(label: "autoclip.reels.save", qos: .utility)
+
+    /// The list is a few MB, so quick runs of changes share one save, done off the main thread.
     private func save() {
-        if let data = try? JSONEncoder().encode(reels) {
-            UserDefaults.standard.set(data, forKey: key)
+        pendingSave?.cancel()
+        let snapshot = reels, key = key
+        let work = DispatchWorkItem {
+            if let data = try? JSONEncoder().encode(snapshot) { UserDefaults.standard.set(data, forKey: key) }
         }
+        pendingSave = work
+        Self.saveQueue.asyncAfter(deadline: .now() + 0.5, execute: work)
+    }
+
+    /// Saves now (when AutoClip quits).
+    func saveNow() {
+        pendingSave?.cancel(); pendingSave = nil
+        if let data = try? JSONEncoder().encode(reels) { UserDefaults.standard.set(data, forKey: key) }
     }
 
     private func load() {
@@ -2007,29 +2021,31 @@ struct ReelThumbnailView: View {
         defer { loaded = true }
         let key = (path + "|\(faceAspect ?? 0)") as NSString
         if let hit = Self.cache.object(forKey: key) { image = hit; return }
-        guard FileManager.default.fileExists(atPath: path) else { return }
-        let url = URL(fileURLWithPath: path)
-        let asset = AVURLAsset(url: url)
-        let gen = AVAssetImageGenerator(asset: asset)
-        gen.appliesPreferredTrackTransform = true
-        gen.maximumSize = CGSize(width: 960, height: 960)
-        // Long videos (sermons, episodes) open on black or a title; pick a moment further in
-        let dur = (try? await asset.load(.duration)).map(CMTimeGetSeconds) ?? 0
-        let first = dur > 60 ? dur * 0.12 : min(1.5, dur / 2)
-        // When framing a person, look a little further if the first moment has no face
-        let moments = faceAspect == nil || dur <= 60 ? [first] : [first, dur * 0.3, dur * 0.5]
-        var chosen: CGImage?
-        for m in moments {
-            guard let cg = try? await gen.image(at: CMTime(seconds: m, preferredTimescale: 600)).image else { continue }
-            if chosen == nil { chosen = cg }
-            if let aspect = faceAspect, let framed = Self.frame(cg, aspect: aspect) { chosen = framed; break }
-            if faceAspect == nil { break }
-        }
-        guard var cg = chosen else { return }
-        // No face anywhere: still crop to the shape, from the middle
-        if let aspect = faceAspect, abs(CGFloat(cg.width) / CGFloat(cg.height) - aspect) > 0.02 {
-            cg = Self.crop(cg, aspect: aspect, centerX: 0.5, centerY: 0.5) ?? cg
-        }
+        let p = path, faceAspect = faceAspect
+        guard let cg = await ThumbStore.image(for: p, key: "card|\(faceAspect ?? 0)", make: {
+            let asset = AVURLAsset(url: URL(fileURLWithPath: p))
+            let gen = AVAssetImageGenerator(asset: asset)
+            gen.appliesPreferredTrackTransform = true
+            gen.maximumSize = CGSize(width: 960, height: 960)
+            // Long videos (sermons, episodes) open on black or a title; pick a moment further in
+            let dur = (try? await asset.load(.duration)).map(CMTimeGetSeconds) ?? 0
+            let first = dur > 60 ? dur * 0.12 : min(1.5, dur / 2)
+            // When framing a person, look a little further if the first moment has no face
+            let moments = faceAspect == nil || dur <= 60 ? [first] : [first, dur * 0.3, dur * 0.5]
+            var chosen: CGImage?
+            for m in moments {
+                guard let cg = try? await gen.image(at: CMTime(seconds: m, preferredTimescale: 600)).image else { continue }
+                if chosen == nil { chosen = cg }
+                if let aspect = faceAspect, let framed = Self.frame(cg, aspect: aspect) { chosen = framed; break }
+                if faceAspect == nil { break }
+            }
+            guard var cg = chosen else { return nil }
+            // No face anywhere: still crop to the shape, from the middle
+            if let aspect = faceAspect, abs(CGFloat(cg.width) / CGFloat(cg.height) - aspect) > 0.02 {
+                cg = Self.crop(cg, aspect: aspect, centerX: 0.5, centerY: 0.5) ?? cg
+            }
+            return cg
+        }) else { return }
         let ns = NSImage(cgImage: cg, size: .zero)
         Self.cache.setObject(ns, forKey: key)
         await MainActor.run { image = ns }

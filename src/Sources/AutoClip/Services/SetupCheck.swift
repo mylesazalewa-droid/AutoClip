@@ -104,13 +104,13 @@ final class SetupCheck: ObservableObject {
     private static var home: URL { URL(fileURLWithPath: NSHomeDirectory()) }
 
     private static func folderCheck() -> (State, String, Fix?) {
-        let dir = home.appendingPathComponent("Documents/AutoClip")
+        let dir = AppPaths.root
         let probe = dir.appendingPathComponent(".setup-check")
         do {
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             try Data("ok".utf8).write(to: probe)
             try? FileManager.default.removeItem(at: probe)
-            return (.good, "AutoClip can save to Documents → AutoClip", nil)
+            return (.good, AppPaths.root == AppPaths.support ? "AutoClip can save its files (in its own folder, which needs no permission)" : "AutoClip can save to Documents → AutoClip", nil)
         } catch {
             return (.problem, "AutoClip can't save to Documents → AutoClip. Open System Settings → Privacy & Security → Files and Folders and allow AutoClip to use Documents.",
                     .openURL("x-apple.systempreferences:com.apple.preference.security?Privacy_FilesAndFolders"))

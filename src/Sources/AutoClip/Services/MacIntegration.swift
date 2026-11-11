@@ -30,6 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
     func applicationWillTerminate(_ notification: Notification) {
         Reopen.quitting = true
+        MainActor.assumeIsolated { AutoReelsStore.shared.saveNow() }
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {

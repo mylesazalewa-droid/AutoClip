@@ -592,7 +592,7 @@ enum CarouselStore {
 
     /// Copies a series graphic into AutoClip's folder so it survives the original moving.
     static func importArt(_ url: URL) -> String? {
-        let dir = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Documents/AutoClip/Series Art")
+        let dir = AppPaths.folder("Series Art")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let dest = dir.appendingPathComponent(String(UUID().uuidString.prefix(8)) + "-" + url.lastPathComponent)
         do { try FileManager.default.copyItem(at: url, to: dest) } catch { return nil }

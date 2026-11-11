@@ -71,7 +71,7 @@ enum YTDLP {
 
     /// Where YouTube downloads are saved (shared by Auto Reels and Assess).
     static var videosDir: URL {
-        URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Documents/AutoClip/Videos")
+        AppPaths.folder("Videos")
     }
 
     /// The yt-dlp to run: AutoClip's own (kept up to date) first, then a bundled or Homebrew one.

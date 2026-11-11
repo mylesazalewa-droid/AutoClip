@@ -208,7 +208,7 @@ final class ShortResultsStore: ObservableObject {
     @Published var refreshing = false
     @Published var refreshNote: String?
 
-    private var file: URL { URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Documents/AutoClip/Results/posted.json") }
+    private var file: URL { AppPaths.folder("Results/posted.json") }
 
     init() {
         if let d = try? Data(contentsOf: file), let list = try? JSONDecoder().decode([PostedShort].self, from: d) { shorts = list }

@@ -149,13 +149,12 @@ struct ClipMomentThumb: View {
         .task(id: "\(path)|\(Int(time * 10))|\(aspect)") {
             let key = "\(path)|\(Int(time * 10))|\(aspect)" as NSString
             if let hit = Self.cache.object(forKey: key) { image = hit; return }
-            guard FileManager.default.fileExists(atPath: path),
-                  let cg = await Reframe.frame(path: path, at: time, maxWidth: 720) else { return }
-            let a = aspect
-            let framed = await Task.detached(priority: .utility) { () -> CGImage in
+            let p = path, t = time, a = aspect
+            guard let framed = await ThumbStore.image(for: p, key: "moment|\(Int(t * 10))|\(a)", make: {
+                guard let cg = await Reframe.frame(path: p, at: t, maxWidth: 720) else { return nil }
                 if abs(CGFloat(cg.width) / CGFloat(cg.height) - a) < 0.02 { return cg }
                 return ReelThumbnailView.frame(cg, aspect: a) ?? ReelThumbnailView.crop(cg, aspect: a, centerX: 0.5, centerY: 0.5) ?? cg
-            }.value
+            }) else { return }
             let ns = NSImage(cgImage: framed, size: .zero)
             Self.cache.setObject(ns, forKey: key)
             image = ns

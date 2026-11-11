@@ -7,6 +7,11 @@ struct AutoClipApp: App {
     @AppStorage("sounds_on") private var soundsOn = true
     @AppStorage(AppAppearance.key) private var appearance = AppAppearance.dark.rawValue
 
+    init() {
+        // Before anything reads AutoClip's files: move them out of Documents once (see AppPaths)
+        DataMove.runIfNeeded()
+    }
+
     var body: some Scene {
         WindowGroup(id: "main") {
             MainWindow()

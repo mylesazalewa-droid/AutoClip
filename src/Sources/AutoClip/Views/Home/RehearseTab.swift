@@ -90,7 +90,7 @@ Give up to 4 strongest and up to 4 to strengthen.
     }
 
     static var folder: URL {
-        URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Documents/AutoClip/Rehearsals")
+        AppPaths.folder("Rehearsals")
     }
 
     struct Saved: Codable { var text: String; var source: String?; var review: Review? }

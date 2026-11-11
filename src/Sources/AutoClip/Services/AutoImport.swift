@@ -102,7 +102,7 @@ final class AutoImport: ObservableObject {
 
     var kitFolder: URL {
         if !settings.kitFolder.isEmpty { return URL(fileURLWithPath: settings.kitFolder) }
-        return URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Documents/AutoClip/Content Kits")
+        return AppPaths.folder("Content Kits")
     }
 
     /// Called once at launch.

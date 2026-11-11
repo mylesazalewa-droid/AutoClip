@@ -19,7 +19,7 @@ final class PracticeRecorder: NSObject, ObservableObject, AVCaptureFileOutputRec
     var onFinished: ((URL) -> Void)?
 
     nonisolated static var dir: URL {
-        let d = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Documents/AutoClip/Practice")
+        let d = AppPaths.folder("Practice")
         try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
         return d
     }

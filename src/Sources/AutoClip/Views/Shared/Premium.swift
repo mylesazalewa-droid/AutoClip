@@ -21,15 +21,17 @@ enum VideoFrames {
     static func frame(_ path: String, width: CGFloat) async -> CGImage? {
         let key = "\(path)|\(Int(width))" as NSString
         if let hit = cache.object(forKey: key) { return hit }
-        let asset = AVURLAsset(url: URL(fileURLWithPath: path))
-        let gen = AVAssetImageGenerator(asset: asset)
-        gen.appliesPreferredTrackTransform = true
-        gen.maximumSize = CGSize(width: width, height: width)
-        gen.requestedTimeToleranceBefore = CMTime(seconds: 2, preferredTimescale: 600)
-        gen.requestedTimeToleranceAfter = CMTime(seconds: 2, preferredTimescale: 600)
-        let at = await bestMoment(path, asset: asset)
-        guard let image = try? await gen.image(at: CMTime(seconds: at, preferredTimescale: 600)).image else { return nil }
-        cache.setObject(image, forKey: key)
+        let image = await ThumbStore.image(for: path, key: "best|\(Int(width))") {
+            let asset = AVURLAsset(url: URL(fileURLWithPath: path))
+            let gen = AVAssetImageGenerator(asset: asset)
+            gen.appliesPreferredTrackTransform = true
+            gen.maximumSize = CGSize(width: width, height: width)
+            gen.requestedTimeToleranceBefore = CMTime(seconds: 2, preferredTimescale: 600)
+            gen.requestedTimeToleranceAfter = CMTime(seconds: 2, preferredTimescale: 600)
+            let at = await bestMoment(path, asset: asset)
+            return try? await gen.image(at: CMTime(seconds: at, preferredTimescale: 600)).image
+        }
+        if let image { cache.setObject(image, forKey: key) }
         return image
     }
 
@@ -264,7 +266,7 @@ struct AppSidebar: View {
                 group("Manage")
                 row("Brand kit", "paintpalette", .brand)
                 row("Storage", "internaldrive", .storage)
-                if LicenseIssuer.isOwnerMac { row("Licences", "key", .licenses) }
+                if DataMove.isOwnerMac { row("Licences", "key", .licenses) }
             }
 
             Spacer()

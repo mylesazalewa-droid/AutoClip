@@ -24,7 +24,7 @@ final class CostMeter: ObservableObject {
     @Published private(set) var entries: [Entry] = []
 
     private static var file: URL {
-        let d = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Documents/AutoClip")
+        let d = AppPaths.root
         try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
         return d.appendingPathComponent("ai-costs.json")
     }

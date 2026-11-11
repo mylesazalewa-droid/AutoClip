@@ -21,7 +21,7 @@ enum SampleSermon {
     struct ManifestWord: Codable { var w: String; var s: Double; var e: Double }
 
     static var folder: URL {
-        URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Documents/AutoClip/Samples")
+        AppPaths.folder("Samples")
     }
 
     static var videoPath: String { folder.appendingPathComponent("Sample Sermon.mp4").path }

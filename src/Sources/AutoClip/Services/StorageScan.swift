@@ -37,7 +37,7 @@ struct StorageReport: Equatable {
 }
 
 enum StorageScan {
-    private static var root: URL { URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Documents/AutoClip") }
+    private static var root: URL { AppPaths.root }
 
     private static func measure(_ url: URL) -> (bytes: Int64, modified: Date?) {
         let keys: Set<URLResourceKey> = [.totalFileAllocatedSizeKey, .fileAllocatedSizeKey, .isDirectoryKey, .contentModificationDateKey]
