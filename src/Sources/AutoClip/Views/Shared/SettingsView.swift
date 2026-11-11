@@ -171,6 +171,7 @@ private struct AISettings: View {
 
 private struct ReelSettings: View {
     @AppStorage("ar_findSermon") private var findSermon = true
+    @AppStorage(ScreenCues.key) private var wideForScreen = true
     @AppStorage("ar_motion") private var motion = ReelMotion.Style.both.rawValue
     @AppStorage("ar_hookStyle") private var hookStyle = HookStyle.pop.rawValue
     @AppStorage("ar_targetDur") private var target: Double = 90
@@ -187,6 +188,7 @@ private struct ReelSettings: View {
             }
             SettingsSection(title: "New clips") {
                 Row(title: "Find the sermon in a full service", detail: "For recordings over 30 minutes") { Toggle("", isOn: $findSermon).labelsHidden().toggleStyle(.switch) }
+                Row(title: "Wide shot when the screen is mentioned", detail: "Vertical clips cut to the whole picture on lines like “look at the screen”, then back to the speaker") { Toggle("", isOn: $wideForScreen).labelsHidden().toggleStyle(.switch) }
                 Row(title: "Length") {
                     Picker("", selection: $target) {
                         Text("30 seconds").tag(30.0); Text("45 seconds").tag(45.0); Text("60 seconds").tag(60.0); Text("90 seconds").tag(90.0); Text("2 minutes").tag(120.0)

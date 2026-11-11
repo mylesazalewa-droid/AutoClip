@@ -69,6 +69,9 @@ struct Clip: Identifiable, Codable {
     /// Split screen (vertical reels): two people stacked, top and bottom, each centred at these
     /// horizontal positions (0…1)
     var splitX: [Double]?
+    /// Stretches (source seconds, [start, end]) shown as the whole wide picture instead of the
+    /// close crop, for when the speaker points to the stage screen
+    var wide: [[Double]]?
 
     var duration: TimeInterval { endTime - startTime }
 

@@ -336,6 +336,40 @@ class VideoExportService {
         var time: Double
         var centerX: Double
         var cut = false
+        /// Show the whole wide picture from here (until the next sample)
+        var wide = false
+    }
+
+    /// The whole picture fitted to the output's width, centred, with bars above and below.
+    private func fitTransform(videoSize: CGSize, renderSize: CGSize, preferredTransform: CGAffineTransform) -> CGAffineTransform {
+        let scale = min(renderSize.width / videoSize.width, renderSize.height / videoSize.height)
+        return preferredTransform
+            .concatenating(CGAffineTransform(scaleX: scale, y: scale))
+            .concatenating(CGAffineTransform(translationX: (renderSize.width - videoSize.width * scale) / 2,
+                                             y: (renderSize.height - videoSize.height * scale) / 2))
+    }
+
+    /// Works a clip's wide-shot stretches into its framing samples: a cut to wide where each
+    /// starts, and a cut back to wherever the speaker is when it ends. Pure, so it can be tested.
+    static func addingWide(_ samples: [FaceSample], clip: Clip, fallbackX: Double) -> [FaceSample] {
+        let length = clip.endTime - clip.startTime
+        let windows: [(Double, Double)] = (clip.wide ?? []).compactMap { w in
+            guard w.count == 2 else { return nil }
+            let a = max(0, w[0] - clip.startTime), b = min(length, w[1] - clip.startTime)
+            return b - a > 0.3 ? (a, b) : nil
+        }.sorted { $0.0 < $1.0 }
+        guard !windows.isEmpty else { return samples }
+        var base = samples.isEmpty ? [FaceSample(time: 0, centerX: fallbackX)] : samples
+        if let first = base.first, first.time > 0 { base.insert(FaceSample(time: 0, centerX: first.centerX), at: 0) }
+        func x(at t: Double) -> Double {
+            (base.first { $0.time >= t } ?? base.last { $0.time <= t })?.centerX ?? fallbackX
+        }
+        var out = base.filter { s in !windows.contains { s.time >= $0.0 && s.time < $0.1 } }
+        for (a, b) in windows {
+            out.append(FaceSample(time: a, centerX: x(at: a), cut: true, wide: true))
+            if b < length - 0.05 { out.append(FaceSample(time: b, centerX: x(at: b), cut: true)) }
+        }
+        return out.sorted { $0.time < $1.time }
     }
 
     /// Glide the crop between face samples with transform ramps (instead of jumping every sample),
@@ -352,6 +386,10 @@ class VideoExportService {
         for i in samples.indices {
             let tA = at(samples[i].time)
             guard CMTimeCompare(tA, end) < 0 else { break }
+            if samples[i].wide {
+                li.setTransform(fitTransform(videoSize: videoSize, renderSize: renderSize, preferredTransform: preferredTransform), at: tA)
+                continue
+            }
             let a = cropTransform(centerX: samples[i].centerX, videoSize: videoSize,
                                   renderSize: renderSize, preferredTransform: preferredTransform)
             if i + 1 < samples.count, !samples[i + 1].cut {
@@ -674,17 +712,15 @@ class VideoExportService {
                 extra.append(li2)
             } else if vs.width > vs.height, let fx = clip.frameX {
                 // Held still where the editor put it
-                li.setTransform(cropTransform(centerX: fx * vs.width, videoSize: vs, renderSize: renderSize, preferredTransform: pt), at: seg.start)
+                applyFaceTrack(Self.addingWide([FaceSample(time: 0, centerX: fx * vs.width)], clip: clip, fallbackX: fx * vs.width),
+                               to: li, base: seg.start, end: seg.end, videoSize: vs, renderSize: renderSize, preferredTransform: pt)
             } else if vs.width > vs.height {
                 let faces = await detectFaces(in: a, clipRange: range, videoSize: vs,
                                               cropFraction: cropFraction(videoSize: vs, renderSize: renderSize),
                                               careful: clip.carefulFraming ?? false, followX: clip.trackX, followT: clip.trackT)
-                if faces.isEmpty {
-                    li.setTransform(cropTransform(centerX: vs.width / 2, videoSize: vs, renderSize: renderSize, preferredTransform: pt), at: seg.start)
-                } else {
-                    applyFaceTrack(faces, to: li, base: seg.start, end: seg.end, videoSize: vs,
-                                   renderSize: renderSize, preferredTransform: pt)
-                }
+                applyFaceTrack(Self.addingWide(faces.isEmpty ? [FaceSample(time: 0, centerX: vs.width / 2)] : faces, clip: clip, fallbackX: vs.width / 2),
+                               to: li, base: seg.start, end: seg.end, videoSize: vs,
+                               renderSize: renderSize, preferredTransform: pt)
             } else {
                 li.setTransform(cropTransform(centerX: vs.width / 2, videoSize: vs, renderSize: renderSize, preferredTransform: pt), at: seg.start)
             }
@@ -1672,21 +1708,18 @@ class VideoExportService {
                     li2.setCropRectangle(halves[1].crop, at: segStart)
                     extra.append(li2)
                 } else if needsFace && clipVideoSize.width > clipVideoSize.height, let fx = clip.frameX {
-                    let t = cropTransform(centerX: fx * clipVideoSize.width, videoSize: clipVideoSize, renderSize: renderSize, preferredTransform: clipTransform)
-                    li.setTransform(t, at: segStart)
+                    applyFaceTrack(Self.addingWide([FaceSample(time: 0, centerX: fx * clipVideoSize.width)], clip: clip, fallbackX: fx * clipVideoSize.width),
+                                   to: li, base: segStart, end: segRange.end,
+                                   videoSize: clipVideoSize, renderSize: renderSize, preferredTransform: clipTransform)
                 } else if needsFace && clipVideoSize.width > clipVideoSize.height {
                     let srcRange = CMTimeRange(start: CMTime(seconds: clip.startTime, preferredTimescale: 600), duration: segDur)
                     let faces    = await detectFaces(in: clipAsset, clipRange: srcRange, videoSize: clipVideoSize,
                                                      cropFraction: cropFraction(videoSize: clipVideoSize, renderSize: renderSize),
                                                      careful: clip.carefulFraming ?? false, followX: clip.trackX, followT: clip.trackT)
 
-                    if faces.isEmpty {
-                        let t = cropTransform(centerX: clipVideoSize.width / 2, videoSize: clipVideoSize, renderSize: renderSize, preferredTransform: clipTransform)
-                        li.setTransform(t, at: segStart)
-                    } else {
-                        applyFaceTrack(faces, to: li, base: segStart, end: segRange.end,
-                                       videoSize: clipVideoSize, renderSize: renderSize, preferredTransform: clipTransform)
-                    }
+                    applyFaceTrack(Self.addingWide(faces.isEmpty ? [FaceSample(time: 0, centerX: clipVideoSize.width / 2)] : faces, clip: clip, fallbackX: clipVideoSize.width / 2),
+                                   to: li, base: segStart, end: segRange.end,
+                                   videoSize: clipVideoSize, renderSize: renderSize, preferredTransform: clipTransform)
                 } else {
                     let t = cropTransform(centerX: clipVideoSize.width / 2, videoSize: clipVideoSize, renderSize: renderSize, preferredTransform: clipTransform)
                     li.setTransform(t, at: segStart)

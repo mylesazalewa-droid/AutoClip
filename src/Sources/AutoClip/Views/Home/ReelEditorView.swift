@@ -871,6 +871,7 @@ struct ReelEditorView: View {
         .task { await askWhoToFollow() }
         .onChange(of: draft.pieces) { _ in reloadToken += 1 }
         .onChange(of: draft.tightenPauses) { _ in reloadToken += 1 }
+        .onChange(of: draft.screenWide) { _ in reloadToken += 1 }
         .onChange(of: draft.hookText) { _ in rebuildOverlays() }
         .onChange(of: draft.verseCards) { _ in rebuildOverlays() }
         .onChange(of: draft.look) { _ in rebuildOverlays() }
@@ -1796,6 +1797,17 @@ struct ReelEditorView: View {
                                 .buttonStyle(.plain).font(.ui(size: 11)).foregroundColor(Theme.ink.opacity(0.55))
                                 .help("Play from this sentence")
                         }
+                        if s.included, draft.pieces[i].framing?.mode != "split" {
+                            let auto = draft.widensForScreen && j != piece.sentences.firstIndex(where: { !$0.keptWords.isEmpty })
+                                && ScreenCues.mentionsScreen(s.keptWords.map(\.word).joined(separator: " "))
+                            let wide = s.wide ?? auto
+                            Button { draft.pieces[i].sentences[j].wide = !wide } label: {
+                                Image(systemName: wide ? "rectangle.inset.filled" : "rectangle")
+                            }
+                            .buttonStyle(.plain).font(.ui(size: 11.5)).foregroundColor(wide ? gold : Theme.ink.opacity(0.35))
+                            .help(wide ? "Wide shot: the whole picture shows while this is said, so the stage screen is in view. Click for the close shot."
+                                       : "Close shot. Click to show the whole wide picture while this is said (for when the screen matters).")
+                        }
                         Button { editText = s.text; editingSentence = s.id } label: { Image(systemName: "pencil") }
                             .buttonStyle(.plain).font(.ui(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
                             .help("Fix the caption text for this sentence")
@@ -1885,6 +1897,13 @@ struct ReelEditorView: View {
                 Text("Framing").font(.ui(size: 11.5, weight: .semibold)).foregroundColor(Theme.ink.opacity(0.55))
                 PillTabs(selection: mode, items: (f.mode == "person" ? [("person", "Chosen person")] : []) + [("auto", "Follow speaker"), ("careful", "Look closer"), ("fixed", "Hold still"), ("split", "Split screen")], compact: true)
                 Spacer(minLength: 0)
+            }
+            if f.mode != "split" {
+                Toggle(isOn: Binding(get: { draft.widensForScreen }, set: { draft.screenWide = $0 })) {
+                    Text("Wide shot when the speaker points to the screen").font(.ui(size: 11.5)).foregroundColor(Theme.ink.opacity(0.7))
+                }
+                .toggleStyle(.checkbox)
+                .help("On lines like “look at the screen”, the clip cuts to the whole picture with bars above and below, then back to the close shot. Use the small rectangle on any sentence to choose by hand.")
             }
             if f.mode == "careful" {
                 Text("Checks this clip twice as often and catches smaller faces. Use it where the frame drifted off the person.")

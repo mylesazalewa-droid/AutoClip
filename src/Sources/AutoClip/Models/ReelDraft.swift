@@ -16,6 +16,9 @@ struct ReelDraft: Identifiable, Codable, Equatable {
         var endNudge: Double?
         /// Individual words cut out of an otherwise-kept sentence
         var cutWordIDs: [UUID]?
+        /// Show the whole wide picture while this is said: true = always, false = never,
+        /// nil = when the speaker points to the screen (see ScreenCues)
+        var wide: Bool?
         func isCut(_ w: Word) -> Bool { cutWordIDs?.contains(w.id) ?? false }
         var keptWords: [Word] { included ? words.filter { !isCut($0) } : [] }
         /// Where this sentence's clip starts with no nudge
@@ -101,6 +104,9 @@ struct ReelDraft: Identifiable, Codable, Equatable {
     var hookStyle: String?
     /// Small series label shown on the clip
     var seriesTag: String?
+    /// Cut to the wide shot when the speaker points to the stage screen (nil = the setting)
+    var screenWide: Bool?
+    var widensForScreen: Bool { screenWide ?? ScreenCues.onByDefault }
     /// The caption look with this reel's highlighted words filled in. Bible references are
     /// highlighted too when verse cards are on.
     var styledLook: CaptionLook {
@@ -302,6 +308,7 @@ struct ReelDraft: Identifiable, Codable, Equatable {
                              score: 0, scoreReason: "", words: words, isLiked: false, starRating: 0,
                              captionStyleName: "Karaoke", aspectRatio: "9:16", notes: "", thumbnailData: nil)
                 c.sourceVideoPath = piece.sourceVideoPath
+                c.wide = wideWindows(cur.map { ($0.0, $0.1) }, start: start, end: end, split: piece.framing?.mode == "split")
                 if let f = piece.framing {
                     if f.mode == "fixed" { c.frameX = f.x }
                     if f.mode == "person" { c.trackX = f.x; c.trackT = f.t }
@@ -342,6 +349,31 @@ struct ReelDraft: Identifiable, Codable, Equatable {
     }
 
     var renderClips: [Clip] { renderRuns.map(\.clip) }
+
+    /// Where one run shows the wide shot: sentences marked by hand, and (when it's on) ones where
+    /// the speaker points to the screen. Each lasts at least a few seconds so the screen can be read.
+    private func wideWindows(_ words: [(Word, Sentence)], start: Double, end: Double, split: Bool) -> [[Double]]? {
+        guard !split else { return nil }
+        let auto = widensForScreen
+        var out: [[Double]] = []
+        var seen = Set<UUID>()
+        let firstID = words.first?.1.id
+        for (_, s) in words where seen.insert(s.id).inserted {
+            let on: Bool
+            if let w = s.wide { on = w }
+            // The opening line stays on the speaker's face unless it's chosen by hand
+            else { on = auto && s.id != firstID && ScreenCues.mentionsScreen(s.keptWords.map(\.word).joined(separator: " ")) }
+            guard on else { continue }
+            let mine = words.filter { $0.1.id == s.id }.map(\.0)
+            guard let a = mine.first?.startTime, let b = mine.last?.endTime else { continue }
+            let from = max(start, a - 0.15)
+            // A short "look at the screen" still holds long enough to read it, unless chosen by hand
+            let to = min(end, max(b + 0.3, s.wide == true ? b + 0.3 : from + ScreenCues.minimumHold))
+            if let last = out.last, from - last[1] < 1.2 { out[out.count - 1][1] = max(last[1], to) }
+            else { out.append([from, to]) }
+        }
+        return out.isEmpty ? nil : out
+    }
 
     /// How long one clip really plays, after cuts, trims and nudges.
     func playingLength(ofPiece i: Int) -> Double {
