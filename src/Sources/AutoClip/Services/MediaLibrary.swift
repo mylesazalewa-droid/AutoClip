@@ -13,26 +13,36 @@ struct LibraryMedia: Identifiable, Hashable {
 
 @MainActor
 enum MediaLibrary {
-    static func all() -> [LibraryMedia] {
-        var out: [LibraryMedia] = []
-        let fm = FileManager.default
-        func add(_ path: String?, _ title: String, _ source: String, _ date: Date) {
-            guard let path, !path.isEmpty, fm.fileExists(atPath: path), !out.contains(where: { $0.path == path }) else { return }
-            out.append(LibraryMedia(path: path, title: title.isEmpty ? name(path) : title, source: source, date: date))
-        }
+    /// Everything known, with file checks done off the main thread (a video in Downloads or on a
+    /// drive can make macOS check permission, which must never hold up drawing a page).
+    static func load() async -> [LibraryMedia] {
+        struct Candidate: Sendable { var path: String; var title: String; var source: String; var date: Date? }
+        var list: [Candidate] = []
         for r in AutoReelsStore.shared.reels {
-            add(ReelGenerator.sourceVideoPath(for: r), r.title, "Clips", Date(timeIntervalSince1970: r.dateCreated))
+            if let p = ReelGenerator.sourceVideoPath(for: r) {
+                list.append(Candidate(path: p, title: r.title, source: "Clips", date: Date(timeIntervalSince1970: r.dateCreated)))
+            }
         }
         for e in PodcastStore.shared.episodes {
             for (i, a) in e.angles.enumerated() {
-                add(a.path, e.angles.count > 1 ? "\(e.title) (\(i + 1))" : e.title, "Podcast", e.created)
+                list.append(Candidate(path: a.path, title: e.angles.count > 1 ? "\(e.title) (\(i + 1))" : e.title, source: "Podcast", date: e.created))
             }
         }
-        for p in AssessTab.knownVideos(reels: AutoReelsStore.shared.reels) {
-            let d = (try? fm.attributesOfItem(atPath: p)[.creationDate] as? Date) ?? .distantPast
-            add(p, name(p), p.hasPrefix(YTDLP.videosDir.path) ? "YouTube" : "Assess", d)
-        }
-        return out.sorted { $0.date > $1.date }
+        let reels = AutoReelsStore.shared.reels
+        let youTube = YTDLP.videosDir.path
+        return await Task.detached(priority: .utility) { () -> [LibraryMedia] in
+            let fm = FileManager.default
+            for p in AssessTab.knownVideos(reels: reels) {
+                list.append(Candidate(path: p, title: "", source: p.hasPrefix(youTube) ? "YouTube" : "Assess",
+                                      date: (try? fm.attributesOfItem(atPath: p)[.creationDate] as? Date) ?? .distantPast))
+            }
+            var out: [LibraryMedia] = []
+            for c in list where !c.path.isEmpty && !out.contains(where: { $0.path == c.path }) && fm.fileExists(atPath: c.path) {
+                out.append(LibraryMedia(path: c.path, title: c.title.isEmpty ? YTDLP.title(fromFile: URL(fileURLWithPath: c.path)) : c.title,
+                                        source: c.source, date: c.date ?? .distantPast))
+            }
+            return out.sorted { $0.date > $1.date }
+        }.value
     }
 
     static func name(_ path: String) -> String { YTDLP.title(fromFile: URL(fileURLWithPath: path)) }
@@ -43,10 +53,11 @@ struct LibraryMenu<Label: View>: View {
     var exclude: Set<String> = []
     let onPick: (LibraryMedia) -> Void
     @ViewBuilder var label: () -> Label
+    @State private var all: [LibraryMedia] = []
 
     var body: some View {
         Menu {
-            let items = MediaLibrary.all().filter { !exclude.contains($0.path) }
+            let items = all.filter { !exclude.contains($0.path) }
             if items.isEmpty {
                 Text("Nothing added yet")
             } else {
@@ -59,6 +70,7 @@ struct LibraryMenu<Label: View>: View {
         } label: { label() }
         .menuIndicator(.hidden)
         .fixedSize()
+        .task { all = await MediaLibrary.load() }
         .help("Use a recording you've already added, without adding it again")
     }
 }

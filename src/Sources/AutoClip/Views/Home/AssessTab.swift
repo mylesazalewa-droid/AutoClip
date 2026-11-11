@@ -30,7 +30,7 @@ struct AssessTab: View {
     @State private var hoveredVideo: String?
     /// A moment to play once the next selected video loads (from the Series view)
     @State private var pendingSeek: Double?
-    enum Mode: String, CaseIterable { case fillers = "Filler words", delivery = "Delivery", coach = "AI Coach", notes = "Notes", series = "Series", stage = "Stage", progress = "Progress" }
+    enum Mode: String, CaseIterable { case fillers = "Filler words", delivery = "Delivery", coach = "AI Coach", notes = "Notes", series = "Series", compare = "Compare", stage = "Stage", progress = "Progress" }
     @State private var mode: Mode = .fillers
     @State private var report: SpeakerReport?
     @State private var deliveryStatus: String?
@@ -664,6 +664,12 @@ struct AssessTab: View {
                             if p == selected { if let t { play(at: t) } } else { pendingSeek = t; select(p) }
                         }
                     }
+                case .compare:
+                    if let path = selected {
+                        CompareSection(path: path, videos: allVideos) { p, t in
+                            if p == selected { if let t { play(at: t) } } else { pendingSeek = t; select(p) }
+                        }
+                    }
                 case .stage:
                     if let r = report { StageSection(report: r, status: stageStatus, play: play(at:)) }
                 case .progress:
@@ -866,6 +872,11 @@ private struct SermonCard: View {
         .animation(.easeOut(duration: 0.15), value: hover)
         .contentShape(Rectangle())
         .onTapGesture(perform: open)
+        // A button to VoiceOver and other accessibility tools, not just a picture to click
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction(.default, open)
         .onHover { hover = $0 }
     }
 }

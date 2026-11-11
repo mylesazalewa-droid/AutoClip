@@ -47,7 +47,22 @@ enum TranscriptCache {
         for f in legacy {
             if let words = read(f) { save(words, for: videoPath); return words }
         }
+        // The video moved (the name includes its location): one transcript of a video with the
+        // same name is taken to be this one, and filed under the new location
+        let sameName = ((try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? [])
+            .filter { $0.lastPathComponent.hasPrefix(prefix + "v2-") }
+        if sameName.count == 1, let words = read(sameName[0]) {
+            try? FileManager.default.moveItem(at: sameName[0], to: file(for: videoPath))
+            return words
+        }
         return nil
+    }
+
+    /// Keeps a transcript with its video when the video moves to `newPath`.
+    static func move(from oldPath: String, to newPath: String) {
+        let a = file(for: oldPath), b = file(for: newPath)
+        guard a != b, FileManager.default.fileExists(atPath: a.path), !FileManager.default.fileExists(atPath: b.path) else { return }
+        try? FileManager.default.moveItem(at: a, to: b)
     }
 
     static func transcript(for videoPath: String, progress: @escaping (String) -> Void) async throws -> [Word] {

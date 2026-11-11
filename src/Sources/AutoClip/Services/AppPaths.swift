@@ -83,6 +83,18 @@ enum DataMove {
                 try? fm.copyItem(at: oldWords, to: newWords)
             }
 
+            // Saved transcripts are filed by their video's location, so they follow the videos
+            let media: Set<String> = ["mp4", "mov", "m4v", "mkv", "webm", "m4a", "mp3", "wav", "aiff", "caf"]
+            for rel in moved where rel != "WhisperModels" && rel != "Transcripts" {
+                // Paths relative to the folder, so how the system spells the folder can't shift them
+                var isDir: ObjCBool = false
+                fm.fileExists(atPath: new.appendingPathComponent(rel).path, isDirectory: &isDir)
+                let inside = isDir.boolValue ? (fm.subpaths(atPath: new.appendingPathComponent(rel).path) ?? []).map { rel + "/" + $0 } : [rel]
+                for r in inside where media.contains(URL(fileURLWithPath: r).pathExtension.lowercased()) {
+                    TranscriptCache.move(from: old.appendingPathComponent(r).path, to: new.appendingPathComponent(r).path)
+                }
+            }
+
             // Every saved location that pointed into the old folder now points into the new one
             let swaps = [(old.path, new.path)]
             rewriteSettings(domain, swaps)
