@@ -728,7 +728,7 @@ struct WorshipTab: View {
                 HStack(spacing: 10) {
                     Button { runCoach(s) } label: { Label(r.coach == nil ? "Write the coaching" : "Write it again", systemImage: "sparkles") }
                         .buttonStyle(PrimaryButtonStyle(compact: true)).disabled(coachStatus != nil)
-                    if let coachStatus { ProgressView().controlSize(.small); Text(coachStatus).font(.ui(size: 12)).foregroundColor(Theme.muted) }
+                    if let coachStatus { LoadingBar(status: coachStatus); Text(coachStatus).font(.ui(size: 12)).foregroundColor(Theme.muted) }
                 }
                 if let coachError { Text(coachError).font(.ui(size: 12)).foregroundColor(Theme.danger).fixedSize(horizontal: false, vertical: true) }
             }

@@ -96,7 +96,7 @@ struct AutoImportView: View {
             .toggleStyle(.switch).tint(Theme.sand)
 
             if let s = auto.status {
-                HStack(spacing: 6) { ProgressView().scaleEffect(0.5); Text(s).font(.ui(size: 12)).foregroundColor(Theme.muted).lineLimit(2) }
+                HStack(spacing: 6) { LoadingBar(status: s, width: 100); Text(s).font(.ui(size: 12)).foregroundColor(Theme.muted).lineLimit(2) }
             } else if let c = auto.lastCheck {
                 Text("Last checked \(c.formatted(date: .omitted, time: .shortened))").font(.ui(size: 11.5)).foregroundColor(Theme.faint)
             }

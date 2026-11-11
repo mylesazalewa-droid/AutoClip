@@ -24,7 +24,7 @@ struct ResultsTab: View {
                     HStack {
                         SectionTitle(title: "Posted shorts", count: store.shorts.count)
                         Spacer()
-                        if store.refreshing { ProgressView().controlSize(.small) }
+                        if store.refreshing { LoadingBar() }
                         else if hasLinks {
                             Button { Task { await store.refreshAll() } } label: { Label("Update numbers from links", systemImage: "arrow.clockwise") }
                                 .buttonStyle(SecondaryButtonStyle(compact: true))
@@ -170,7 +170,7 @@ struct PostedShortSheet: View {
                     }
                     HStack(spacing: 10) {
                         Button { screenshot() } label: { Label("Read an analytics screenshot", systemImage: "text.viewfinder") }.disabled(busy)
-                        if busy { ProgressView().controlSize(.small) }
+                        if busy { LoadingBar() }
                     }
                     if let note { Text(note).font(.ui(size: 12)).foregroundColor(Theme.good).fixedSize(horizontal: false, vertical: true) }
                     if let problem { Text(problem).font(.ui(size: 12)).foregroundColor(Theme.warn).fixedSize(horizontal: false, vertical: true) }

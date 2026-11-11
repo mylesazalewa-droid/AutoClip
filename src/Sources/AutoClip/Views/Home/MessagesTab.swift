@@ -149,7 +149,7 @@ struct MessagesTab: View {
                 VStack(alignment: .leading, spacing: 14) {
                     ForEach(reels.activeJobs.filter { !$0.isFinished }) { job in
                         HStack(spacing: 10) {
-                            ProgressView().controlSize(.small)
+                            LoadingBar()
                             Text("\(job.title): \(job.statusMsg)").font(.ui(size: 13)).foregroundColor(Theme.muted).lineLimit(1)
                         }
                         .padding(14).frame(maxWidth: .infinity, alignment: .leading)

@@ -76,7 +76,7 @@ struct CompareSection: View {
                     .disabled(link.trimmingCharacters(in: .whitespaces).isEmpty || linkStatus != nil)
             }
             if let linkStatus {
-                HStack(spacing: 6) { ProgressView().controlSize(.small); Text(linkStatus).font(.ui(size: 12)).foregroundColor(Theme.muted) }
+                HStack(spacing: 6) { LoadingBar(status: linkStatus, width: 120); Text(linkStatus).font(.ui(size: 12)).foregroundColor(Theme.muted) }
             }
             if let linkError { Text(linkError).font(.ui(size: 12)).foregroundColor(Theme.warn).fixedSize(horizontal: false, vertical: true) }
         }
@@ -128,10 +128,13 @@ struct CompareSection: View {
     }
 
     private func statusLine(_ title: String, _ s: String) -> some View {
-        HStack(spacing: 8) {
-            if s != "Ready" { ProgressView().controlSize(.small) } else { Image(systemName: "checkmark.circle.fill").foregroundColor(Theme.good) }
-            Text(title).font(.ui(size: 12.5, weight: .medium)).foregroundColor(Theme.ink).lineLimit(1)
-            Text(s).font(.ui(size: 12)).foregroundColor(Theme.muted).lineLimit(1)
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 8) {
+                if s == "Ready" { Image(systemName: "checkmark.circle.fill").foregroundColor(Theme.good) }
+                Text(title).font(.ui(size: 12.5, weight: .medium)).foregroundColor(Theme.ink).lineLimit(1)
+                Text(s).font(.ui(size: 12)).foregroundColor(Theme.muted).lineLimit(1)
+            }
+            if s != "Ready" { LoadingBar(status: s, width: 320) }
         }
     }
 
@@ -264,7 +267,7 @@ struct CompareSection: View {
                     Button("Compare again") { confirmAI = true }.buttonStyle(.plain).font(.ui(size: 12)).foregroundColor(gold)
                 }
             } else if let styleStatus {
-                HStack(spacing: 8) { ProgressView().controlSize(.small); Text(styleStatus).font(.ui(size: 13)).foregroundColor(Theme.muted) }
+                HStack(spacing: 8) { LoadingBar(status: styleStatus); Text(styleStatus).font(.ui(size: 13)).foregroundColor(Theme.muted) }
             } else {
                 Button { confirmAI = true } label: { Label("Compare preaching styles with AI", systemImage: "sparkles") }
                     .buttonStyle(PrimaryButtonStyle(compact: true))

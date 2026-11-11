@@ -279,7 +279,7 @@ private struct BackupRows: View {
             Row(title: "Restore from a backup", detail: "For a new Mac. What's here now goes to the Trash first. Your AI key isn't in backups, so add it again in Settings → AI.") {
                 Button("Restore…") { pickRestore() }.buttonStyle(SecondaryButtonStyle(compact: true)).disabled(status != nil)
             }
-            if let status { HStack(spacing: 8) { ProgressView().controlSize(.small); Text(status).font(.ui(size: 12)).foregroundColor(Theme.muted) } }
+            if let status { HStack(spacing: 8) { LoadingBar(status: status); Text(status).font(.ui(size: 12)).foregroundColor(Theme.muted) } }
             if let done { Label(done, systemImage: "checkmark.circle.fill").font(.ui(size: 12)).foregroundColor(Theme.good) }
             if let error { Text(error).font(.ui(size: 12)).foregroundColor(Theme.danger).fixedSize(horizontal: false, vertical: true) }
         }

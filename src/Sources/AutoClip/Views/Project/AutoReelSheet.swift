@@ -302,8 +302,7 @@ struct AutoReelSheet: View {
 
     private var loadingState: some View {
         VStack(spacing: 10) {
-            ProgressView()
-                .scaleEffect(0.7)
+            LoadingBar(width: 200)
             Text("Segmenting transcript...")
                 .font(.ui(size: 13))
                 .foregroundColor(Theme.ink.opacity(0.55))
@@ -474,10 +473,7 @@ struct AutoReelSheet: View {
                         captionBgColor: .black
                     )
                 } else {
-                    ProgressView()
-                        .progressViewStyle(.circular)
-                        .scaleEffect(0.8)
-                        .tint(Theme.action)
+                    LoadingBar(width: 120)
                 }
 
                 // Play/pause tap overlay

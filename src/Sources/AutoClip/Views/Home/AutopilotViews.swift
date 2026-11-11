@@ -113,7 +113,7 @@ struct ContextGuardCard: View {
                 }
                 .labelsHidden().controlSize(.small).fixedSize()
                 .help("Which Bible translation quoted verses are compared with")
-                if busy { ProgressView().scaleEffect(0.5).frame(width: 14, height: 14) }
+                if busy { LoadingBar(width: 60) }
                 Spacer(minLength: 0)
             }
             if let error { Text(error).font(.ui(size: 11.5)).foregroundColor(Theme.danger).fixedSize(horizontal: false, vertical: true) }

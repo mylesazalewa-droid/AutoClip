@@ -77,7 +77,7 @@ struct VolunteerHome: View {
                     Button(action: action) { Label(button, systemImage: icon).frame(maxWidth: .infinity) }.buttonStyle(SecondaryButtonStyle())
                 }
             } else if n == 1 {
-                ProgressView().controlSize(.small)
+                LoadingBar()
             }
         }
         .padding(20)

@@ -186,7 +186,7 @@ struct ReviewSendSheet: View {
             }
             HStack {
                 if let s = store.preparing[record.id] {
-                    ProgressView().controlSize(.small)
+                    LoadingBar()
                     Text(s).font(.ui(size: 12.5)).foregroundColor(Theme.muted)
                 }
                 Spacer()
@@ -255,7 +255,7 @@ struct ReviewLinkView: View {
                 Text("This Mac isn't connected to a network. Connect it to Wi-Fi and the link will appear here.")
                     .font(.ui(size: 13)).foregroundColor(Theme.warn).multilineTextAlignment(.center)
             } else {
-                ProgressView().controlSize(.small)
+                LoadingBar()
                 Text("Starting the link…").font(.ui(size: 12.5)).foregroundColor(Theme.muted)
             }
         }

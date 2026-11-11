@@ -299,7 +299,7 @@ struct CoachSection: View {
                 HStack {
                     Button(status == nil ? "Run AI coach" : "Working…") { run() }
                         .buttonStyle(PrimaryButtonStyle()).disabled(status != nil)
-                    if let status { ProgressView().controlSize(.small); Text(status).font(.ui(size: 12)).foregroundColor(Theme.ink.opacity(0.6)) }
+                    if let status { LoadingBar(status: status); Text(status).font(.ui(size: 12)).foregroundColor(Theme.ink.opacity(0.6)) }
                 }
                 Text("Uses your AI key — about 1–3¢ per sermon.").font(.ui(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55))
                 if let error { Text(error).font(.ui(size: 12)).foregroundColor(Theme.danger) }
@@ -422,7 +422,7 @@ struct StageSection: View {
         } else {
             AssessCard(title: "Stage presence") {
                 HStack(spacing: 8) {
-                    if status != nil { ProgressView().controlSize(.small) }
+                    if status != nil { LoadingBar() }
                     Text(status ?? "Not available — no face found in this video (or it was recorded as sound only).")
                         .font(.ui(size: 13)).foregroundColor(Theme.ink.opacity(0.7))
                 }
@@ -550,7 +550,7 @@ struct NotesSection: View {
                     Button { saveWord(n) } label: { Label("Save as Word…", systemImage: "doc.richtext") }
                     Spacer()
                     if let status {
-                        ProgressView().controlSize(.small)
+                        LoadingBar()
                         Text(status).font(.ui(size: 12)).foregroundColor(Theme.ink.opacity(0.6))
                     } else {
                         Button("Write again") { run() }.help("Ask the AI for a fresh set of notes")
@@ -602,7 +602,7 @@ struct NotesSection: View {
                     .font(.ui(size: 13)).foregroundColor(Theme.ink.opacity(0.7)).fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 8) {
                     if let status {
-                        ProgressView().controlSize(.small)
+                        LoadingBar()
                         Text(status).font(.ui(size: 13)).foregroundColor(Theme.ink.opacity(0.7))
                     } else {
                         Button { run() } label: { Label("Write sermon notes", systemImage: "sparkles") }

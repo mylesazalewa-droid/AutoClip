@@ -63,7 +63,7 @@ struct ImproveShortTab: View {
                         .onSubmit(download)
                     Button("Get it", action: download).buttonStyle(SecondaryButtonStyle(compact: true))
                         .disabled(link.trimmingCharacters(in: .whitespaces).isEmpty || ytStatus != nil)
-                    if let ytStatus { ProgressView().controlSize(.small); Text(ytStatus).font(.ui(size: 12)).foregroundColor(Theme.muted).lineLimit(1) }
+                    if let ytStatus { LoadingBar(status: ytStatus, width: 120); Text(ytStatus).font(.ui(size: 12)).foregroundColor(Theme.muted).lineLimit(1) }
                 }
                 if let ytError { Text(ytError).font(.ui(size: 13)).foregroundColor(Theme.danger).fixedSize(horizontal: false, vertical: true) }
                 if let e = model.error {

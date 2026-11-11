@@ -150,7 +150,7 @@ struct CleanAudioSheet: View {
                     }
                 }
                 if levels.isEmpty {
-                    HStack(spacing: 8) { ProgressView().controlSize(.small); Text("Reading the sound…").font(.ui(size: 12)).foregroundColor(Theme.muted) }
+                    HStack(spacing: 8) { LoadingBar(); Text("Reading the sound…").font(.ui(size: 12)).foregroundColor(Theme.muted) }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
                 if duration > 0 {

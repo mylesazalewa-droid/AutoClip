@@ -98,7 +98,7 @@ struct WeekReadyView: View {
             if carousel == nil {
                 HStack(spacing: 10) {
                     if jobs.running(recordID) {
-                        ProgressView().controlSize(.small)
+                        LoadingBar()
                         Text(jobs.status[recordID] ?? "Writing the graphics…").font(.ui(size: 12.5)).foregroundColor(Theme.muted)
                     } else {
                         Text("No graphics yet for this message.").font(.ui(size: 12.5)).foregroundColor(Theme.muted)

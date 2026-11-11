@@ -94,7 +94,7 @@ struct SermonMapView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 .overlay {
                     if loading {
-                        HStack(spacing: 8) { ProgressView().controlSize(.small); Text("Reading the message…").font(.ui(size: 12)).foregroundColor(Theme.muted) }
+                        HStack(spacing: 8) { LoadingBar(); Text("Reading the message…").font(.ui(size: 12)).foregroundColor(Theme.muted) }
                     }
                 }
 

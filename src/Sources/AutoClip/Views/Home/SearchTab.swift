@@ -325,7 +325,7 @@ struct SearchTab: View {
                 Text("\(untranscribed.count) more \(untranscribed.count == 1 ? "isn't" : "aren't") transcribed yet, so \(untranscribed.count == 1 ? "it isn't" : "they aren't") searched.")
                     .font(.ui(size: 12)).foregroundColor(Theme.ink.opacity(0.55)).fixedSize(horizontal: false, vertical: true)
                 if let transcribing {
-                    HStack(spacing: 6) { ProgressView().controlSize(.small)
+                    HStack(spacing: 6) { LoadingBar()
                         Text(transcribing).font(.ui(size: 12)).foregroundColor(Theme.ink.opacity(0.6)).lineLimit(2) }
                     Button("Stop after this one") { stopTranscribing = true }.controlSize(.small)
                 } else {

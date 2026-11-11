@@ -21,7 +21,7 @@ struct MessageGraphicsPane: View {
             VStack(alignment: .leading, spacing: 20) {
                 if jobs.running(recordID) {
                     HStack(spacing: 8) {
-                        ProgressView().controlSize(.small)
+                        LoadingBar()
                         Text(jobs.status[recordID] ?? "Writing the graphics…").font(.ui(size: 13)).foregroundColor(Theme.muted)
                     }
                 } else if let c = carousel {

@@ -181,7 +181,7 @@ struct ThisWeekCard: View {
             Group {
                 switch state {
                 case .done: Image(systemName: "checkmark.circle.fill").foregroundColor(Theme.good)
-                case .working: ProgressView().controlSize(.small)
+                case .working: LoadingBar()
                 case .todo: Image(systemName: "circle").foregroundColor(Theme.faint)
                 }
             }

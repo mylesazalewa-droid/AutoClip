@@ -548,7 +548,7 @@ struct YouTubeURLSheet: View {
 
             Button(action: startDownload) {
                 HStack {
-                    if isDownloading { ProgressView().scaleEffect(0.7) }
+                    if isDownloading { LoadingBar(width: 90) }
                     Text(isDownloading ? "Downloading…" : "Import")
                 }
                 .font(.ui(size: 14, weight: .semibold))

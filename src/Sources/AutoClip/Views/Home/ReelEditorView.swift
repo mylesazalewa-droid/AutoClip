@@ -270,7 +270,7 @@ struct ReelDraftsView: View {
                 }
             }
             if let st = genStatus {
-                HStack(spacing: 6) { ProgressView().scaleEffect(0.5); Text(st).font(.ui(size: 12)).foregroundColor(Theme.ink.opacity(0.6)) }
+                HStack(spacing: 6) { LoadingBar(status: st, width: 100); Text(st).font(.ui(size: 12)).foregroundColor(Theme.ink.opacity(0.6)) }
             } else if let e = genError {
                 Text(e).font(.ui(size: 12)).foregroundColor(Theme.danger)
                     .fixedSize(horizontal: false, vertical: true)
@@ -899,7 +899,7 @@ struct ReelEditorView: View {
                 TextField("Say what to change: cut the part about my brother, start at the question…", text: $askText)
                     .textFieldStyle(.plain).font(.ui(size: 13)).foregroundColor(Theme.ink)
                     .onSubmit { ask(askText) }
-                if askBusy { ProgressView().scaleEffect(0.5).frame(width: 16, height: 16) }
+                if askBusy { LoadingBar(width: 50) }
                 Button("Change") { ask(askText) }
                     .buttonStyle(.plain).font(.ui(size: 13, weight: .semibold)).foregroundColor(Theme.onSand)
                     .padding(.horizontal, 10).padding(.vertical, 4)

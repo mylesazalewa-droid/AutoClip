@@ -22,7 +22,7 @@ struct StorageTab: View {
     var body: some View {
         ScrollView {
             PageHeader(eyebrow: "Manage", title: "Storage", subtitle: "What AutoClip keeps on this Mac, and what you can clear.") {
-                if scanning { ProgressView().controlSize(.small) }
+                if scanning { LoadingBar() }
                 else { Button { Task { await scan() } } label: { Label("Check again", systemImage: "arrow.clockwise") }.buttonStyle(SecondaryButtonStyle(compact: true)) }
             }
             VStack(alignment: .leading, spacing: 22) {
@@ -35,7 +35,7 @@ struct StorageTab: View {
                     ForEach(report.groups) { groupCard($0) }
                 } else {
                     HStack(spacing: 8) {
-                        ProgressView().controlSize(.small)
+                        LoadingBar()
                         Text("Adding up your files…").font(.ui(size: 13)).foregroundColor(Theme.muted)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)

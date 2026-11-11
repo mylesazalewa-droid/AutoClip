@@ -145,7 +145,7 @@ struct AssessTab: View {
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if let status {
-                    VStack(spacing: 10) { ProgressView().controlSize(.small); Text(status).font(.ui(size: 13)).foregroundColor(Theme.ink.opacity(0.6)) }
+                    VStack(spacing: 10) { LoadingBar(status: status, width: 240); Text(status).font(.ui(size: 13)).foregroundColor(Theme.ink.opacity(0.6)) }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if let error {
                     placeholder("Couldn't assess this video", error)
@@ -353,7 +353,7 @@ struct AssessTab: View {
             .padding(.leading, 14).padding(.trailing, 5).padding(.vertical, 4)
             .background(Capsule().fill(Theme.ink.opacity(0.05))).overlay(Capsule().stroke(Theme.line, lineWidth: 1))
             if let ytStatus {
-                HStack(spacing: 5) { ProgressView().scaleEffect(0.45).frame(width: 12, height: 12)
+                HStack(spacing: 5) { LoadingBar(status: ytStatus, width: 90)
                     Text(ytStatus).font(.ui(size: 11.5)).foregroundColor(Theme.muted) }
             } else if let ytError {
                 Text(ytError).font(.ui(size: 11.5)).foregroundColor(Theme.danger).fixedSize(horizontal: false, vertical: true)
@@ -650,7 +650,7 @@ struct AssessTab: View {
                         DeliverySection(report: r, d: d, play: play(at:))
                     } else {
                         AssessCard(title: "Delivery") {
-                            HStack(spacing: 8) { ProgressView().controlSize(.small)
+                            HStack(spacing: 8) { LoadingBar()
                                 Text(deliveryStatus ?? "Starting…").font(.ui(size: 13)).foregroundColor(Theme.ink.opacity(0.7)) }
                         }
                     }
@@ -722,7 +722,7 @@ struct AssessTab: View {
                     Text("Coach \(c.score)/10").font(.ui(size: 13, weight: .semibold)).foregroundColor(gold)
                 }
                 if deliveryStatus != nil || stageStatus != nil {
-                    HStack(spacing: 4) { ProgressView().scaleEffect(0.4).frame(width: 10, height: 10)
+                    HStack(spacing: 4) { LoadingBar(status: deliveryStatus ?? stageStatus, width: 60, height: 4)
                         Text(deliveryStatus ?? stageStatus ?? "").font(.ui(size: 11.5)).foregroundColor(Theme.ink.opacity(0.55)) }
                 }
             }

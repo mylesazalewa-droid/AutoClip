@@ -40,7 +40,7 @@ struct ContentKitSheet: View {
                 if let e = error { Text(e).font(.ui(size: 12)).foregroundColor(Theme.danger) }
                 HStack {
                     if let s = status {
-                        ProgressView().scaleEffect(0.6)
+                        LoadingBar(width: 90)
                         Text(s).font(.ui(size: 13)).foregroundColor(Theme.muted).lineLimit(1)
                     }
                     Spacer()

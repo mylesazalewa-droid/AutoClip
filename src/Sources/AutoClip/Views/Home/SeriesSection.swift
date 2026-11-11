@@ -94,7 +94,7 @@ struct SeriesSection: View {
                     Button("Edit series…") { editing = s }
                     Spacer()
                     if let status {
-                        ProgressView().controlSize(.small)
+                        LoadingBar()
                         Text(status).font(.ui(size: 12)).foregroundColor(Theme.ink.opacity(0.6)).lineLimit(1)
                     } else if s.videos.count < 2 {
                         Text("Add at least one more message").font(.ui(size: 12)).foregroundColor(Theme.ink.opacity(0.55))

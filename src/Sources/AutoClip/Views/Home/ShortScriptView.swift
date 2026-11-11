@@ -159,7 +159,7 @@ struct ShortScriptView: View {
                     Button { copy(script) } label: { Label(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc") }
                         .buttonStyle(SecondaryButtonStyle(compact: true)).disabled(script.isEmpty)
                     Button { improve() } label: {
-                        if working { HStack(spacing: 6) { ProgressView().controlSize(.small); Text("Rewriting…") } }
+                        if working { HStack(spacing: 6) { LoadingBar(); Text("Rewriting…") } }
                         else { Label("Make it better", systemImage: "sparkles") }
                     }
                     .buttonStyle(PrimaryButtonStyle(compact: true))

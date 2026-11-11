@@ -37,7 +37,7 @@ struct SetupCheckView: View {
     @ViewBuilder private var summaryIcon: some View {
         let bad = check.items.contains { $0.state == .problem }
         let warn = check.items.contains { $0.state == .warning }
-        if check.running { ProgressView().controlSize(.small).frame(width: 20) }
+        if check.running { LoadingBar(width: 60) }
         else if check.lastRun == nil { Image(systemName: "stethoscope").foregroundColor(.secondary).frame(width: 20) }
         else {
             Image(systemName: bad ? "xmark.octagon.fill" : warn ? "exclamationmark.triangle.fill" : "checkmark.seal.fill")
@@ -50,7 +50,7 @@ struct SetupCheckView: View {
             Group {
                 switch item.state {
                 case .waiting: Image(systemName: "circle").foregroundColor(.secondary.opacity(0.5))
-                case .checking: ProgressView().controlSize(.mini)
+                case .checking: LoadingBar(width: 70)
                 case .good: Image(systemName: "checkmark.circle.fill").foregroundColor(Theme.good)
                 case .warning: Image(systemName: "exclamationmark.triangle.fill").foregroundColor(Theme.sand)
                 case .problem: Image(systemName: "xmark.circle.fill").foregroundColor(Theme.danger)

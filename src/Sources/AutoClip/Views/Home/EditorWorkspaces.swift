@@ -169,7 +169,7 @@ struct ReframeWorkspace<Advanced: View>: View {
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         } else {
             RoundedRectangle(cornerRadius: 10).fill(Theme.ink.opacity(0.05)).aspectRatio(16 / 9, contentMode: .fit)
-                .overlay(ProgressView().controlSize(.small))
+                .overlay(LoadingBar())
         }
     }
 
@@ -249,7 +249,7 @@ struct ReframeWorkspace<Advanced: View>: View {
             }
         } else {
             HStack(spacing: 8) {
-                ProgressView().controlSize(.small)
+                LoadingBar()
                 Text("Looking for people…").font(.ui(size: 13)).foregroundColor(Theme.muted)
             }
         }

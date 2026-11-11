@@ -487,7 +487,7 @@ struct SocialGraphicsTab: View {
                         .offset(x: CGFloat(i) * 46, y: CGFloat(i) * 4)
                 }
                 VStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
+                    LoadingBar()
                     Text(jobs.status[rec.id] ?? "Working…").font(.ui(size: 12)).foregroundColor(Theme.muted)
                         .multilineTextAlignment(.center).frame(width: 170)
                 }

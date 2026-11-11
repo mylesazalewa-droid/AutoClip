@@ -204,7 +204,7 @@ struct MessageWritingPane: View {
 
             if store.isWorking(recordID, selected) {
                 VStack(spacing: 10) {
-                    ProgressView()
+                    LoadingBar(width: 220)
                     Text("Reading the whole message and writing…").font(.ui(size: 13)).foregroundColor(Theme.muted)
                     Text("You can switch tabs. It carries on.").font(.ui(size: 11.5)).foregroundColor(Theme.faint)
                 }
@@ -256,7 +256,7 @@ struct MessageWritingPane: View {
             HStack(spacing: 8) {
                 Image(systemName: k.icon).foregroundColor(on ? Theme.onSand : Theme.sand).frame(width: 18)
                 Text(k.title).font(.ui(size: 12.5, weight: .semibold)).lineLimit(1).fixedSize()
-                if store.isWorking(recordID, k) { ProgressView().controlSize(.mini) }
+                if store.isWorking(recordID, k) { LoadingBar(width: 70) }
                 else if done { Image(systemName: "checkmark.circle.fill").foregroundColor(on ? Theme.onSand : Theme.good).font(.ui(size: 12)) }
             }
             .padding(.horizontal, 10).padding(.vertical, 8)

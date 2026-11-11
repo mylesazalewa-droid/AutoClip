@@ -75,7 +75,7 @@ struct DeliveryOverviewCard: View {
                 }
             } else {
                 HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
+                    LoadingBar()
                     Text(status ?? "Measuring your delivery…").font(.ui(size: 13)).foregroundColor(Theme.muted)
                 }
             }

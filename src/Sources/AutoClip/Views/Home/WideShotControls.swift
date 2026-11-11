@@ -126,7 +126,7 @@ struct ScreenPicker: View {
                 .font(.ui(size: 12.5)).foregroundColor(Theme.muted)
             ZStack(alignment: .topLeading) {
                 if let image { Image(decorative: image, scale: 1).resizable().frame(width: width, height: height) }
-                else { Rectangle().fill(Theme.ink.opacity(0.06)).overlay(ProgressView().controlSize(.small)) }
+                else { Rectangle().fill(Theme.ink.opacity(0.06)).overlay(LoadingBar()) }
                 let box = CGRect(x: rect.minX * width, y: rect.minY * height, width: rect.width * width, height: rect.height * height)
                 Rectangle().fill(Theme.sand.opacity(0.18))
                     .overlay(Rectangle().stroke(Theme.sand, lineWidth: 2))

@@ -156,7 +156,20 @@ class WhisperService: ObservableObject {
             wordTimestamps: true
         )
 
+        // WhisperKit counts finished pieces of audio; read that twice a second for a percentage
+        let watch = progress.map { report in
+            Task { @MainActor in
+                report(0)
+                while !Task.isCancelled {
+                    try? await Task.sleep(nanoseconds: 500_000_000)
+                    let f = whisper.progress.fractionCompleted
+                    if f.isFinite, f > 0 { report(min(0.99, f)) }
+                }
+            }
+        }
+        defer { watch?.cancel() }
         let results = try await whisper.transcribe(audioPath: audioURL.path, decodeOptions: options)
+        progress?(1)
 
         var words: [Word] = []
         for result in results {

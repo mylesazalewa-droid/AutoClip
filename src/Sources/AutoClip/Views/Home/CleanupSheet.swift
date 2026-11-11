@@ -85,7 +85,7 @@ struct CleanupSheet: View {
 
     @ViewBuilder private var summary: some View {
         if words == nil {
-            HStack(spacing: 8) { ProgressView().scaleEffect(0.6); Text("Reading the transcript…").font(.ui(size: 13)).foregroundColor(Theme.muted) }
+            HStack(spacing: 8) { LoadingBar(width: 90); Text("Reading the transcript…").font(.ui(size: 13)).foregroundColor(Theme.muted) }
         } else if let p = plan {
             HStack(spacing: 22) {
                 stat(fmt(p.removedSeconds), "shorter")

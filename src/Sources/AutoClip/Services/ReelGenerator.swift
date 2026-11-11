@@ -70,13 +70,15 @@ enum TranscriptCache {
         let whisper = WhisperService.shared
         if !whisper.modelExists {
             progress("Downloading speech model…")
-            try await whisper.downloadModel { _, _ in }
+            try await whisper.downloadModel { f, _ in progress("Downloading speech model… \(Int(f * 100))%") }
         } else if !whisper.isModelLoaded {
             progress("Loading speech model…")
             try await whisper.loadModel()
         }
         progress("Transcribing…")
-        let words = try await whisper.transcribe(audioURL: URL(fileURLWithPath: videoPath))
+        let words = try await whisper.transcribe(audioURL: URL(fileURLWithPath: videoPath)) { f in
+            progress("Transcribing… \(Int(f * 100))%")
+        }
         save(words, for: videoPath)
         return words
     }

@@ -48,7 +48,7 @@ struct SocialGraphicsView: View {
                 VStack(spacing: 14) {
                     Spacer()
                     if let status {
-                        ProgressView().controlSize(.small)
+                        LoadingBar()
                         Text(status).font(.ui(size: 13)).foregroundColor(Theme.ink.opacity(0.6))
                     } else {
                         Image(systemName: "photo.on.rectangle.angled").font(.ui(size: 38)).foregroundColor(gold)
@@ -75,7 +75,7 @@ struct SocialGraphicsView: View {
                         }.padding(.horizontal, 16).padding(.top, 12)
                     }
                     if let status {
-                        HStack(spacing: 6) { ProgressView().scaleEffect(0.5); Text(status).font(.ui(size: 12)).foregroundColor(Theme.ink.opacity(0.6)) }
+                        HStack(spacing: 6) { LoadingBar(status: status, width: 100); Text(status).font(.ui(size: 12)).foregroundColor(Theme.ink.opacity(0.6)) }
                             .padding(.top, 8)
                     }
                     section("Thumbnail for the full video", kinds: [.thumbnail], min: 360)
@@ -107,7 +107,7 @@ struct SocialGraphicsView: View {
             ZStack {
                 Theme.ink.opacity(0.05)
                 if let img = images[c.id] { Image(nsImage: img).resizable().scaledToFit() }
-                else { ProgressView().controlSize(.small) }
+                else { LoadingBar() }
             }
             .aspectRatio(c.size.width / c.size.height, contentMode: .fit)
             .cornerRadius(6)

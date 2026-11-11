@@ -114,7 +114,7 @@ private struct EpisodeCard: View {
                     Spacer()
                     if let status {
                         HStack(spacing: 6) {
-                            ProgressView().controlSize(.mini)
+                            LoadingBar(width: 70)
                             Text(status).font(.ui(size: 11.5)).foregroundColor(Theme.cream).lineLimit(1)
                         }
                         .padding(8).frame(maxWidth: .infinity, alignment: .leading).background(Color.black.opacity(0.6))
@@ -196,7 +196,7 @@ struct NewEpisodeSheet: View {
                 TextField("Or paste a YouTube link", text: $link).textFieldStyle(.roundedBorder).onSubmit(download)
                 Button("Import", action: download).disabled(link.isEmpty || downloading != nil)
             }
-            if let downloading { HStack { ProgressView().controlSize(.small); Text(downloading).font(.ui(size: 12)).foregroundColor(Theme.ink.opacity(0.6)) } }
+            if let downloading { HStack { LoadingBar(status: downloading); Text(downloading).font(.ui(size: 12)).foregroundColor(Theme.ink.opacity(0.6)) } }
             if let error { Text(error).font(.ui(size: 12)).foregroundColor(warn) }
             if perPerson && files.count == 1 {
                 Text("Add a recording for each person.").font(.ui(size: 12)).foregroundColor(warn)
@@ -357,7 +357,7 @@ struct PodcastEpisodeView: View {
     @ViewBuilder private func statusLine() -> some View {
         if let st = store.status[id] {
             HStack(spacing: 8) {
-                if let p = store.progress[id] { ProgressView(value: p).frame(width: 140) } else { ProgressView().controlSize(.small) }
+                if let p = store.progress[id] { ProgressView(value: p).frame(width: 140) } else { LoadingBar() }
                 Text(st).font(.ui(size: 13)).foregroundColor(Theme.ink.opacity(0.7)).lineLimit(1)
                 Spacer()
                 Button("Stop") { store.cancel(id) }.controlSize(.small)
@@ -388,7 +388,7 @@ struct PodcastEpisodeView: View {
                 Color.black
                 VideoPlayer(player: player)
                     .frame(width: e.isAudioOnly ? box.width : size.width * s, height: e.isAudioOnly ? 80 : size.height * s)
-                if building { ProgressView().controlSize(.small) }
+                if building { LoadingBar() }
             }
             .frame(width: box.width, height: e.isAudioOnly ? 80 : box.height).cornerRadius(8)
             if !e.isAudioOnly {
@@ -959,7 +959,7 @@ struct PodcastExportSection: View {
                         .buttonStyle(PrimaryButtonStyle())
                         .disabled(store.status[id] != nil || (e.settings.formats.isEmpty && !e.settings.exportAudio && !e.isAudioOnly))
                     if let st = store.status[id] {
-                        if let p = store.progress[id] { ProgressView(value: p).frame(width: 160) } else { ProgressView().controlSize(.small) }
+                        if let p = store.progress[id] { ProgressView(value: p).frame(width: 160) } else { LoadingBar() }
                         Text(st).font(.ui(size: 13)).foregroundColor(Theme.ink.opacity(0.7))
                         Button("Stop") { store.cancel(id) }.controlSize(.small)
                     }

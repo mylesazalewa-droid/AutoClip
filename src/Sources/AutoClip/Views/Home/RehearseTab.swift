@@ -168,7 +168,7 @@ struct RehearseTab: View {
                 }
             }
             if let status {
-                HStack(spacing: 6) { ProgressView().scaleEffect(0.5); Text(status).font(.ui(size: 12)).foregroundColor(Theme.muted) }
+                HStack(spacing: 6) { LoadingBar(status: status, width: 100); Text(status).font(.ui(size: 12)).foregroundColor(Theme.muted) }
             } else if let error {
                 Text(error).font(.ui(size: 12)).foregroundColor(Theme.danger).fixedSize(horizontal: false, vertical: true)
             }

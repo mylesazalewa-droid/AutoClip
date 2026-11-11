@@ -152,7 +152,7 @@ struct CarouselWindow: View {
             }
             Spacer()
             if let status {
-                ProgressView().controlSize(.small)
+                LoadingBar()
                 Text(status).font(.ui(size: 12)).foregroundColor(Theme.muted).lineLimit(1)
             }
             if let saved {
@@ -190,7 +190,7 @@ struct CarouselWindow: View {
             Text("AI reads the full sermon and writes a carousel (a cover, the question it answers, the big idea, the main points, the key Scripture, a quote, a question for the week and a closing slide) plus a week of single posts. Then design them your way and save them for Instagram.")
                 .font(.ui(size: 13)).foregroundColor(Theme.muted).multilineTextAlignment(.center).frame(maxWidth: 540)
             if let status {
-                HStack(spacing: 8) { ProgressView().controlSize(.small); Text(status).font(.ui(size: 13)).foregroundColor(Theme.muted) }
+                HStack(spacing: 8) { LoadingBar(status: status); Text(status).font(.ui(size: 13)).foregroundColor(Theme.muted) }
                 Text("You can close this window. It keeps going and shows up in Social Graphics.")
                     .font(.ui(size: 11.5)).foregroundColor(Theme.faint)
             } else {
@@ -214,7 +214,7 @@ struct CarouselWindow: View {
             Text("Quotes, Scripture, a question for the comments, encouragement and an invite for Sunday. Each one in its own look.")
                 .font(.ui(size: 13)).foregroundColor(Theme.muted).multilineTextAlignment(.center).frame(maxWidth: 480)
             if let status {
-                HStack(spacing: 8) { ProgressView().controlSize(.small); Text(status).font(.ui(size: 13)).foregroundColor(Theme.muted) }
+                HStack(spacing: 8) { LoadingBar(status: status); Text(status).font(.ui(size: 13)).foregroundColor(Theme.muted) }
             } else {
                 Button { if let r = record { jobs.makePosts(r) } } label: { Label("Write the posts", systemImage: "sparkles") }
                     .buttonStyle(PrimaryButtonStyle()).disabled(record == nil)
@@ -610,7 +610,7 @@ struct CarouselWindow: View {
                                 }
                             }
                             .controlSize(.small)
-                            if rewriting { HStack(spacing: 6) { ProgressView().controlSize(.mini); Text("Rewriting…").font(.ui(size: 11.5)).foregroundColor(Theme.muted) } }
+                            if rewriting { HStack(spacing: 6) { LoadingBar(width: 70); Text("Rewriting…").font(.ui(size: 11.5)).foregroundColor(Theme.muted) } }
                         }
                     }
                     section("Background picture") {
@@ -964,7 +964,7 @@ struct CarouselWindow: View {
                 Spacer()
                 Button("Cancel") { showBG = false }.disabled(bgBusy)
                 Button { generateBG() } label: {
-                    if bgBusy { HStack(spacing: 6) { ProgressView().controlSize(.small); Text("Painting…") } }
+                    if bgBusy { HStack(spacing: 6) { LoadingBar(); Text("Painting…") } }
                     else { Label("Make it", systemImage: "wand.and.stars") }
                 }
                 .buttonStyle(PrimaryButtonStyle(compact: true)).disabled(bgBusy || bgPrompt.isEmpty)

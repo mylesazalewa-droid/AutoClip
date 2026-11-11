@@ -144,7 +144,7 @@ struct UpdateSheet: View {
                 .frame(height: 220).padding(10).background(RoundedRectangle(cornerRadius: 8).fill(Theme.ink.opacity(0.05)))
                 if let s = updater.status {
                     HStack(spacing: 8) {
-                        if let p = updater.progress { ProgressView(value: p).frame(width: 140) } else { ProgressView().controlSize(.small) }
+                        if let p = updater.progress { ProgressView(value: p).frame(width: 140) } else { LoadingBar() }
                         Text(s).font(.ui(size: 12)).foregroundColor(Theme.muted)
                     }
                 }
