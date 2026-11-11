@@ -1093,6 +1093,27 @@ Respond with ONLY valid JSON, no markdown:
         }
     }
 
+    /// The Claude API version AutoClip is written for. Keys the Console issues now
+    /// (starting "sk-ant-usr-") are used with this version.
+    static let anthropicVersion = "2026-10-21"
+
+    /// Checks a Claude key without spending anything: listing models is free.
+    /// Returns nil when the key works, or what's wrong in plain words.
+    func checkAnthropicKey(_ key: String) async -> String? {
+        let k = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !k.isEmpty else { return "No key saved." }
+        var req = URLRequest(url: URL(string: "https://api.anthropic.com/v1/models?limit=1")!, timeoutInterval: 20)
+        req.setValue(k, forHTTPHeaderField: "x-api-key")
+        req.setValue(Self.anthropicVersion, forHTTPHeaderField: "anthropic-version")
+        do {
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            try checkHTTP(resp, data: data)
+            return nil
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
     private func callAnthropic(prompt: String, apiKey: String, model: String) async throws -> String {
         var body: [String: Any] = [
             "model": model,
@@ -1105,7 +1126,7 @@ Respond with ONLY valid JSON, no markdown:
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue(apiKey,             forHTTPHeaderField: "x-api-key")
-        req.setValue("2023-06-01",       forHTTPHeaderField: "anthropic-version")
+        req.setValue(Self.anthropicVersion, forHTTPHeaderField: "anthropic-version")
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
         req.timeoutInterval = 120
         let (data, resp) = try await URLSession.shared.data(for: req)
@@ -1253,7 +1274,10 @@ Respond with ONLY valid JSON, no markdown:
                 )
             }
             if rawMsg.contains("invalid x-api-key") || rawMsg.contains("invalid_api_key") || http.statusCode == 401 {
-                throw llmError("Invalid API key. Check that you copied the full key correctly.")
+                throw llmError("Claude didn't accept the API key. Copy the whole key again from console.anthropic.com → API Keys and paste it in Settings → AI.\n\nClaude said: \(rawMsg.prefix(200))")
+            }
+            if http.statusCode == 403 {
+                throw llmError("Claude accepted the key but won't allow this request. Check the key's workspace and the account's billing at console.anthropic.com.\n\nClaude said: \(rawMsg.prefix(200))")
             }
             throw llmError(rawMsg.isEmpty ? "HTTP \(http.statusCode)" : String(rawMsg.prefix(300)))
         }

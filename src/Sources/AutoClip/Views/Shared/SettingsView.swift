@@ -144,7 +144,10 @@ private struct AISettings: View {
                 }
                 Text("The key stays in your Keychain and is only sent to \(provider.rawValue). The AI company bills you directly, so set a spending limit in your account.")
                     .font(.ui(size: 12)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
-                if let note { Text(note).font(.ui(size: 12)).foregroundColor(Theme.good) }
+                if let note {
+                    Text(note).font(.ui(size: 12)).foregroundColor(note.contains("didn't work") ? Theme.warn : Theme.good)
+                        .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+                }
             }
             SettingsSection(title: "On this Mac") {
                 Row(title: "Use on-device AI for simple jobs", detail: "Hooks, captions and topic lists run free and private through Ollama, when it's installed and running.") {
@@ -171,6 +174,15 @@ private struct AISettings: View {
             newKey = ""
             note = k.isEmpty ? "Key removed." : "Key saved."
             await refresh()
+            // A Claude key is checked straight away, for free, so a bad one shows here and not mid-sermon
+            if !k.isEmpty, p == .anthropic {
+                note = "Key saved. Checking it with Claude…"
+                if let problem = await LLMClipService.shared.checkAnthropicKey(k) {
+                    note = "Key saved, but it didn't work: \(problem)"
+                } else {
+                    note = "Key saved and working."
+                }
+            }
         }
     }
 }

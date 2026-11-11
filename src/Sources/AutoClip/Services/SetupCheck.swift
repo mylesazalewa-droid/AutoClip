@@ -257,8 +257,15 @@ final class SetupCheck: ObservableObject {
     private static func aiCheck() async -> (State, String, Fix?) {
         let raw = UserDefaults.standard.string(forKey: "ar_provider") ?? LLMClipService.AIProvider.anthropic.rawValue
         let provider = LLMClipService.AIProvider(rawValue: raw) ?? .anthropic
-        let saved = !((await LLMClipService.shared.loadAPIKey(for: provider)) ?? "").isEmpty
-        if saved { return (.good, "A \(provider.rawValue) key is saved. Titles, captions and graphics can be written.", nil) }
+        let key = (await LLMClipService.shared.loadAPIKey(for: provider)) ?? ""
+        if !key.isEmpty, provider == .anthropic {
+            // Listing models is free, so this proves the key works without spending credits
+            if let problem = await LLMClipService.shared.checkAnthropicKey(key) {
+                return (.problem, "The Claude key didn't work: \(problem)", .openAISettings)
+            }
+            return (.good, "The Claude key works. Titles, captions and graphics can be written. (Checked for free.)", nil)
+        }
+        if !key.isEmpty { return (.good, "A \(provider.rawValue) key is saved. Titles, captions and graphics can be written.", nil) }
         return (.warning, "No AI key saved. Clips are still made on this Mac; writing titles, captions and graphics needs a key.", .openAISettings)
     }
 }
