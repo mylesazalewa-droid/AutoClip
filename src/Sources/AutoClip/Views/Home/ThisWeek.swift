@@ -34,6 +34,11 @@ struct ThisWeekCard: View {
                 Text("This week").font(Theme.display(30, weight: .medium)).foregroundColor(Theme.cream)
                 Text(weekLabel).font(.ui(size: 13)).foregroundColor(Theme.muted)
                 Spacer()
+                if let rec = latest {
+                    Button { WeekReady.shared.show(rec.id) } label: { Label("See the week", systemImage: "calendar") }
+                        .buttonStyle(SecondaryButtonStyle(compact: true))
+                        .help("This message's clips and graphics laid out by day")
+                }
             }
             if let rec = latest { sermon(rec) } else { start }
         }

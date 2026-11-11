@@ -2036,7 +2036,7 @@ struct ReelThumbnailView: View {
     }
 
     /// Crops to `aspect` around the biggest face, with the face a little above the middle.
-    private static func frame(_ img: CGImage, aspect: CGFloat) -> CGImage? {
+    static func frame(_ img: CGImage, aspect: CGFloat) -> CGImage? {
         let req = VNDetectFaceRectanglesRequest()
         try? VNImageRequestHandler(cgImage: img, options: [:]).perform([req])
         guard let face = (req.results ?? []).max(by: { $0.boundingBox.width * $0.boundingBox.height < $1.boundingBox.width * $1.boundingBox.height }) else { return nil }
@@ -2044,7 +2044,7 @@ struct ReelThumbnailView: View {
         return crop(img, aspect: aspect, centerX: b.midX, centerY: 1 - b.midY + 0.12)
     }
 
-    private static func crop(_ img: CGImage, aspect: CGFloat, centerX: CGFloat, centerY: CGFloat) -> CGImage? {
+    static func crop(_ img: CGImage, aspect: CGFloat, centerX: CGFloat, centerY: CGFloat) -> CGImage? {
         let W = CGFloat(img.width), H = CGFloat(img.height)
         var w = W, h = W / aspect
         if h > H { h = H; w = H * aspect }

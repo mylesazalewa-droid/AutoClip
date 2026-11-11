@@ -42,8 +42,14 @@ struct ScrubThumb: View {
         GeometryReader { geo in
             let index = position.map { min(max(moments.count - 1, 0), Int($0 / max(geo.size.width, 1) * CGFloat(moments.count))) }
             ZStack(alignment: .bottom) {
-                ReelThumbnailView(path: path, faceAspect: faceAspect)
-                    .frame(width: geo.size.width, height: geo.size.height).clipped()
+                if let d = draft, let t = ClipMomentThumb.openingTime(d), let aspect = faceAspect {
+                    // Each clip shows its own opening moment, so clips are easy to tell apart
+                    ClipMomentThumb(path: path, time: t, aspect: aspect)
+                        .frame(width: geo.size.width, height: geo.size.height).clipped()
+                } else {
+                    ReelThumbnailView(path: path, faceAspect: faceAspect)
+                        .frame(width: geo.size.width, height: geo.size.height).clipped()
+                }
                 if let index, moments.indices.contains(index) {
                     if let img = frames[index] ?? nearest(index) {
                         Image(nsImage: img).resizable().scaledToFill()
@@ -108,6 +114,51 @@ struct ScrubThumb: View {
                 }
             }
             loading = false
+        }
+    }
+}
+
+
+/// A picture of the moment a clip opens on, framed on the speaker.
+struct ClipMomentThumb: View {
+    let path: String
+    let time: Double
+    let aspect: CGFloat
+    @State private var image: NSImage?
+
+    private static let cache = NSCache<NSString, NSImage>()
+
+    /// When the clip's first kept word is said, a beat in so the speaker's mouth is open.
+    static func openingTime(_ d: ReelDraft) -> Double? {
+        for p in d.pieces {
+            for s in p.sentences where s.included {
+                if let w = s.keptWords.first { return w.startTime + 0.4 }
+            }
+        }
+        return nil
+    }
+
+    var body: some View {
+        ZStack {
+            Rectangle().fill(Theme.raised2)
+            if let image {
+                Image(nsImage: image).resizable().scaledToFill().transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.25), value: image != nil)
+        .task(id: "\(path)|\(Int(time * 10))|\(aspect)") {
+            let key = "\(path)|\(Int(time * 10))|\(aspect)" as NSString
+            if let hit = Self.cache.object(forKey: key) { image = hit; return }
+            guard FileManager.default.fileExists(atPath: path),
+                  let cg = await Reframe.frame(path: path, at: time, maxWidth: 720) else { return }
+            let a = aspect
+            let framed = await Task.detached(priority: .utility) { () -> CGImage in
+                if abs(CGFloat(cg.width) / CGFloat(cg.height) - a) < 0.02 { return cg }
+                return ReelThumbnailView.frame(cg, aspect: a) ?? ReelThumbnailView.crop(cg, aspect: a, centerX: 0.5, centerY: 0.5) ?? cg
+            }.value
+            let ns = NSImage(cgImage: framed, size: .zero)
+            Self.cache.setObject(ns, forKey: key)
+            image = ns
         }
     }
 }

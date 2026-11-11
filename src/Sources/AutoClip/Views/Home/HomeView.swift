@@ -18,6 +18,7 @@ struct HomeView: View {
     private let gold = Theme.sand
     @Environment(\.pageVisible) private var homeVisible
     @State private var visited: Set<HomeTab> = []
+    @ObservedObject private var weekReady = WeekReady.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Each page's backdrop, to go back to when you return to it
     @State private var backdrops: [HomeTab: String] = [:]
@@ -127,6 +128,12 @@ struct HomeView: View {
         }
         .sheet(isPresented: $appState.showYouTubeSheet) {
             YouTubeURLSheet()
+        }
+        .sheet(item: $weekReady.showing) { WeekReadyView(recordID: $0.id) }
+        .onAppear { weekReady.presentIfReady() }
+        .onReceive(CarouselJobs.shared.$status) { _ in
+            // Graphics finishing is the last thing a new message waits for
+            DispatchQueue.main.async { weekReady.presentIfReady() }
         }
         // "Make clips" in the Podcast tab opens Auto Reels
         .onReceive(AutoReelsHandoff.shared.$showTab) { show in

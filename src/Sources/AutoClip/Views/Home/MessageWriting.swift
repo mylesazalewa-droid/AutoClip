@@ -197,8 +197,8 @@ struct MessageWritingPane: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 8)], spacing: 8) {
-                ForEach(WritingKind.allCases) { k in kindChip(k) }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) { ForEach(WritingKind.allCases) { k in kindChip(k) } }
             }
             Text(selected.blurb).font(.ui(size: 12.5)).foregroundColor(Theme.muted).fixedSize(horizontal: false, vertical: true)
 
@@ -255,8 +255,7 @@ struct MessageWritingPane: View {
         return Button { selected = k } label: {
             HStack(spacing: 8) {
                 Image(systemName: k.icon).foregroundColor(on ? Theme.onSand : Theme.sand).frame(width: 18)
-                Text(k.title).font(.ui(size: 12.5, weight: .semibold)).lineLimit(1)
-                Spacer(minLength: 0)
+                Text(k.title).font(.ui(size: 12.5, weight: .semibold)).lineLimit(1).fixedSize()
                 if store.isWorking(recordID, k) { ProgressView().controlSize(.mini) }
                 else if done { Image(systemName: "checkmark.circle.fill").foregroundColor(on ? Theme.onSand : Theme.good).font(.ui(size: 12)) }
             }
