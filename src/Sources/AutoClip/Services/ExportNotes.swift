@@ -6,11 +6,11 @@ final class ExportNotes {
     static let shared = ExportNotes()
     private var shown: Set<String> = []
 
-    func add(_ text: String) {
+    func add(_ text: String, title: String = "Your clip was exported") {
         // Once per session for the same thing, so a batch export doesn't stack them up
         guard shown.insert(text).inserted else { return }
         let alert = NSAlert()
-        alert.messageText = "Your clip was exported"
+        alert.messageText = title
         alert.informativeText = text
         alert.addButton(withTitle: "OK")
         if let w = NSApp.keyWindow ?? NSApp.mainWindow, w.attachedSheet == nil {

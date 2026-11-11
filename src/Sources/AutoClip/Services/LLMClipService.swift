@@ -64,8 +64,14 @@ actor LLMClipService {
 
     // MARK: - Keychain
 
+    /// A pasted key without the spaces, line breaks or quotes a copy can pick up.
+    static func clean(_ key: String) -> String {
+        key.components(separatedBy: .whitespacesAndNewlines).joined()
+            .trimmingCharacters(in: CharacterSet(charactersIn: "\"'“”‘’`"))
+    }
+
     func saveAPIKey(_ key: String, for provider: AIProvider) {
-        let data = Data(key.utf8)
+        let data = Data(Self.clean(key).utf8)
         let query: [CFString: Any] = [
             kSecClass:       kSecClassGenericPassword,
             kSecAttrService: provider.keychainService as CFString
@@ -86,7 +92,7 @@ actor LLMClipService {
         var result: AnyObject?
         guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
               let data = result as? Data else { return nil }
-        return String(data: data, encoding: .utf8)
+        return String(data: data, encoding: .utf8).map(Self.clean)
     }
 
     // MARK: - Segment-based prompt builder
@@ -1082,7 +1088,11 @@ Respond with ONLY valid JSON, no markdown:
 
     // MARK: - Anthropic
 
-    private func callAnthropic(prompt: String, apiKey: String) async throws -> String {
+    private func callAnthropic(prompt: String, apiKey passed: String) async throws -> String {
+        // Always the key saved now: a page that loaded the key earlier (or a Retry) may hold an old one
+        let saved = loadAPIKey(for: .anthropic) ?? ""
+        let apiKey = Self.clean(saved.isEmpty ? passed : saved)
+        guard !apiKey.isEmpty else { throw llmError("No Claude API key saved. Add one in Settings → AI.") }
         do {
             return try await callAnthropic(prompt: prompt, apiKey: apiKey, model: "claude-haiku-5-5")
         } catch {
@@ -1100,7 +1110,7 @@ Respond with ONLY valid JSON, no markdown:
     /// Checks a Claude key without spending anything: listing models is free.
     /// Returns nil when the key works, or what's wrong in plain words.
     func checkAnthropicKey(_ key: String) async -> String? {
-        let k = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        let k = Self.clean(key)
         guard !k.isEmpty else { return "No key saved." }
         var req = URLRequest(url: URL(string: "https://api.anthropic.com/v1/models?limit=1")!, timeoutInterval: 20)
         req.setValue(k, forHTTPHeaderField: "x-api-key")

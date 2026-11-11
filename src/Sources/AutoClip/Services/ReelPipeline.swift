@@ -154,12 +154,14 @@ enum ReelPipeline {
             let storySentences = ReelDraft.sentences(from: words)
             var usedSentences = Set<Int>()
             var usedClipIDs: Set<UUID> = []
+            var aiOff: String?
             for i in 0..<autoReels {
                 await upd(0.40 + Double(i) / Double(autoReels) * 0.10,
                           "Selecting clips for clip \(i + 1) of \(autoReels)…")
                 let localVariation = baseVariation + i + 1
-                var reelClips: [Clip]
-                if useAI && !apiKey.isEmpty {
+                var reelClips: [Clip] = []
+                var madeByAI = false
+                if useAI && !apiKey.isEmpty && aiOff == nil {
                     await upd(0.40 + Double(i) / Double(autoReels) * 0.10,
                               "AI is writing the story for clip \(i + 1)…")
                     do {
@@ -185,13 +187,17 @@ enum ReelPipeline {
                         aiKeywords.append(plan.keywords)
                         await upd(0.40 + Double(i) / Double(autoReels) * 0.10,
                                   "AI built clip \(i + 1) ✓")
+                        madeByAI = true
                     } catch {
-                        // Surface the real error — don't silently fall back
-                        throw NSError(domain: "AutoClip", code: 99, userInfo: [
-                            NSLocalizedDescriptionKey: "AI clip selection failed for clip \(i + 1): \(error.localizedDescription)"
-                        ])
+                        // Don't lose the sermon over the AI: make the rest with the built-in picker and say why
+                        aiOff = error.localizedDescription
+                        await upd(0.40 + Double(i) / Double(autoReels) * 0.10,
+                                  "AI couldn't help, so the built-in picker is choosing the clips…")
                     }
-                } else if single {
+                }
+                if !madeByAI {
+                    if useAI && !apiKey.isEmpty { aiTitles.append(""); aiHooks.append(""); aiKeywords.append([]) }
+                    if single {
                     // One continuous moment, the best one the scorer finds that isn't used yet
                     guard let r = ReelGenerator.singleWindow(storySentences, segments: segments, target: targetDur,
                                                              avoid: usedSentences, rank: i == 0 ? baseVariation % 3 : 0)
@@ -204,8 +210,9 @@ enum ReelPipeline {
                                                                previouslyUsedIDs: usedClipIDs)
                     reelClips = hook.map { [$0] + rest } ?? rest
                 }
+                }
                 // AI story mode already decides the order (hook first, then the story)
-                if let smode = storylineMode, !(useAI && !apiKey.isEmpty) { reelClips = smode.order(reelClips) }
+                if let smode = storylineMode, !madeByAI { reelClips = smode.order(reelClips) }
                 if !reelClips.isEmpty {
                     reelGroups.append(reelClips)
                     usedClipIDs.formUnion(reelClips.map { $0.id })
@@ -213,6 +220,14 @@ enum ReelPipeline {
             }
             guard !reelGroups.isEmpty else {
                 throw NSError(domain: "AutoClip", code: 4, userInfo: [NSLocalizedDescriptionKey: "No clips could be selected."])
+            }
+
+            if let aiOff {
+                let n = reelGroups.count
+                await MainActor.run {
+                    ExportNotes.shared.add("Your \(n) clip\(n == 1 ? " was" : "s were") made by AutoClip's built-in picker, because the AI couldn't be used: \(aiOff)\n\nFix the key in Settings → AI, then use Generate more to have AI pick clips too.",
+                                           title: "Clips are ready, without AI")
+                }
             }
 
             // Reels are saved as editable drafts — nothing is rendered until the user
