@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Video or audio</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.movie</string>
+				<string>public.audio</string>
+			</array>
+		</dict>
+	</array>
+	<key>CFBundleExecutable</key>
+	<string>AutoClip</string>
+	<key>CFBundleIconFile</key>
+	<string>AutoClipIcon</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.autoclip.app.dev</string>
+	<key>CFBundleName</key>
+	<string>AutoClip</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>3.27.0</string>
+	<key>CFBundleSupportedPlatforms</key>
+	<array>
+		<string>MacOSX</string>
+	</array>
+	<key>CFBundleVersion</key>
+	<string>300</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>NSCameraUsageDescription</key>
+	<string>AutoClip records your practice runs on camera so it can assess your stage presence.</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>AutoClip shares review links with phones on your Wi-Fi so someone can approve clips and graphics.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>AutoClip records your practice runs so it can assess your delivery.</string>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
+	<key>NSQuitAlwaysKeepsWindows</key>
+	<false/>
+	<key>NSServices</key>
+	<array>
+		<dict>
+			<key>NSMenuItem</key>
+			<dict>
+				<key>default</key>
+				<string>Make Clips with AutoClip</string>
+			</dict>
+			<key>NSMessage</key>
+			<string>makeClips</string>
+			<key>NSPortName</key>
+			<string>AutoClip</string>
+			<key>NSRequiredContext</key>
+			<dict/>
+			<key>NSSendFileTypes</key>
+			<array>
+				<string>public.movie</string>
+				<string>public.audio</string>
+			</array>
+		</dict>
+	</array>
+	<key>NSSupportsAutomaticTermination</key>
+	<false/>
+</dict>
+</plist>

@@ -390,14 +390,17 @@ struct ReelDraftsView: View {
         case .todo: list = list.filter { !Self.done($0.d) }
         case .done: list = list.filter { Self.done($0.d) }
         }
-        if byStrength { list.sort { ClipStrength.score($0.d) > ClipStrength.score($1.d) } }
+        if byStrength {
+            let score = Dictionary(list.map { ($0.d.id, ClipStrength.score($0.d)) }, uniquingKeysWith: { a, _ in a })
+            list.sort { score[$0.d.id, default: 0] > score[$1.d.id, default: 0] }
+        }
         return list
     }
 
     /// The three strongest clips, when there are enough to choose from.
     private var best: Set<UUID> {
         guard drafts.count >= 4 else { return [] }
-        return Set(drafts.sorted { ClipStrength.score($0) > ClipStrength.score($1) }.prefix(3).map(\.id))
+        return Set(drafts.map { ($0.id, ClipStrength.score($0)) }.sorted { $0.1 > $1.1 }.prefix(3).map(\.0))
     }
 
     private var listBar: some View {
@@ -2161,7 +2164,21 @@ enum ClipStrength {
         return nil
     }
 
+    /// Scores are remembered until the clip changes: the list asks for every clip's score once per
+    /// row, which used to mean re-sorting the whole list for each row (seconds with 20 clips).
+    private static var remembered: [UUID: (draft: ReelDraft, score: Int)] = [:]
+    private static let lock = NSLock()
+
     static func score(_ d: ReelDraft) -> Int {
+        lock.lock()
+        if let r = remembered[d.id], r.draft == d { lock.unlock(); return r.score }
+        lock.unlock()
+        let s = workOut(d)
+        lock.lock(); remembered[d.id] = (d, s); lock.unlock()
+        return s
+    }
+
+    private static func workOut(_ d: ReelDraft) -> Int {
         let hook = HookLab.wordScore(firstLine(d) ?? "")
         let words = d.pieces.flatMap { $0.sentences.flatMap(\.keptWords) }
         let talk = words.reduce(0.0) { $0 + max(0, $1.endTime - $1.startTime) }

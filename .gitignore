@@ -34,3 +34,7 @@ build/
 *.swp
 *~
 Samples/
+
+# Intel half of the universal build
+.build-x86/
+release-out/

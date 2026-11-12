@@ -53,6 +53,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 HomeNav.shared.open(.social)
             } else if page == "approvals" {
                 HomeNav.shared.open(.approvals)
+            } else if let page, raw == nil, let tab = HomeTab(rawValue: page) {
+                HomeNav.shared.open(tab)
             } else if let raw, let id = UUID(uuidString: raw) {
                 if response.actionIdentifier == Notifier.reviewAction { AutoReelsStore.shared.reviewOnOpen = id }
                 if let open = CommandBar.shared.openReel { open(id) }
@@ -130,6 +132,28 @@ enum Notifier {
         try? await center.add(UNNotificationRequest(identifier: "social-" + rec.id.uuidString, content: n, trigger: nil))
     }
 
+    /// "Assess is finished": any page's long work, done while you were in another app.
+    static func pageDone(_ tab: HomeTab) async {
+        guard !NSApp.isActive else { return }
+        let names: [HomeTab: (String, String)] = [
+            .assess: ("Assess is finished", "The message's report is ready to read."),
+            .rehearse: ("Rehearse is finished", "Your practice run has been read."),
+            .improve: ("Your clip is saved", "Improve a Clip has finished."),
+            .search: ("Search is ready", "Your messages have been transcribed and can be searched."),
+            .worship: ("Worship is finished", "The worship set is ready to look at."),
+            .podcast: ("Your podcast is ready", "The episode has finished."),
+        ]
+        guard let (title, body) = names[tab] else { return }
+        let c = UNUserNotificationCenter.current()
+        guard (try? await c.requestAuthorization(options: [.alert, .sound, .badge])) == true else { return }
+        let n = UNMutableNotificationContent()
+        n.title = title
+        n.body = body
+        n.sound = .default
+        n.userInfo = ["page": tab.rawValue]
+        try? await c.add(UNNotificationRequest(identifier: "done-\(tab.rawValue)-\(Date().timeIntervalSince1970)", content: n, trigger: nil))
+    }
+
     private static func thumbnail(_ rec: AutoReelRecord) async -> URL? {
         guard let piece = rec.drafts?.first?.pieces.first, let s = piece.sentences.first else { return nil }
         let g = AVAssetImageGenerator(asset: AVURLAsset(url: URL(fileURLWithPath: piece.sourceVideoPath)))
@@ -151,6 +175,7 @@ final class DockStatus {
     static let shared = DockStatus()
     private var bag = Set<AnyCancellable>()
     private var showing = false
+    private var loggedJobs = 0
 
     func start() {
         AutoReelsStore.shared.$activeJobs.receive(on: RunLoop.main).sink { [weak self] _ in self?.refresh() }.store(in: &bag)
@@ -163,6 +188,11 @@ final class DockStatus {
     private func refresh() {
         let tile = NSApp.dockTile
         let jobs = AutoReelsStore.shared.activeJobs.filter { !$0.isFinished }
+        if jobs.count != loggedJobs {
+            AppLog.write(jobs.isEmpty ? "Clips: nothing being made (using \(AppLog.memoryMB()) MB)"
+                                      : "Clips: \(jobs.count) being made (using \(AppLog.memoryMB()) MB)")
+            loggedJobs = jobs.count
+        }
         if jobs.isEmpty {
             if showing { tile.contentView = nil; showing = false }
         } else {

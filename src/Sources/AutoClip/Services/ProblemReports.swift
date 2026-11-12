@@ -17,6 +17,7 @@ final class ProblemReports: ObservableObject {
 
     /// Called once at launch.
     func start() {
+        AppLog.start()
         let fm = FileManager.default
         if fm.fileExists(atPath: marker.path) {
             previousStart = (try? fm.attributesOfItem(atPath: marker.path))?[.modificationDate] as? Date
@@ -44,8 +45,12 @@ final class ProblemReports: ObservableObject {
         if let crash = latestCrashLog() {
             lines += ["", "Crash log: \(crash.lastPathComponent)", String((try? String(contentsOf: crash, encoding: .utf8))?.prefix(60_000) ?? "")]
         } else if crashedLastTime {
-            lines += ["", "AutoClip closed unexpectedly, but macOS didn't save a crash log."]
+            let lowMemory = AppLog.tail(40).contains("on memory")
+            lines += ["", "AutoClip closed unexpectedly, but macOS didn't save a crash log." +
+                      (lowMemory ? " The Mac was low on memory just before, so macOS may have closed it to free some." : "")]
         }
+        let diary = AppLog.tail(200)
+        if !diary.isEmpty { lines += ["", "What AutoClip was doing (newest last):", diary] }
         return lines.joined(separator: "\n")
     }
 

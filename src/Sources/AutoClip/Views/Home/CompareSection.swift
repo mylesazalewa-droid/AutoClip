@@ -50,6 +50,7 @@ struct CompareSection: View {
             }
         }
         .task(id: "\(path)|\(otherPath)") { await load() }
+        .reportsWork(.assess, "compare", aStatus != nil || bStatus != nil || linkStatus != nil || styleStatus != nil)
     }
 
     // MARK: Choosing the other message

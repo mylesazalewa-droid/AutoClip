@@ -229,7 +229,9 @@ final class PodcastStore: ObservableObject {
 
     @Published private(set) var episodes: [PodcastEpisode] = []
     /// Episode id → what is happening ("Transcribing… 40%")
-    @Published var status: [String: String] = [:]
+    @Published var status: [String: String] = [:] {
+        didSet { TabActivity.shared.set(.podcast, "episodes", !status.isEmpty) }
+    }
     @Published var progress: [String: Double] = [:]
     @Published var errors: [String: String] = [:]
     /// Running work per episode, so it can be stopped
