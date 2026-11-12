@@ -53,7 +53,7 @@ else
 fi
 lipo -archs "$APP/Contents/MacOS/AutoClip"
 cp -R "$ARM/AutoClip_AutoClip.bundle" "$APP/Contents/Resources/"
-cp Sample/sample-sermon.json Sample/sample-sermon.mp4 "$APP/Contents/Resources/"
+cp Sample/sample-sermon.json Sample/sample-sermon.mp4 ../website/help.html "$APP/Contents/Resources/"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 ./plist-extras.sh "$APP"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP/Contents/Info.plist"
