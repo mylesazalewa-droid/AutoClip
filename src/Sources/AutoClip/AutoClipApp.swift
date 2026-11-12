@@ -124,6 +124,7 @@ struct MainWindow: View {
                 AutoImport.shared.start()
                 ProblemReports.shared.start()
                 Updater.shared.checkAtLaunch()
+                Task { try? await YouTubeTools.shared.ensure() }
             }
             .modifier(CommandBarHost())
             .onAppear { Self.fillScreen() }

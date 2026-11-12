@@ -159,6 +159,10 @@ struct ClipDetailPanel: View {
                     .foregroundColor(Theme.ink.opacity(0.55))
                     .padding(.horizontal, 14)
 
+                TrimRangeBar(clip: $clip, project: project)
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 4)
+
                 HStack(spacing: 8) {
                     Text("Start")
                         .font(.ui(size: 13))
@@ -322,5 +326,113 @@ struct ClipDetailPanel: View {
         let m = s / 60
         let sec = s % 60
         return String(format: "%d:%02d", m, sec)
+    }
+}
+
+// MARK: - Drag trim bar
+
+private struct TrimRangeBar: View {
+    @Binding var clip: Clip
+    let project: Project
+
+    @State private var activeHandle: Handle? = nil
+    @State private var dragCtxStart: Double = 0
+    @State private var dragCtxEnd: Double = 0
+
+    private enum Handle { case start, end }
+
+    // Natural extent of the clip (word boundaries ± small buffer)
+    private var naturalStart: Double { (clip.words.first?.startTime ?? clip.startTime) }
+    private var naturalEnd: Double   { (clip.words.last?.endTime   ?? clip.endTime) }
+
+    // The visible range covers both the current trim points and the word extent
+    private var rangeStart: Double { min(clip.startTime, naturalStart) - 2 }
+    private var rangeEnd:   Double { max(clip.endTime,   naturalEnd)   + 2 }
+    private var rangeLen:   Double { max(1, rangeEnd - rangeStart) }
+
+    // The range that was locked in at drag start (stays fixed while dragging)
+    private var effectiveStart: Double { activeHandle != nil ? dragCtxStart : rangeStart }
+    private var effectiveEnd:   Double { activeHandle != nil ? dragCtxEnd   : rangeEnd   }
+    private var effectiveLen:   Double { max(1, effectiveEnd - effectiveStart) }
+
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            let inX  = CGFloat((clip.startTime - effectiveStart) / effectiveLen) * w
+            let outX = CGFloat((clip.endTime   - effectiveStart) / effectiveLen) * w
+
+            ZStack(alignment: .topLeading) {
+                // Anchor the ZStack to the right size
+                Color.clear.frame(width: w, height: 20)
+
+                // Track
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(Theme.ink.opacity(0.08))
+                    .frame(width: w, height: 6)
+                    .offset(y: 7)
+
+                // Dimmed left region
+                if inX > 0 {
+                    Rectangle()
+                        .fill(Color.black.opacity(0.3))
+                        .frame(width: inX, height: 6)
+                        .offset(y: 7)
+                }
+
+                // Dimmed right region
+                if outX < w {
+                    Rectangle()
+                        .fill(Color.black.opacity(0.3))
+                        .frame(width: w - outX, height: 6)
+                        .offset(x: outX, y: 7)
+                }
+
+                // Selected clip region
+                if outX > inX {
+                    Rectangle()
+                        .fill(Theme.sand.opacity(0.35))
+                        .frame(width: outX - inX, height: 6)
+                        .offset(x: inX, y: 7)
+                }
+
+                // IN bracket handle
+                trimHandle(highlighted: activeHandle == .start)
+                    .offset(x: max(0, inX - 1.5))
+
+                // OUT bracket handle
+                trimHandle(highlighted: activeHandle == .end)
+                    .offset(x: max(0, min(w - 3, outX - 1.5)))
+            }
+            .contentShape(Rectangle().size(CGSize(width: w, height: 20)))
+            .gesture(
+                DragGesture(minimumDistance: 2)
+                    .onChanged { v in
+                        let x = max(0, min(w, v.location.x))
+                        if activeHandle == nil {
+                            dragCtxStart = rangeStart
+                            dragCtxEnd   = rangeEnd
+                            activeHandle = abs(x - inX) <= abs(x - outX) ? .start : .end
+                        }
+                        let t = effectiveStart + Double(x / w) * effectiveLen
+                        var u = clip
+                        switch activeHandle {
+                        case .start: u.startTime = max(effectiveStart + 1, min(u.endTime - 2, t))
+                        case .end:   u.endTime   = max(u.startTime + 2, min(effectiveEnd - 1, t))
+                        case nil: break
+                        }
+                        clip = u
+                        LibraryService.shared.updateClip(u, in: project)
+                    }
+                    .onEnded { _ in activeHandle = nil }
+            )
+        }
+        .frame(height: 20)
+    }
+
+    @ViewBuilder
+    private func trimHandle(highlighted: Bool) -> some View {
+        RoundedRectangle(cornerRadius: 1.5)
+            .fill(highlighted ? Theme.sand : Theme.sand.opacity(0.75))
+            .frame(width: 3, height: 20)
     }
 }
