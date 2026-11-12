@@ -21,8 +21,9 @@ Claude Haiku 5.5 costs $0.10 per million input tokens and $0.50 per million outp
 ## Set up (once)
 
 1. **Vercel**: create a project from this folder (`ai-server`). Root directory: `ai-server`.
-2. **Storage**: in the Vercel project, Storage → add **Upstash for Redis** (free tier is plenty).
-   It sets `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` for you.
+2. **Storage (optional)**: in the Vercel project, Storage → add **Upstash for Redis** (free tier is plenty).
+   It sets `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` for you. Without it, each
+   license's monthly use isn't counted and the spending limit on the Anthropic key is the only cap.
 3. **Environment variables** (Settings → Environment Variables):
    - `ANTHROPIC_API_KEY`: a key made just for this server in the Anthropic Console, with a
      monthly spend limit set on it in the Console as a safety net.

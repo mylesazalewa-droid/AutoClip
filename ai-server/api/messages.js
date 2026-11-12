@@ -62,12 +62,15 @@ export default async function handler(req, res) {
     return fail(res, 403, "permission_error", "This AutoClip license has been switched off. Please contact AutoClip support.");
   }
 
-  if (!process.env.ANTHROPIC_API_KEY || !process.env.UPSTASH_REDIS_REST_URL) {
+  if (!process.env.ANTHROPIC_API_KEY) {
     return fail(res, 503, "api_error", "AutoClip AI isn't switched on yet. Please try again later, or add your own AI key in Settings → AI.");
   }
+  // Without storage (no Upstash yet) each license's use isn't counted; the spending limit on
+  // the Anthropic key caps the total instead. Plans with no allowance are still refused.
+  const counting = Boolean(process.env.UPSTASH_REDIS_REST_URL);
   const allowance = monthlyAllowance(license.plan);
-  const spent = await used(license);
-  if (spent >= allowance) {
+  const spent = counting ? await used(license) : 0;
+  if (allowance === 0 || spent >= allowance) {
     return fail(res, 429, "rate_limit_error",
       allowance === 0
         ? "Your plan doesn't include AutoClip AI. You can add your own AI key in Settings → AI."
@@ -91,8 +94,10 @@ export default async function handler(req, res) {
   }
 
   const cost = costMicros(request.model, message.usage?.input_tokens ?? 0, message.usage?.output_tokens ?? 0);
-  const total = await addUse(license, cost);
-  res.setHeader("X-AutoClip-Remaining", String(Math.max(0, allowance - total)));
-  res.setHeader("X-AutoClip-Allowance", String(allowance));
+  if (counting) {
+    const total = await addUse(license, cost);
+    res.setHeader("X-AutoClip-Remaining", String(Math.max(0, allowance - total)));
+    res.setHeader("X-AutoClip-Allowance", String(allowance));
+  }
   res.status(200).json(message);
 }
