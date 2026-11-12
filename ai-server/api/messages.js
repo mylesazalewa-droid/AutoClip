@@ -15,7 +15,12 @@ const MODELS = new Set(["claude-haiku-5-5", "claude-haiku-4-5"]);
 const MAX_TOKENS = 8192;
 const MAX_PROMPT_CHARS = 600_000; // about a 3-hour sermon transcript
 
-const client = new Anthropic(); // ANTHROPIC_API_KEY from the environment
+let client = null;
+/** Made on first use, so a missing key is reported clearly instead of breaking every request */
+function claude() {
+  client ??= new Anthropic(); // ANTHROPIC_API_KEY from the environment
+  return client;
+}
 
 function fail(res, status, type, message, extra = {}) {
   // The shape Claude's own errors have, so the app shows the message as it already does
@@ -57,6 +62,9 @@ export default async function handler(req, res) {
     return fail(res, 403, "permission_error", "This AutoClip license has been switched off. Please contact AutoClip support.");
   }
 
+  if (!process.env.ANTHROPIC_API_KEY || !process.env.UPSTASH_REDIS_REST_URL) {
+    return fail(res, 503, "api_error", "AutoClip AI isn't switched on yet. Please try again later, or add your own AI key in Settings → AI.");
+  }
   const allowance = monthlyAllowance(license.plan);
   const spent = await used(license);
   if (spent >= allowance) {
@@ -72,7 +80,7 @@ export default async function handler(req, res) {
 
   let message;
   try {
-    message = await client.messages.create(request);
+    message = await claude().messages.create(request);
   } catch (e) {
     if (e instanceof Anthropic.APIError) {
       // Overloaded or rate limited upstream: the app's normal retry handles these

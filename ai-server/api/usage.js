@@ -5,6 +5,7 @@ import { monthlyAllowance, used } from "../lib/allowance.js";
 export default async function handler(req, res) {
   const license = checkLicense(req.headers["x-autoclip-license"]);
   if (!license) return res.status(401).json({ type: "error", error: { type: "authentication_error", message: "No active license." } });
+  if (!process.env.UPSTASH_REDIS_REST_URL) return res.status(503).json({ type: "error", error: { type: "api_error", message: "AutoClip AI isn't switched on yet." } });
   const allowance = monthlyAllowance(license.plan);
   const spent = await used(license);
   const now = new Date();
