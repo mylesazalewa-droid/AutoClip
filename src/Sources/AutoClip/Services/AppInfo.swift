@@ -9,7 +9,7 @@ enum AppInfo {
     /// The product website. Empty = help opens the copy inside the app.
     static let websiteURL = ""
     /// AutoClip's included AI (the ai-server folder, deployed). Empty = churches use their own AI key.
-    static let aiServerURL = ""
+    static let aiServerURL = "https://autoclip-ai-taupe.vercel.app"
     /// YouTube posting: a Google Cloud OAuth client of type "Desktop app" (YouTube Data API v3 on).
     /// Empty = the YouTube button is hidden. A desktop client's secret isn't secret (Google's words).
     static let youtubeClientID = ""
