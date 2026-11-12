@@ -255,9 +255,11 @@ final class SetupCheck: ObservableObject {
 
     /// Only whether a key is saved. It's never read out, and nothing is sent.
     private static func aiCheck() async -> (State, String, Fix?) {
-        let raw = UserDefaults.standard.string(forKey: "ar_provider") ?? LLMClipService.AIProvider.anthropic.rawValue
-        let provider = LLMClipService.AIProvider(rawValue: raw) ?? .anthropic
+        let provider = LLMClipService.chosenProvider
         let key = (await LLMClipService.shared.loadAPIKey(for: provider)) ?? ""
+        if key == LLMClipService.includedAIKey {
+            return (.good, "AutoClip AI is included with your license. Titles, captions and graphics can be written.", nil)
+        }
         if !key.isEmpty, provider == .anthropic {
             // Listing models is free, so this proves the key works without spending credits
             if let problem = await LLMClipService.shared.checkAnthropicKey(key) {

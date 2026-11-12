@@ -61,6 +61,7 @@ enum AppLog {
 
     private static var pressure: DispatchSourceMemoryPressure?
     private static var watchdog: Thread?
+    private static let quitting = OSAllocatedUnfairLock(initialState: false)
 
     /// Called once at launch: notes the start, low memory, and the window freezing.
     static func start() {
@@ -76,6 +77,7 @@ enum AppLog {
         pressure = p
 
         NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: nil) { _ in
+            quitting.withLock { $0 = true }
             write("Quit normally")
             queue.sync {}
         }
@@ -85,8 +87,10 @@ enum AppLog {
             let lastAnswer = OSAllocatedUnfairLock(initialState: Date())
             var reported = false
             while true {
-                DispatchQueue.main.async { lastAnswer.withLock { $0 = Date() } }
+                // In every run loop mode, so a dialog waiting for an answer isn't taken for a freeze
+                RunLoop.main.perform(inModes: [.common, .modalPanel, .eventTracking]) { lastAnswer.withLock { $0 = Date() } }
                 Thread.sleep(forTimeInterval: 2)
+                if quitting.withLock({ $0 }) { return }
                 let silent = Date().timeIntervalSince(lastAnswer.withLock { $0 })
                 if silent > 8, !reported {
                     reported = true

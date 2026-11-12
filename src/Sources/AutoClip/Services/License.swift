@@ -72,6 +72,12 @@ final class License: ObservableObject {
         raw.base64EncodedString() == publicKey
     }
 
+    /// The license key as entered, while it's genuine and current (it's what AutoClip AI checks).
+    nonisolated static var activeKey: String? {
+        guard let raw = UserDefaults.standard.string(forKey: "license_key"), let info = decode(raw), !info.expired else { return nil }
+        return raw
+    }
+
     /// For exports, which don't run on the main actor: true until a valid key has ever been added.
     nonisolated static var watermarkExports: Bool {
         guard let raw = UserDefaults.standard.string(forKey: keyKey) else { return true }

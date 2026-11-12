@@ -67,6 +67,9 @@ private struct GeneralSettings: View {
                         .pickerStyle(.segmented).labelsHidden().frame(width: 240)
                 }
             }
+            SettingsSection(title: "Two Macs") {
+                SyncRows()
+            }
             SettingsSection(title: "Backup") {
                 BackupRows()
             }
@@ -142,6 +145,13 @@ private struct AISettings: View {
                         .onSubmit { save(newKey) }
                     Button("Save key") { save(newKey) }.disabled(newKey.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
+                if LLMClipService.includedAIReady && hasKey[.anthropic] != true {
+                    Label(provider == .anthropic
+                          ? "AutoClip AI is included with your license, so Claude works without a key. Add your own key only if you'd rather be billed directly."
+                          : "AutoClip AI is included with your license: choose Claude above to use it without a key.",
+                          systemImage: "sparkles")
+                        .font(.ui(size: 12)).foregroundColor(Theme.good).fixedSize(horizontal: false, vertical: true)
+                }
                 Text("The key stays in your Keychain and is only sent to \(provider.rawValue). The AI company bills you directly, so set a spending limit in your account.")
                     .font(.ui(size: 12)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
                 if let note {
@@ -162,7 +172,7 @@ private struct AISettings: View {
 
     private func refresh() async {
         var out: [LLMClipService.AIProvider: Bool] = [:]
-        for p in LLMClipService.AIProvider.allCases { out[p] = !((await LLMClipService.shared.loadAPIKey(for: p)) ?? "").isEmpty }
+        for p in LLMClipService.AIProvider.allCases { out[p] = !((await LLMClipService.shared.savedAPIKey(for: p)) ?? "").isEmpty }
         hasKey = out
     }
 
@@ -258,6 +268,44 @@ private struct PlanSettings: View {
 }
 
 
+/// Two Macs sharing one library through iCloud Drive, Dropbox or Google Drive.
+struct SyncRows: View {
+    @ObservedObject private var sync = LibrarySync.shared
+    @AppStorage(LibrarySync.videosKey) private var shareVideos = true
+    @AppStorage(LibrarySync.folderKey) private var folderPath = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Row(title: "Share with your other Mac",
+                detail: folderPath.isEmpty
+                    ? "Use AutoClip on two Macs, such as a laptop and the office Mac. Choose a folder both can see (iCloud Drive or Dropbox). When you quit, AutoClip leaves its library there, and the other Mac offers to bring it in when it opens."
+                    : "Sharing through \(URL(fileURLWithPath: folderPath).lastPathComponent). Quit AutoClip on one Mac before opening it on the other: the newest library wins, and what it replaces goes to the Trash.") {
+                if folderPath.isEmpty {
+                    Button("Choose Folder…") { sync.chooseFolder() }.buttonStyle(SecondaryButtonStyle(compact: true))
+                } else {
+                    HStack(spacing: 8) {
+                        Button("Share Now") { Task { await sync.send() } }
+                            .buttonStyle(SecondaryButtonStyle(compact: true)).disabled(sync.status != nil)
+                        Button("Stop Sharing") { sync.stop() }.buttonStyle(.link)
+                    }
+                }
+            }
+            if !folderPath.isEmpty {
+                Toggle(isOn: $shareVideos) {
+                    Text("Include sermon videos, so clips can be edited and exported on the other Mac").font(.ui(size: 12)).foregroundColor(Theme.muted)
+                }
+                .toggleStyle(.checkbox)
+                if let sent = sync.lastSent, sync.status == nil {
+                    Text("Last shared from this Mac \(sent.formatted(date: .abbreviated, time: .shortened))")
+                        .font(.ui(size: 12)).foregroundColor(Theme.muted)
+                }
+            }
+            if let s = sync.status { HStack(spacing: 8) { LoadingBar(status: s); Text(s).font(.ui(size: 12)).foregroundColor(Theme.muted) } }
+            if let e = sync.lastError { Text(e).font(.ui(size: 12)).foregroundColor(Theme.danger).fixedSize(horizontal: false, vertical: true) }
+        }
+    }
+}
+
 /// Back up everything to one file, or restore from one (for a new Mac or after a problem).
 private struct BackupRows: View {
     @State private var includeVideos = false
@@ -328,12 +376,7 @@ private struct BackupRows: View {
             do {
                 try await Backup.restore(from: url) { msg in Task { @MainActor in status = msg } }
                 status = "Restarting…"
-                let app = Bundle.main.bundleURL
-                let task = Process()
-                task.executableURL = URL(fileURLWithPath: "/bin/sh")
-                task.arguments = ["-c", "sleep 1; /usr/bin/open \"\(app.path)\""]
-                try? task.run()
-                NSApp.terminate(nil)
+                Relaunch.quitAndReopen()
             } catch { self.error = error.localizedDescription; status = nil }
         }
     }

@@ -239,7 +239,7 @@ final class AutoImport: ObservableObject {
             let started = Date().timeIntervalSince1970
             let d = UserDefaults.standard
             let format = VideoExportService.ExportFormat(rawValue: d.string(forKey: "ar_format") ?? "") ?? .vertical9x16
-            let provider = LLMClipService.AIProvider(rawValue: d.string(forKey: "ar_provider") ?? "") ?? .anthropic
+            let provider = LLMClipService.chosenProvider
             let key = await LLMClipService.shared.loadAPIKey(for: provider) ?? ""
             let useAI = (d.object(forKey: "ar_useAI") as? Bool ?? false) && !key.isEmpty
             let captions = d.object(forKey: "ar_captions") as? Bool ?? true

@@ -25,7 +25,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         Task { @MainActor in
             DockStatus.shared.start()
             ReviewStore.shared.startIfNeeded()
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            await LibrarySync.shared.checkForNewer()
         }
+    }
+
+    /// With a sync folder set, the library is left there before AutoClip closes (at most 60 seconds).
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        let sync = LibrarySync.shared
+        guard sync.folder != nil, !sync.holdSending, sync.status == nil else { return .terminateNow }
+        AutoReelsStore.shared.saveNow()
+        Task { @MainActor in
+            let send = Task { await sync.send() }
+            let limit = Task { try? await Task.sleep(nanoseconds: 60_000_000_000) }
+            await withTaskGroup(of: Void.self) { g in
+                g.addTask { await send.value }
+                g.addTask { await limit.value }
+                await g.next()
+                g.cancelAll()
+            }
+            NSApp.reply(toApplicationShouldTerminate: true)
+        }
+        return .terminateLater
     }
 
     func applicationWillTerminate(_ notification: Notification) {

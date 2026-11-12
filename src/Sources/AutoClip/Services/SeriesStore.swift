@@ -198,7 +198,7 @@ final class SeriesStore: ObservableObject {
                                        bigIdea: report?.coach?.bigIdea ?? report?.notes?.bigIdea))
                 }
                 status[id] = "The AI is reading all \(parts.count) messages together…"
-                let provider = LLMClipService.AIProvider(rawValue: UserDefaults.standard.string(forKey: "ar_provider") ?? "") ?? .google
+                let provider = LLMClipService.chosenProvider
                 guard let key = await LLMClipService.shared.loadAPIKey(for: provider), !key.isEmpty else {
                     status[id] = nil
                     errors[id] = "Add an API key in AutoClip → Settings → AI to assess a series."

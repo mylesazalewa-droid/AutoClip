@@ -82,7 +82,29 @@ actor LLMClipService {
         SecItemAdd(add as CFDictionary, nil)
     }
 
+    // MARK: - AutoClip AI (included with a license)
+
+    /// Stands in for a Claude key when the church uses AutoClip's included AI (see ai-server)
+    static let includedAIKey = "autoclip-included-ai"
+
+    /// True when AutoClip AI is set up and this Mac has a current license.
+    nonisolated static var includedAIReady: Bool { !AppInfo.aiServerURL.isEmpty && License.activeKey != nil }
+
+    /// The provider chosen in Settings → AI. Before one is chosen: Claude when AutoClip AI is
+    /// included, otherwise Gemini (as before).
+    nonisolated static var chosenProvider: AIProvider {
+        if let raw = UserDefaults.standard.string(forKey: "ar_provider"), let p = AIProvider(rawValue: raw) { return p }
+        return includedAIReady ? .anthropic : .google
+    }
+
+    /// The key to use: one saved in the Keychain, or for Claude, AutoClip AI when it's included.
     func loadAPIKey(for provider: AIProvider) -> String? {
+        if let k = savedAPIKey(for: provider), !k.isEmpty { return k }
+        return provider == .anthropic && Self.includedAIReady ? Self.includedAIKey : nil
+    }
+
+    /// Only a key saved in the Keychain (what Settings shows).
+    func savedAPIKey(for provider: AIProvider) -> String? {
         let query: [CFString: Any] = [
             kSecClass:       kSecClassGenericPassword,
             kSecAttrService: provider.keychainService as CFString,
@@ -864,7 +886,7 @@ Respond with ONLY valid JSON: {"hook":"..."}
     /// A reply to any prompt, using the provider chosen in Auto Reels. Without a key it runs on
     /// this Mac's on-device AI when that's on. Features in other files come through here.
     func complete(_ prompt: String, light: Bool) async throws -> String {
-        let provider = AIProvider(rawValue: UserDefaults.standard.string(forKey: "ar_provider") ?? "") ?? .google
+        let provider = LLMClipService.chosenProvider
         let key = loadAPIKey(for: provider) ?? ""
         if key.isEmpty {
             guard await LocalAI.ready() else {
@@ -878,7 +900,7 @@ Respond with ONLY valid JSON: {"hook":"..."}
 
     /// Whether `complete` has anything to run on.
     func canComplete() async -> Bool {
-        let provider = AIProvider(rawValue: UserDefaults.standard.string(forKey: "ar_provider") ?? "") ?? .google
+        let provider = LLMClipService.chosenProvider
         if let k = loadAPIKey(for: provider), !k.isEmpty { return true }
         return await LocalAI.ready()
     }
@@ -1132,14 +1154,35 @@ Respond with ONLY valid JSON, no markdown:
         ]
         // Haiku 5.5 thinks by default; low effort keeps it fast and cheap for clip picking
         if model == "claude-haiku-5-5" { body["output_config"] = ["effort": "low"] }
-        var req = URLRequest(url: URL(string: "https://api.anthropic.com/v1/messages")!)
+        let included = apiKey == Self.includedAIKey
+        var req: URLRequest
+        if included {
+            // AutoClip AI: the same request, with the license instead of a key
+            guard let license = License.activeKey, let url = URL(string: AppInfo.aiServerURL + "/api/messages") else {
+                throw llmError("AutoClip AI needs an active license. Add yours in AutoClip → Activate AutoClip, or add your own AI key in Settings → AI.")
+            }
+            req = URLRequest(url: url)
+            req.setValue(license, forHTTPHeaderField: "X-AutoClip-License")
+        } else {
+            req = URLRequest(url: URL(string: "https://api.anthropic.com/v1/messages")!)
+            req.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+            req.setValue(Self.anthropicVersion, forHTTPHeaderField: "anthropic-version")
+        }
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.setValue(apiKey,             forHTTPHeaderField: "x-api-key")
-        req.setValue(Self.anthropicVersion, forHTTPHeaderField: "anthropic-version")
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
         req.timeoutInterval = 120
         let (data, resp) = try await URLSession.shared.data(for: req)
+        if included, let http = resp as? HTTPURLResponse, http.statusCode != 200 {
+            // AutoClip AI's own messages (no license, allowance used up) say what to do
+            let msg = ((try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? [String: Any])?["message"] as? String
+            throw llmError(msg ?? "AutoClip AI isn't answering right now (\(http.statusCode)). Please try again in a minute.")
+        }
+        if included, let http = resp as? HTTPURLResponse, let left = http.value(forHTTPHeaderField: "X-AutoClip-Remaining"),
+           let all = http.value(forHTTPHeaderField: "X-AutoClip-Allowance") {
+            UserDefaults.standard.set(["remaining": Double(left) ?? 0, "allowance": Double(all) ?? 0, "date": Date().timeIntervalSince1970],
+                                      forKey: "included_ai_usage")
+        }
         try checkHTTP(resp, data: data)
         // Thinking blocks may come before the answer, so take the text blocks
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -1147,7 +1190,7 @@ Respond with ONLY valid JSON, no markdown:
             throw llmError("Unexpected Anthropic response")
         }
         if let u = json["usage"] as? [String: Any] {
-            CostMeter.record(provider: "Claude", model: model, input: u["input_tokens"] as? Int ?? 0,
+            CostMeter.record(provider: included ? "AutoClip AI" : "Claude", model: model, input: u["input_tokens"] as? Int ?? 0,
                              output: u["output_tokens"] as? Int ?? 0)
         }
         let text = blocks.filter { $0["type"] as? String == "text" }

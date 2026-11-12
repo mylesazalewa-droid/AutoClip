@@ -72,7 +72,8 @@ enum Backup {
     // MARK: Making a backup
 
     @MainActor
-    static func make(to zip: URL, includeVideos: Bool, progress: @escaping (String) -> Void) async throws {
+    static func make(to zip: URL, includeVideos: Bool, alsoSkip: Set<String> = [], sharedMedia: [String: String] = [:],
+                     progress: @escaping (String) -> Void) async throws {
         let videos = includeVideos ? sourceVideos() : []
         AutoReelsStore.shared.saveNow()   // a change from the last half second is in the backup too
         let settings = UserDefaults.standard.persistentDomain(forName: domain) ?? [:]
@@ -90,13 +91,13 @@ enum Backup {
 
             progress("Copying your sermons and graphics…")
             try copy(support, to: root.appendingPathComponent("Support"),
-                     skipping: oneFolder ? (includeVideos ? skipAlways : skipAlways.union(mediaFolders)) : skipAlways)
+                     skipping: (oneFolder ? (includeVideos ? skipAlways : skipAlways.union(mediaFolders)) : skipAlways).union(alsoSkip))
             if !oneFolder {
                 try copy(documents, to: root.appendingPathComponent("Documents"),
-                         skipping: includeVideos ? skipAlways : skipAlways.union(mediaFolders))
+                         skipping: (includeVideos ? skipAlways : skipAlways.union(mediaFolders)).union(alsoSkip))
             }
 
-            var media: [String: String] = [:]
+            var media: [String: String] = sharedMedia
             if !videos.isEmpty {
                 progress("Copying \(videos.count) sermon video\(videos.count == 1 ? "" : "s")…")
                 let dir = root.appendingPathComponent("Media")
@@ -141,7 +142,12 @@ enum Backup {
     // MARK: Restoring
 
     /// Replaces this Mac's AutoClip data with the backup's. What was here goes to the Trash first.
-    static func restore(from zip: URL, progress: @escaping (String) -> Void) async throws {
+    ///
+    /// With `mediaBase` (sync from another Mac): videos are read from that folder instead of the
+    /// backup, and only what the backup brings is replaced, so this Mac's speech model, tools and
+    /// videos stay where they are.
+    static func restore(from zip: URL, mediaBase: URL? = nil, keepSettings: Set<String> = [],
+                        progress: @escaping (String) -> Void) async throws {
         try await Task.detached {
             let fm = FileManager.default
             let work = fm.temporaryDirectory.appendingPathComponent("AutoClip Restore \(UUID().uuidString.prefix(6))")
@@ -163,9 +169,21 @@ enum Backup {
             swaps.append((m.home + "/Documents/AutoClip", documents.path))
             if m.home != home { swaps.append((m.home, home)) }
 
-            progress("Putting your current AutoClip data in the Trash…")
-            for dir in [support, documents] where fm.fileExists(atPath: dir.path) {
-                try? fm.trashItem(at: dir, resultingItemURL: nil)
+            if mediaBase == nil {
+                progress("Putting your current AutoClip data in the Trash…")
+                for dir in [support, documents] where fm.fileExists(atPath: dir.path) {
+                    try? fm.trashItem(at: dir, resultingItemURL: nil)
+                }
+            } else {
+                progress("Putting what's being replaced in the Trash…")
+                for (name, dest) in [("Support", support), ("Documents", documents)] {
+                    let src = root.appendingPathComponent(name)
+                    guard fm.fileExists(atPath: src.path) else { continue }
+                    for item in try fm.contentsOfDirectory(atPath: src.path) {
+                        let here = dest.appendingPathComponent(item)
+                        if fm.fileExists(atPath: here.path) { try fm.trashItem(at: here, resultingItemURL: nil) }
+                    }
+                }
             }
             progress("Restoring sermons and graphics…")
             for (name, dest) in [("Support", support), ("Documents", documents)] {
@@ -183,9 +201,14 @@ enum Backup {
                 progress("Restoring sermon videos…")
                 try fm.createDirectory(at: videosDir, withIntermediateDirectories: true)
                 for rel in m.media.values {
-                    let src = root.appendingPathComponent(rel)
+                    let src = (mediaBase ?? root).appendingPathComponent(rel)
+                    guard fm.fileExists(atPath: src.path) else { continue }
                     let dest = videosDir.appendingPathComponent(URL(fileURLWithPath: rel).lastPathComponent)
                     if !fm.fileExists(atPath: dest.path) { try fm.copyItem(at: src, to: dest) }
+                }
+                // Saved transcripts are filed by their video's location, so they follow the videos
+                for (old, rel) in m.media {
+                    TranscriptCache.move(from: old, to: videosDir.appendingPathComponent(URL(fileURLWithPath: rel).lastPathComponent).path)
                 }
             }
             progress("Restoring settings…")
@@ -196,6 +219,7 @@ enum Backup {
                 let here = UserDefaults.standard.string(forKey: AppPaths.locationKey) ?? "support"
                 fixed[AppPaths.locationKey] = here
                 fixed["owner_mac"] = UserDefaults.standard.bool(forKey: "owner_mac")
+                for k in keepSettings { fixed[k] = UserDefaults.standard.object(forKey: k) }
                 UserDefaults.standard.setPersistentDomain(fixed, forName: domain)
                 UserDefaults.standard.synchronize()
             }

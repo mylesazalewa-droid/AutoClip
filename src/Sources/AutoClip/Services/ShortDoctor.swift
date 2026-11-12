@@ -269,7 +269,7 @@ enum ShortDoctor {
         applyRules(&r)
 
         // The written review: the user's cloud AI if they have a key, or on-device AI if it's on
-        let provider = LLMClipService.AIProvider(rawValue: UserDefaults.standard.string(forKey: "ar_provider") ?? "") ?? .google
+        let provider = LLMClipService.chosenProvider
         var key = ""
         if allowCloud { key = await LLMClipService.shared.loadAPIKey(for: provider) ?? "" }
         let local = await LocalAI.ready()

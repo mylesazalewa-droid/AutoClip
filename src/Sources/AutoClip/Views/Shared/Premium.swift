@@ -222,6 +222,11 @@ struct AppSidebar: View {
     @ObservedObject private var shorts = ShortDoctorModel.shared
     @ObservedObject private var volunteer = VolunteerMode.shared
     @Namespace private var highlight
+    @AppStorage("sidebar_more_open") private var moreOpen = false
+
+    private let moreTabs: [HomeTab] = [.improve, .podcast, .rehearse, .assess, .worship, .approvals, .search, .brand, .storage, .licenses]
+    /// Open when asked, or while one of its pages is showing
+    private var showMore: Bool { moreOpen || moreTabs.contains(active) }
 
     /// True while this page has work running, so it's clear it carried on when you left.
     private func working(_ tab: HomeTab) -> Bool {
@@ -250,23 +255,32 @@ struct AppSidebar: View {
                 row("Results", "chart.line.uptrend.xyaxis", .results)
             } else {
                 row("Messages", "rectangle.stack", .messages)
-                group("Create")
                 row("Clips", "play.rectangle.on.rectangle", .autoReels)
                 row("Social Graphics", "rectangle.split.3x1", .social)
-                row("Improve a Clip", "wand.and.stars", .improve)
-                row("Podcast", "mic", .podcast)
-                group("Review")
-                row("Rehearse", "text.book.closed", .rehearse)
-                row("Assess", "waveform.badge.magnifyingglass", .assess)
-                row("Worship", "music.note", .worship)
                 row("Results", "chart.line.uptrend.xyaxis", .results)
-                row("Approvals", "checkmark.seal", .approvals)
-                group("Find")
-                row("Search", "magnifyingglass", .search)
-                group("Manage")
-                row("Brand kit", "paintpalette", .brand)
-                row("Storage", "internaldrive", .storage)
-                if DataMove.isOwnerMac { row("Licences", "key", .licenses) }
+
+                // Everything else, folded away until wanted (opens by itself when you're on one of them)
+                SidebarLink(title: "More tools", icon: showMore ? "chevron.down" : "chevron.right", isActive: false,
+                            working: !showMore && moreTabs.contains(where: working), highlight: highlight) {
+                    withAnimation(.easeInOut(duration: 0.2)) { moreOpen.toggle() }
+                }
+                .padding(.top, 14)
+                .help(showMore ? "Hide the other tools" : "Improve a Clip, Podcast, Rehearse, Assess, Worship, Approvals, Search, Brand kit and Storage")
+                if showMore {
+                    VStack(alignment: .leading, spacing: 4) {
+                        row("Improve a Clip", "wand.and.stars", .improve)
+                        row("Podcast", "mic", .podcast)
+                        row("Rehearse", "text.book.closed", .rehearse)
+                        row("Assess", "waveform.badge.magnifyingglass", .assess)
+                        row("Worship", "music.note", .worship)
+                        row("Approvals", "checkmark.seal", .approvals)
+                        row("Search", "magnifyingglass", .search)
+                        row("Brand kit", "paintpalette", .brand)
+                        row("Storage", "internaldrive", .storage)
+                        if DataMove.isOwnerMac { row("Licences", "key", .licenses) }
+                    }
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
             }
 
             Spacer()

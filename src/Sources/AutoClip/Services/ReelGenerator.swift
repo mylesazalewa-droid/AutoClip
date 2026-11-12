@@ -112,7 +112,7 @@ enum ReelGenerator {
             look: d?.look ?? CaptionLook.load(),
             crossDissolve: d?.crossDissolve ?? p?.crossDissolve ?? false,
             emojiOverlays: d?.emojiOverlays ?? p?.emojiOverlays ?? false,
-            provider: LLMClipService.AIProvider(rawValue: providerRaw) ?? .google,
+            provider: LLMClipService.AIProvider(rawValue: providerRaw) ?? LLMClipService.chosenProvider,
             useAI: p?.useAI ?? true,
             singleClip: p?.singleClip ?? false)
     }

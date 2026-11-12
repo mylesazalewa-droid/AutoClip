@@ -339,7 +339,7 @@ extension PodcastStore {
         run(id) { [self] in
             guard let e = episode(id), let words = TranscriptCache.load(for: e.soundPath) else { return }
             say(id, "Writing show notes and chapters…")
-            let provider = LLMClipService.AIProvider(rawValue: UserDefaults.standard.string(forKey: "ar_provider") ?? "") ?? .google
+            let provider = LLMClipService.chosenProvider
             guard let key = await LLMClipService.shared.loadAPIKey(for: provider), !key.isEmpty else {
                 throw PodcastAudio.Failure(message: "Add an API key in AutoClip → Settings → AI to write show notes.")
             }

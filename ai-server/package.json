@@ -1,0 +1,14 @@
+{
+  "name": "autoclip-ai-server",
+  "private": true,
+  "type": "module",
+  "description": "AutoClip's included AI: checks the church's AutoClip license, counts its monthly allowance, and passes the request to Claude with AutoClip's own key.",
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "1.3.0",
+    "@upstash/redis": "1.40.0"
+  },
+  "engines": { "node": ">=22" }
+}

@@ -764,7 +764,7 @@ struct WorshipTab: View {
         let facts = s.coachFacts, title = s.report.title, path = s.report.videoPath
         Task {
             do {
-                let provider = LLMClipService.AIProvider(rawValue: UserDefaults.standard.string(forKey: "ar_provider") ?? "") ?? .google
+                let provider = LLMClipService.chosenProvider
                 guard let key = await LLMClipService.shared.loadAPIKey(for: provider), !key.isEmpty else {
                     coachStatus = nil
                     coachError = "Add an API key in AutoClip → Settings → AI to use the AI coach."

@@ -42,6 +42,7 @@ struct ReelDraftsView: View {
     @AppStorage("message_pane") private var pane: MessagePane = .clips
     @State private var confirmDelete = false
     @State private var celebrating: Set<UUID> = []
+    @State private var youtubeFor: YouTubeTarget?
 
     private var record: AutoReelRecord? { store.reels.first { $0.id == recordID } }
     private var drafts: [ReelDraft] { record?.drafts ?? [] }
@@ -127,6 +128,7 @@ struct ReelDraftsView: View {
                 if on { UserDefaults.standard.set(true, forKey: AutoReelsStore.reviewedKey(recordID)); QuickReviewTip().invalidate(reason: .actionPerformed) }
             }
             .onAppear { if store.reviewOnOpen == recordID { store.reviewOnOpen = nil; showReview = true } }
+            .sheet(item: $youtubeFor) { t in YouTubePostSheet(draft: t.draft, file: t.file).appLook() }
             .sheet(isPresented: $showReview) {
                 ReviewModeView(recordID: recordID, selected: $selected, onToss: { notForMe($0) }, onExport: { export($0) })
             }
@@ -496,6 +498,11 @@ struct ReelDraftsView: View {
                 }
                 smallAction(labels ? "Show file" : nil, "folder", help: "Show the exported video in Finder") {
                     NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
+                }
+                if YouTubePost.available {
+                    smallAction(labels ? "YouTube" : nil, "play.rectangle", help: "Post this clip to YouTube Shorts, now or at a set time") {
+                        youtubeFor = YouTubeTarget(draft: d, file: URL(fileURLWithPath: path))
+                    }
                 }
             }
             if !volunteer.enabled {
@@ -1650,7 +1657,7 @@ struct ReelEditorView: View {
         let inReelWords = Set(draft.pieces.flatMap { $0.sentences.filter(\.included).flatMap { $0.words.map(\.id) } })
         Task {
             do {
-                let provider = LLMClipService.AIProvider(rawValue: UserDefaults.standard.string(forKey: "ar_provider") ?? "") ?? .google
+                let provider = LLMClipService.chosenProvider
                 guard let key = await LLMClipService.shared.loadAPIKey(for: provider), !key.isEmpty else {
                     endingStatus = "Add an API key in AutoClip → Settings → AI to use this."
                     return
@@ -1680,7 +1687,7 @@ struct ReelEditorView: View {
         let title = draft.title
         Task {
             do {
-                let provider = LLMClipService.AIProvider(rawValue: UserDefaults.standard.string(forKey: "ar_provider") ?? "") ?? .google
+                let provider = LLMClipService.chosenProvider
                 let key = await LLMClipService.shared.loadAPIKey(for: provider) ?? ""
                 let local = key.isEmpty ? await LocalAI.ready() : false
                 guard !key.isEmpty || local else {
@@ -2195,4 +2202,12 @@ enum ClipStrength {
 private struct WideKey: Equatable {
     var style: String?, zoom: Double?, x: Double?, screen: [Double]?
     init(_ d: ReelDraft) { style = d.wideStyle; zoom = d.wideZoom; x = d.wideX; screen = d.screenRect }
+}
+
+
+/// A finished clip on its way to YouTube
+struct YouTubeTarget: Identifiable {
+    var id: UUID { draft.id }
+    let draft: ReelDraft
+    let file: URL
 }
