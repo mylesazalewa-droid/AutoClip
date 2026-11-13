@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { checkLicense } from "../lib/license.js";
-import { addUse, costMicros, isRevoked, monthlyAllowance, used } from "../lib/allowance.js";
+import { addTrialSpend, addUse, costMicros, isRevoked, monthlyAllowance, trialEnabled, trialDailyCap, trialSpentToday, used } from "../lib/allowance.js";
 
 /**
  * POST /api/messages: AutoClip's included AI.
@@ -53,10 +53,22 @@ export function cleanRequest(body) {
 export default async function handler(req, res) {
   if (req.method !== "POST") return fail(res, 405, "invalid_request_error", "Use POST.");
 
-  const license = checkLicense(req.headers["x-autoclip-license"]);
+  let license = checkLicense(req.headers["x-autoclip-license"]);
+  const trialID = String(req.headers["x-autoclip-trial"] ?? "");
+  const trial = !license && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trialID);
+  if (trial && trialEnabled()) {
+    // A free trial: a small allowance for the whole trial, inside a shared daily budget
+    if ((await trialSpentToday()) >= trialDailyCap()) {
+      return fail(res, 429, "rate_limit_error",
+        "Free-trial AI is busy for today. Please try again tomorrow, or add your own AI key in Settings → AI.");
+    }
+    license = { id: "trial-" + trialID.toLowerCase(), plan: "trial" };
+  }
   if (!license) {
     return fail(res, 401, "authentication_error",
-      "AutoClip AI needs an active AutoClip license. Add yours in AutoClip → Activate AutoClip, or add your own AI key in Settings → AI.");
+      trial
+        ? "AI in the free trial isn't available yet. Buy AutoClip to include it, or add your own AI key in Settings → AI."
+        : "AutoClip AI needs an active AutoClip license. Add yours in AutoClip → Activate AutoClip, or add your own AI key in Settings → AI.");
   }
   if (isRevoked(license.id)) {
     return fail(res, 403, "permission_error", "This AutoClip license has been switched off. Please contact AutoClip support.");
@@ -72,7 +84,9 @@ export default async function handler(req, res) {
   const spent = counting ? await used(license) : 0;
   if (allowance === 0 || spent >= allowance) {
     return fail(res, 429, "rate_limit_error",
-      allowance === 0
+      license.plan === "trial"
+        ? "You've used the AI included with the free trial. Buy AutoClip for AI every month, or add your own AI key in Settings → AI."
+        : allowance === 0
         ? "Your plan doesn't include AutoClip AI. You can add your own AI key in Settings → AI."
         : "This month's included AI is used up. It renews on the 1st, or you can add your own AI key in Settings → AI.",
       { remaining: 0 });
@@ -95,6 +109,7 @@ export default async function handler(req, res) {
 
   const cost = costMicros(request.model, message.usage?.input_tokens ?? 0, message.usage?.output_tokens ?? 0);
   if (counting) {
+    if (license.plan === "trial") await addTrialSpend(cost);
     const total = await addUse(license, cost);
     res.setHeader("X-AutoClip-Remaining", String(Math.max(0, allowance - total)));
     res.setHeader("X-AutoClip-Allowance", String(allowance));

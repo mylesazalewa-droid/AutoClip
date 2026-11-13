@@ -1,3 +1,4 @@
+import AVKit
 import SwiftUI
 import Charts
 
@@ -22,6 +23,7 @@ struct CompareSection: View {
     @State private var styleStatus: String?
     @State private var styleError: String?
     @State private var confirmAI = false
+    @State private var watching: Watch?
 
     private let gold = Theme.sand
     private var other: String? { otherPath.isEmpty || otherPath == path || !FileManager.default.fileExists(atPath: otherPath) ? nil : otherPath }
@@ -29,6 +31,7 @@ struct CompareSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
+            recentCard
             picker
             if let problem { Text(problem).font(.ui(size: 12.5)).foregroundColor(Theme.warn) }
             if other != nil {
@@ -50,7 +53,36 @@ struct CompareSection: View {
             }
         }
         .task(id: "\(path)|\(otherPath)") { await load() }
+        .sheet(item: $watching) { w in WatchBothSheet(watch: w).appLook() }
         .reportsWork(.assess, "compare", aStatus != nil || bStatus != nil || linkStatus != nil || styleStatus != nil)
+    }
+
+    // MARK: Against the last few messages
+
+    @ViewBuilder private var recentCard: some View {
+        if let recent = MessageCompare.againstRecent(path), !recent.rows.isEmpty {
+            AssessCard(title: "Against the \(recent.count) messages before this one",
+                       subtitle: "How this message compares with the average of the ones before it. Free, measured on this Mac.") {
+                VStack(spacing: 0) {
+                    HStack {
+                        Text("").frame(maxWidth: .infinity, alignment: .leading)
+                        Text("This one").frame(width: 110, alignment: .trailing)
+                        Text("Before (avg)").frame(width: 110, alignment: .trailing)
+                    }
+                    .font(.ui(size: 11, weight: .semibold)).foregroundColor(Theme.muted).padding(.bottom, 4)
+                    ForEach(recent.rows.filter { $0.label != "Coach score" }) { r in
+                        HStack {
+                            Text(r.label).font(.ui(size: 12.5)).foregroundColor(Theme.ink).frame(maxWidth: .infinity, alignment: .leading)
+                                .help(r.help)
+                            value(r.a, r.format).frame(width: 110, alignment: .trailing)
+                            value(r.b, r.format).frame(width: 110, alignment: .trailing)
+                        }
+                        .padding(.vertical, 4)
+                        .overlay(Rectangle().fill(Theme.ink.opacity(0.06)).frame(height: 1), alignment: .bottom)
+                    }
+                }
+            }
+        }
     }
 
     // MARK: Choosing the other message
@@ -228,7 +260,16 @@ struct CompareSection: View {
                     Text(style.summary).font(.ui(size: 13.5)).foregroundColor(Theme.ink).fixedSize(horizontal: false, vertical: true)
                     ForEach(style.areas) { ar in
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(ar.area).font(.ui(size: 12, weight: .semibold)).foregroundColor(gold)
+                            HStack(spacing: 8) {
+                                Text(ar.area).font(.ui(size: 12, weight: .semibold)).foregroundColor(gold)
+                                if let ta = MessageCompare.moment(ar, side: a, a: true), let tb = MessageCompare.moment(ar, side: b, a: false) {
+                                    Button { watching = Watch(area: ar.area, a: a.path, aTime: ta, aTitle: "This message", b: b.path, bTime: tb, bTitle: b.title) } label: {
+                                        Label("Watch both", systemImage: "play.rectangle.on.rectangle")
+                                    }
+                                    .buttonStyle(.plain).font(.ui(size: 11.5)).foregroundColor(gold)
+                                    .help("Play this part of each message side by side")
+                                }
+                            }
                             HStack(alignment: .top, spacing: 14) {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("This message").font(.ui(size: 11)).foregroundColor(Theme.muted)
@@ -298,4 +339,61 @@ struct CompareSection: View {
     }
 
     private func stamp(_ t: Double) -> String { String(format: "%d:%02d", Int(t) / 60, Int(t) % 60) }
+}
+
+
+/// One part of two messages, to watch side by side
+struct Watch: Identifiable {
+    var id: String { area + a + b }
+    let area: String
+    let a: String, aTime: Double, aTitle: String
+    let b: String, bTime: Double, bTitle: String
+}
+
+/// The same part of two messages, side by side: play one, then the other.
+struct WatchBothSheet: View {
+    let watch: Watch
+    @Environment(\.dismiss) private var dismiss
+    @State private var left: AVPlayer?
+    @State private var right: AVPlayer?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(watch.area).font(.ui(size: 18, weight: .semibold))
+                Spacer()
+                Button("Done") { dismiss() }.keyboardShortcut(.cancelAction)
+            }
+            HStack(alignment: .top, spacing: 14) {
+                side(watch.aTitle, left, watch.aTime)
+                side(watch.bTitle, right, watch.bTime)
+            }
+            Text("Starting a video pauses the other, so you can hear one, then the other.")
+                .font(.ui(size: 12)).foregroundColor(Theme.muted)
+        }
+        .padding(20)
+        .frame(width: 980, height: 440)
+        .onAppear {
+            let l = AVPlayer(url: URL(fileURLWithPath: watch.a)), r = AVPlayer(url: URL(fileURLWithPath: watch.b))
+            l.seek(to: CMTime(seconds: watch.aTime, preferredTimescale: 600))
+            r.seek(to: CMTime(seconds: watch.bTime, preferredTimescale: 600))
+            left = l; right = r
+        }
+        .onDisappear { left?.pause(); right?.pause() }
+        // Only one plays at a time
+        .onReceive(NotificationCenter.default.publisher(for: AVPlayer.rateDidChangeNotification)) { n in
+            guard let p = n.object as? AVPlayer, p.rate > 0 else { return }
+            if p === left { right?.pause() } else if p === right { left?.pause() }
+        }
+    }
+
+    private func side(_ title: String, _ player: AVPlayer?, _ t: Double) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(.ui(size: 12.5, weight: .medium)).lineLimit(1)
+            if let player { VideoPlayer(player: player).frame(height: 300).clipShape(RoundedRectangle(cornerRadius: 8)) }
+            else { Rectangle().fill(Color.black).frame(height: 300) }
+            Text("From \(String(format: "%d:%02d", Int(t) / 60, Int(t) % 60))").font(.ui(size: 11.5)).foregroundColor(Theme.muted)
+        }
+        .frame(maxWidth: .infinity)
+    }
 }

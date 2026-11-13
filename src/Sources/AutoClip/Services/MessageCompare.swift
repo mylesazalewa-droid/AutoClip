@@ -120,10 +120,52 @@ enum MessageCompare {
 
     // MARK: AI style comparison
 
+    /// Where an area happens in a message: the AI's pick, or for the opening and the close, the
+    /// start and the last two minutes (so comparisons saved before this still get a Watch button).
+    static func moment(_ area: Style.Area, side: Side, a: Bool) -> Double? {
+        if let t = a ? area.aTime : area.bTime { return t }
+        let name = area.area.lowercased()
+        let first = side.words.first?.startTime ?? 0
+        let last = side.words.last?.endTime ?? 0
+        if name.contains("open") { return first }
+        if name.contains("close") || name.contains("response") { return max(first, last - 120) }
+        return nil
+    }
+
+    /// This message against the average of the five before it (by date, practice runs left out).
+    static func againstRecent(_ path: String) -> (rows: [Row], count: Int)? {
+        let all = SpeakerReportStore.all().filter { !$0.isPractice }
+        guard let me = all.first(where: { $0.videoPath == path }) else { return nil }
+        let before = all.filter { $0.videoPath != path && $0.videoDate <= me.videoDate }.suffix(5)
+        guard before.count >= 2 else { return nil }
+        var sums: [String: (Double, Int)] = [:]
+        var mine: [String: Row] = [:]
+        for r in before {
+            for row in rows(me, r) {
+                mine[row.label] = row
+                if let b = row.b { sums[row.label, default: (0, 0)].0 += b; sums[row.label, default: (0, 0)].1 += 1 }
+            }
+        }
+        let order = rows(me, me).map(\.label)
+        let out: [Row] = order.compactMap { label in
+            guard var row = mine[label], row.a != nil, let s = sums[label], s.1 > 0 else { return nil }
+            row.b = s.0 / Double(s.1)
+            return row
+        }
+        return (out, before.count)
+    }
+
     struct Style: Codable, Equatable {
         struct Area: Codable, Equatable, Identifiable {
             var id: String { area }
             var area: String; var a: String; var b: String
+            /// A sentence that shows it in each message, and where it is (seconds)
+            var aSentence: Int?; var bSentence: Int?
+            var aTime: Double?; var bTime: Double?
+            enum CodingKeys: String, CodingKey {
+                case area, a, b, aTime, bTime
+                case aSentence = "a_sentence", bSentence = "b_sentence"
+            }
         }
         struct Borrow: Codable, Equatable, Identifiable {
             var id: String { idea }
@@ -163,12 +205,12 @@ You are an experienced preaching coach comparing two \(noun)s so the first preac
 \(noun.uppercased()) B (the one to compare with): "\(b.title)"
 \(lines(sb.map(\.text)))
 
-Compare them in these areas, one or two sentences each for A and for B: Opening, Structure, Stories and illustrations, Use of Scripture, Application, Tone and connection, Close and response.
+Compare them in these areas, one or two sentences each for A and for B: Opening, Structure, Stories and illustrations, Use of Scripture, Application, Tone and connection, Close and response. For each area also give the number of one A sentence and one B sentence that best shows it ("a_sentence", "b_sentence").
 Then give 3 to 5 things A could borrow from B, each with a short quote from B as the example and the number of the B sentence it comes from.
 Then give 2 or 3 things A already does well that are worth keeping.
 
 Respond with ONLY valid JSON:
-{"summary":"two or three sentences","areas":[{"area":"Opening","a":"...","b":"..."}],"borrow":[{"idea":"...","example":"quote from B","sentence":12}],"keep":["..."]}
+{"summary":"two or three sentences","areas":[{"area":"Opening","a":"...","b":"...","a_sentence":0,"b_sentence":0}],"borrow":[{"idea":"...","example":"quote from B","sentence":12}],"keep":["..."]}
 """
         let text = try await CostTag.$video.withValue("Compare: \(a.title) / \(b.title)") {
             try await LLMClipService.shared.complete(prompt, light: false)
@@ -179,6 +221,10 @@ Respond with ONLY valid JSON:
         }
         for i in style.borrow.indices {
             if let n = style.borrow[i].sentence, sb.indices.contains(n) { style.borrow[i].time = sb[n].start }
+        }
+        for i in style.areas.indices {
+            if let n = style.areas[i].aSentence, sa.indices.contains(n) { style.areas[i].aTime = sa[n].start }
+            if let n = style.areas[i].bSentence, sb.indices.contains(n) { style.areas[i].bTime = sb[n].start }
         }
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         try? JSONEncoder().encode(style).write(to: file(a.path, b.path))

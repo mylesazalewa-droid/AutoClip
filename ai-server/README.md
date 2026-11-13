@@ -28,7 +28,9 @@ Claude Haiku 5.5 costs $0.10 per million input tokens and $0.50 per million outp
    - `ANTHROPIC_API_KEY`: a key made just for this server in the Anthropic Console, with a
      monthly spend limit set on it in the Console as a safety net.
    - Optional allowances in dollars per license per month: `ALLOWANCE_SOLO` (default 2),
-     `ALLOWANCE_CHURCH` (5), `ALLOWANCE_LIFETIME` (5), `ALLOWANCE_TRIAL` (0).
+     `ALLOWANCE_CHURCH` (5), `ALLOWANCE_LIFETIME` (5), `ALLOWANCE_TRIAL` (0.25, for the whole trial).
+   - Free-trial AI only runs once storage is added (so use can be counted). `TRIAL_DAILY_CAP`
+     (default 2 dollars) caps what all trials together can use in a day. Set `ALLOWANCE_TRIAL=0` to turn it off.
    - Optional `REVOKED_LICENSES`: comma-separated license ids to switch off.
 4. Deploy. The app needs the address, e.g. `https://autoclip-ai.vercel.app`, put into
    `AppInfo.aiServerURL` in `src/Sources/AutoClip/Services/AppInfo.swift`, then a new release.
@@ -41,6 +43,7 @@ functions at 60 seconds, which is enough for nearly every AutoClip request.
 - `POST /api/messages`: header `X-AutoClip-License: AUTOCLIP-…`, body = a Claude Messages request.
   Errors use Claude's error shape. 401 no or bad license, 403 switched off, 429 allowance used up.
   Response headers `X-AutoClip-Remaining` and `X-AutoClip-Allowance` (millionths of a dollar).
+- `GET /api/trial`: `{ enabled }`, whether free-trial AI is on. Trial copies send `X-AutoClip-Trial: <install id>`.
 - `GET /api/usage`: same header; returns `{ allowance, used, remaining, fraction, renews }`.
 
 ## Tests

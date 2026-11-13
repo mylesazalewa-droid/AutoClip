@@ -125,6 +125,8 @@ enum YTDLP {
     /// `progress` gets 0…1 and a status line. Gets the downloader ready first, and if YouTube turns it
     /// away, updates it and tries once more.
     static func download(_ url: String, progress: @escaping (Double, String) -> Void) async throws -> URL {
+        // A full service in good quality can be a couple of gigabytes
+        try DiskSpace.check(2_500_000_000, for: "downloading a video", at: AppPaths.root)
         var ytdlp = try await ready { msg in progress(0, msg) }
         do {
             return try await downloadOnce(url, ytdlp: ytdlp, progress: progress)

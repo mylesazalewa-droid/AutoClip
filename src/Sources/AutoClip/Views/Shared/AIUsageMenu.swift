@@ -11,7 +11,7 @@ struct AIUsageChip: View {
         Button { show.toggle() } label: {
             HStack(spacing: 6) {
                 Image(systemName: "gauge.with.dots.needle.33percent").font(.ui(size: 12))
-                Text("AI " + CostMeter.dollars(meter.thisMonth)).font(.ui(size: 13, weight: .medium)).monospacedDigit()
+                Text(meter.includedOnly ? "AI included" : "AI " + CostMeter.dollars(meter.thisMonth)).font(.ui(size: 13, weight: .medium)).monospacedDigit()
             }
             .foregroundColor(hover ? Theme.cream : Theme.sand)
             .padding(.horizontal, 12).padding(.vertical, 6)
@@ -21,7 +21,7 @@ struct AIUsageChip: View {
         }
         .buttonStyle(.plain)
         .onHover { hover = $0 }
-        .help("What AI has cost this month, and on-device AI")
+        .help(meter.includedOnly ? "AI is included with AutoClip. See this month's AI use" : "What AI has cost this month, and on-device AI")
         .popover(isPresented: $show, arrowEdge: .bottom) { AIUsageView() }
     }
 }
@@ -62,7 +62,9 @@ struct AIUsageView: View {
                     }
                 }
             }
-            Text("Estimated from the tokens each AI reports and its list price. Your provider's bill is the final word.")
+            Text(meter.includedOnly
+                 ? "AutoClip AI is included, so these AI calls cost you nothing."
+                 : "Estimated from the tokens each AI reports and its list price. Your provider's bill is the final word. AutoClip AI calls are included and count as $0.")
                 .font(.ui(size: 11.5)).foregroundColor(Theme.faint).fixedSize(horizontal: false, vertical: true)
 
             Rectangle().fill(Theme.line).frame(height: 1)

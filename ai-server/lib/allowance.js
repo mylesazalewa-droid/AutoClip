@@ -6,7 +6,7 @@ import { Redis } from "@upstash/redis";
  * actually cost (so it can't be gamed by counting requests). Amounts are set with environment
  * variables in dollars, e.g. ALLOWANCE_CHURCH=5. Defaults below.
  */
-const DEFAULT_DOLLARS = { solo: 2, church: 5, lifetime: 5, trial: 0 };
+const DEFAULT_DOLLARS = { solo: 2, church: 5, lifetime: 5, trial: 0.25 };
 
 export function monthlyAllowance(plan) {
   const fromEnv = process.env[`ALLOWANCE_${plan.toUpperCase()}`];
@@ -38,7 +38,34 @@ export function costMicros(model, input, output) {
 }
 
 export function monthKey(id, now = new Date()) {
+  // A trial's allowance is for the whole trial, not each month
+  if (id.startsWith("trial-")) return `usage:${id}:all`;
   return `usage:${id}:${now.toISOString().slice(0, 7)}`;
+}
+
+/** Trials share one daily budget too, so lots of new installs can't run up a bill (TRIAL_DAILY_CAP, dollars) */
+export function trialDailyCap() {
+  const v = Number(process.env.TRIAL_DAILY_CAP ?? 2);
+  return Math.round((Number.isFinite(v) ? Math.max(0, v) : 2) * 1_000_000);
+}
+
+export function dayKey(now = new Date()) {
+  return `trialday:${now.toISOString().slice(0, 10)}`;
+}
+
+/** Trial AI only runs when use can be counted (storage is set up) and trials have an allowance */
+export function trialEnabled() {
+  return Boolean(process.env.UPSTASH_REDIS_REST_URL) && monthlyAllowance("trial") > 0 && trialDailyCap() > 0;
+}
+
+export async function trialSpentToday() {
+  return Number((await store().get(dayKey())) ?? 0);
+}
+
+export async function addTrialSpend(micros) {
+  const k = dayKey();
+  await store().incrby(k, micros);
+  await store().expire(k, 60 * 60 * 48);
 }
 
 let redis = null;

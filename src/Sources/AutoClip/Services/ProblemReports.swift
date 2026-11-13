@@ -49,6 +49,7 @@ final class ProblemReports: ObservableObject {
             lines += ["", "AutoClip closed unexpectedly, but macOS didn't save a crash log." +
                       (lowMemory ? " The Mac was low on memory just before, so macOS may have closed it to free some." : "")]
         }
+        if let freeze = AppLog.lastFreeze() { lines += ["", "Where the last freeze was (samples, most first):", freeze] }
         let diary = AppLog.tail(200)
         if !diary.isEmpty { lines += ["", "What AutoClip was doing (newest last):", diary] }
         return lines.joined(separator: "\n")

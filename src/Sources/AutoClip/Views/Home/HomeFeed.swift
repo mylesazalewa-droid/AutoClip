@@ -73,6 +73,9 @@ struct HomeFeed: View {
     private var feed: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 36) {
+                WhatsNewCard()
+                LowDiskBanner()
+                ModelDownloadBanner()
                 if heroItems.isEmpty { welcome } else { ThisWeekCard() }
 
                 AutopilotCard()

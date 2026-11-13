@@ -53,7 +53,8 @@ final class CostMeter: ObservableObject {
 
     /// Called after every AI reply. Safe from any thread.
     nonisolated static func record(provider: String, model: String, input: Int, output: Int) {
-        let (pi, po) = provider == "This Mac" ? (0, 0) : price(model: model, input: input)
+        // On this Mac it's free, and AutoClip AI is included with the license (AutoClip pays)
+        let (pi, po) = provider == "This Mac" || provider == Self.included ? (0, 0) : price(model: model, input: input)
         let e = Entry(date: Date().timeIntervalSince1970, provider: provider, model: model, input: input, output: output,
                       cost: Double(input) / 1_000_000 * pi + Double(output) / 1_000_000 * po, video: video)
         Task { @MainActor in
@@ -62,6 +63,15 @@ final class CostMeter: ObservableObject {
             if m.entries.count > 5000 { m.entries.removeFirst(m.entries.count - 5000) }
             m.save()
         }
+    }
+
+    nonisolated static let included = "AutoClip AI"
+
+    /// This month's AI ran on AutoClip AI (or nothing yet, with it available), so there's no bill to show
+    var includedOnly: Bool {
+        let month = entries.filter { $0.date >= monthStart && $0.provider != "This Mac" }
+        if month.isEmpty { return LLMClipService.includedAIReady }
+        return month.allSatisfy { $0.provider == Self.included }
     }
 
     func reset() { entries = []; save() }
@@ -110,6 +120,7 @@ enum AICost {
         guard !recent.isEmpty else { return what }
         let local = recent.filter { $0.provider == "This Mac" }.count
         if local * 2 > recent.count { return "\(what), free on this Mac" }
+        if LLMClipService.includedAIReady && recent.last?.provider == CostMeter.included { return "\(what), included with AutoClip" }
         let paid = recent.filter { $0.provider != "This Mac" && $0.cost > 0 }
         guard !paid.isEmpty else { return what }
         let each = paid.reduce(0) { $0 + $1.cost } / Double(paid.count) * Double(requests)

@@ -42,9 +42,19 @@ test("cost follows Haiku prices", () => {
 
 test("allowances default and follow the environment", () => {
   assert.equal(monthlyAllowance("church"), 5_000_000);
-  assert.equal(monthlyAllowance("trial"), 0);
+  assert.equal(monthlyAllowance("trial"), 250_000);
   process.env.ALLOWANCE_CHURCH = "12.5";
   assert.equal(monthlyAllowance("church"), 12_500_000);
   delete process.env.ALLOWANCE_CHURCH;
   assert.match(monthKey("abc", new Date("2026-11-12T00:00:00Z")), /^usage:abc:2026-11$/);
+});
+
+test("trial AI stays off without storage, and its allowance lasts the whole trial", async () => {
+  const { trialEnabled, monthKey } = await import("../lib/allowance.js");
+  delete process.env.UPSTASH_REDIS_REST_URL;
+  assert.equal(trialEnabled(), false);
+  process.env.UPSTASH_REDIS_REST_URL = "https://example.invalid";
+  assert.equal(trialEnabled(), true);
+  delete process.env.UPSTASH_REDIS_REST_URL;
+  assert.match(monthKey("trial-abc"), /^usage:trial-abc:all$/);
 });

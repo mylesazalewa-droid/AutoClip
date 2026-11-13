@@ -88,7 +88,29 @@ actor LLMClipService {
     static let includedAIKey = "autoclip-included-ai"
 
     /// True when AutoClip AI is set up and this Mac has a current license.
-    nonisolated static var includedAIReady: Bool { !AppInfo.aiServerURL.isEmpty && License.activeKey != nil }
+    nonisolated static var includedAIReady: Bool {
+        !AppInfo.aiServerURL.isEmpty && (License.activeKey != nil || UserDefaults.standard.bool(forKey: trialAIKey))
+    }
+
+    // MARK: Free-trial AI
+
+    nonisolated static let trialAIKey = "trial_ai_on"
+    /// This copy's trial, so the server can count its small allowance (a random id, nothing personal)
+    nonisolated static var trialID: String {
+        if let id = UserDefaults.standard.string(forKey: "trial_ai_id") { return id }
+        let id = UUID().uuidString
+        UserDefaults.standard.set(id, forKey: "trial_ai_id")
+        return id
+    }
+
+    /// At launch, for copies without a license: asks the server whether free-trial AI is on.
+    nonisolated static func refreshTrialAI() async {
+        guard License.activeKey == nil, !AppInfo.aiServerURL.isEmpty,
+              let url = URL(string: AppInfo.aiServerURL + "/api/trial") else { return }
+        guard let (data, resp) = try? await URLSession.shared.data(from: url), (resp as? HTTPURLResponse)?.statusCode == 200,
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
+        UserDefaults.standard.set(json["enabled"] as? Bool ?? false, forKey: trialAIKey)
+    }
 
     /// The provider chosen in Settings → AI. Before one is chosen: Claude when AutoClip AI is
     /// included, otherwise Gemini (as before).
@@ -1158,11 +1180,15 @@ Respond with ONLY valid JSON, no markdown:
         var req: URLRequest
         if included {
             // AutoClip AI: the same request, with the license instead of a key
-            guard let license = License.activeKey, let url = URL(string: AppInfo.aiServerURL + "/api/messages") else {
-                throw llmError("AutoClip AI needs an active license. Add yours in AutoClip → Activate AutoClip, or add your own AI key in Settings → AI.")
+            guard let url = URL(string: AppInfo.aiServerURL + "/api/messages") else {
+                throw llmError("AutoClip AI isn't available in this copy. Add your own AI key in Settings → AI.")
             }
             req = URLRequest(url: url)
-            req.setValue(license, forHTTPHeaderField: "X-AutoClip-License")
+            if let license = License.activeKey {
+                req.setValue(license, forHTTPHeaderField: "X-AutoClip-License")
+            } else {
+                req.setValue(Self.trialID, forHTTPHeaderField: "X-AutoClip-Trial")
+            }
         } else {
             req = URLRequest(url: URL(string: "https://api.anthropic.com/v1/messages")!)
             req.setValue(apiKey, forHTTPHeaderField: "x-api-key")

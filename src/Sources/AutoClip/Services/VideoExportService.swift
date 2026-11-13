@@ -86,6 +86,7 @@ class VideoExportService {
     // MARK: - Main Export
 
     func exportClip(_ clip: Clip, from project: Project, options: ExportOptions, outputURL: URL, progress: @escaping (Double) -> Void) async throws {
+        try DiskSpace.check(400_000_000, for: "exporting this clip")
         let videoURL = URL(fileURLWithPath: project.videoPath)
         guard FileManager.default.fileExists(atPath: videoURL.path) else {
             throw ExportError.missingVideoFile
@@ -1670,6 +1671,7 @@ class VideoExportService {
         options: ExportOptions = ExportOptions(),
         progress: @escaping (Double, String) -> Void
     ) async throws {
+        try DiskSpace.check(400_000_000, for: "exporting this clip")
         // Cache loaded assets so multi-source reels don't reload the same file repeatedly
         var assetCache: [String: AVURLAsset] = [:]
         func sourceAsset(for clip: Clip) -> AVURLAsset {

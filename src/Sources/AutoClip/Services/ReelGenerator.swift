@@ -68,6 +68,8 @@ enum TranscriptCache {
     static func transcript(for videoPath: String, progress: @escaping (String) -> Void) async throws -> [Word] {
         if let cached = load(for: videoPath) { return cached }
         let whisper = WhisperService.shared
+        if !whisper.modelExists { progress("Getting the speech model ready…") }
+        await ModelDownloader.waitIfDownloading()
         if !whisper.modelExists {
             progress("Downloading speech model…")
             try await whisper.downloadModel { f, _ in progress("Downloading speech model… \(Int(f * 100))%") }

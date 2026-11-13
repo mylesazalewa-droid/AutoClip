@@ -258,7 +258,7 @@ final class SetupCheck: ObservableObject {
         let provider = LLMClipService.chosenProvider
         let key = (await LLMClipService.shared.loadAPIKey(for: provider)) ?? ""
         if key == LLMClipService.includedAIKey {
-            return (.good, "AutoClip AI is included with your license. Titles, captions and graphics can be written.", nil)
+            return (.good, "AutoClip AI is included. Titles, captions and graphics can be written.", nil)
         }
         if !key.isEmpty, provider == .anthropic {
             // Listing models is free, so this proves the key works without spending credits

@@ -25,6 +25,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         Task { @MainActor in
             DockStatus.shared.start()
             ReviewStore.shared.startIfNeeded()
+            ModelDownloader.shared.startIfNeeded()
+            Task { await WhatsNew.shared.check() }
+            Task.detached { await LLMClipService.refreshTrialAI() }
             try? await Task.sleep(nanoseconds: 2_000_000_000)
             await LibrarySync.shared.checkForNewer()
         }

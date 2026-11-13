@@ -86,12 +86,19 @@ enum AppLog {
         let t = Thread {
             let lastAnswer = OSAllocatedUnfairLock(initialState: Date())
             var reported = false
+            var sampled = false
             while true {
                 // In every run loop mode, so a dialog waiting for an answer isn't taken for a freeze
                 RunLoop.main.perform(inModes: [.common, .modalPanel, .eventTracking]) { lastAnswer.withLock { $0 = Date() } }
                 Thread.sleep(forTimeInterval: 2)
                 if quitting.withLock({ $0 }) { return }
                 let silent = Date().timeIntervalSince(lastAnswer.withLock { $0 })
+                if silent > 4, !reported, !sampled {
+                    // While it's still stuck: note where the time is going, for a problem report
+                    sampled = true
+                    captureFreeze()
+                }
+                if silent < 3 { sampled = false }
                 if silent > 8, !reported {
                     reported = true
                     write("The window stopped responding for \(Int(silent)) s (using \(memoryMB()) MB)")
@@ -105,6 +112,50 @@ enum AppLog {
         t.qualityOfService = .utility
         t.start()
         watchdog = t
+    }
+
+    // MARK: Freezes
+
+    static var freezeDir: URL { file.deletingLastPathComponent().appendingPathComponent("Freezes", isDirectory: true) }
+
+    /// Records three seconds of what AutoClip is doing (macOS's own `sample` tool), keeping the last five.
+    private static func captureFreeze() {
+        let fm = FileManager.default
+        try? fm.createDirectory(at: freezeDir, withIntermediateDirectories: true)
+        let name = "freeze \(ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")).txt"
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/sample")
+        p.arguments = [String(ProcessInfo.processInfo.processIdentifier), "3", "-mayDie", "-file", freezeDir.appendingPathComponent(name).path]
+        p.standardOutput = FileHandle.nullDevice
+        p.standardError = FileHandle.nullDevice
+        try? p.run()
+        let old = ((try? fm.contentsOfDirectory(at: freezeDir, includingPropertiesForKeys: [.contentModificationDateKey])) ?? [])
+            .sorted { ($0.lastPathComponent) > ($1.lastPathComponent) }
+        for f in old.dropFirst(5) { try? fm.removeItem(at: f) }
+    }
+
+    /// The newest freeze: AutoClip's own busiest steps on the main thread, most time first.
+    static func lastFreeze() -> String? {
+        let files = ((try? FileManager.default.contentsOfDirectory(at: freezeDir, includingPropertiesForKeys: nil)) ?? [])
+            .filter { $0.pathExtension == "txt" }.sorted { $0.lastPathComponent > $1.lastPathComponent }
+        guard let f = files.first, let text = try? String(contentsOf: f, encoding: .utf8) else { return nil }
+        // Only the main thread's part (up to the next thread)
+        let lines = text.components(separatedBy: "\n")
+        guard let start = lines.firstIndex(where: { $0.contains("Main Thread") || $0.contains("com.apple.main-thread") }) else { return nil }
+        let rest = lines[(start + 1)...]
+        let end = rest.firstIndex { $0.range(of: #"^\s*\d+ Thread_"#, options: .regularExpression) != nil } ?? lines.endIndex
+        let main = lines[start..<end]
+        var steps: [(Int, String)] = []
+        var seen = Set<String>()
+        for l in main where l.contains("(in AutoClip)") || l.contains("(in WhisperKit)") {
+            let t = l.trimmingCharacters(in: CharacterSet(charactersIn: " +!:|"))
+            let parts = t.split(separator: " ", maxSplits: 1)
+            guard parts.count == 2, let n = Int(parts[0]) else { continue }
+            let what = String(parts[1]).replacingOccurrences(of: #"\s+\[0x[0-9a-f]+\]"#, with: "", options: .regularExpression)
+            if seen.insert(what).inserted { steps.append((n, what)) }
+        }
+        guard !steps.isEmpty else { return nil }
+        return "\(f.lastPathComponent)\n" + steps.sorted { $0.0 > $1.0 }.prefix(25).map { "\($0.0)  \($0.1)" }.joined(separator: "\n")
     }
 
     private static func cpu() -> String {

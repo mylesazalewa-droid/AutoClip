@@ -22,7 +22,8 @@ class AppState: ObservableObject {
     private let ai = AIService.shared
 
     private init() {
-        showOnboarding = !WhisperService.shared.modelExists
+        // The speech model now downloads in the background (ModelDownloader); no first-run window
+        showOnboarding = false
     }
 
     func triggerImport() {

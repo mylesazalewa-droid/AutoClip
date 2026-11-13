@@ -3,18 +3,104 @@ import TipKit
 
 /// AutoClip → Settings (⌘,): everything that was spread around the app, in one place.
 struct SettingsView: View {
+    @State private var tab = "General"
+    @State private var query = ""
+
     var body: some View {
-        TabView {
-            GeneralSettings().tabItem { Label("General", systemImage: "gearshape") }
-            AISettings().tabItem { Label("AI", systemImage: "sparkles") }
-            ReelSettings().tabItem { Label("Clips", systemImage: "play.rectangle.on.rectangle") }
-            AutoImportView().tabItem { Label("Autopilot", systemImage: "dot.radiowaves.left.and.right") }
-            PlanSettings().tabItem { Label("Plan", systemImage: "key") }
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass").foregroundColor(Theme.muted)
+                TextField("Search settings", text: $query).textFieldStyle(.plain).font(.ui(size: 13))
+                if !query.isEmpty {
+                    Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundColor(Theme.muted) }.buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 10).padding(.vertical, 7)
+            .background(RoundedRectangle(cornerRadius: 8).fill(Theme.ink.opacity(0.06)))
+            .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 4)
+
+            if query.trimmingCharacters(in: .whitespaces).isEmpty {
+                TabView(selection: $tab) {
+                    GeneralSettings().tabItem { Label("General", systemImage: "gearshape") }.tag("General")
+                    AISettings().tabItem { Label("AI", systemImage: "sparkles") }.tag("AI")
+                    ReelSettings().tabItem { Label("Clips", systemImage: "play.rectangle.on.rectangle") }.tag("Clips")
+                    AutoImportView().tabItem { Label("Autopilot", systemImage: "dot.radiowaves.left.and.right") }.tag("Autopilot")
+                    PlanSettings().tabItem { Label("Plan", systemImage: "key") }.tag("Plan")
+                }
+            } else {
+                results
+            }
         }
         .frame(width: 560)
         .appLook()
         .tint(Theme.action)
     }
+
+    private var results: some View {
+        let words = query.lowercased().split(separator: " ").map(String.init)
+        let found = SettingsIndex.all.filter { item in
+            let hay = (item.title + " " + item.words + " " + item.tab).lowercased()
+            return words.allSatisfy { hay.contains($0) }
+        }
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 4) {
+                if found.isEmpty {
+                    Text("No setting matches “\(query)”.").font(.ui(size: 13)).foregroundColor(Theme.muted).padding(.top, 20)
+                }
+                ForEach(found) { item in
+                    Button {
+                        tab = item.tab; query = ""
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(item.title).font(.ui(size: 13.5, weight: .medium)).foregroundColor(Theme.cream)
+                                Text("Settings → \(item.tab)").font(.ui(size: 11.5)).foregroundColor(Theme.muted)
+                            }
+                            Spacer()
+                            Image(systemName: "arrow.right").foregroundColor(Theme.muted)
+                        }
+                        .padding(.horizontal, 12).padding(.vertical, 8)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(Theme.ink.opacity(0.04)))
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(16)
+        }
+        .frame(height: 420)
+    }
+}
+
+/// Every setting by name, with the words people might search for, and its tab.
+private enum SettingsIndex {
+    struct Item: Identifiable { var id: String { tab + title }; let title: String; let words: String; let tab: String }
+    static let all: [Item] = [
+        .init(title: "Appearance", words: "dark light mode theme look colors", tab: "General"),
+        .init(title: "Text size", words: "bigger larger font read zoom", tab: "General"),
+        .init(title: "Share with your other Mac", words: "two macs sync icloud dropbox laptop office folder", tab: "General"),
+        .init(title: "Back up AutoClip", words: "backup save copy new mac", tab: "General"),
+        .init(title: "Restore from a backup", words: "restore new mac move", tab: "General"),
+        .init(title: "Open AutoClip when this Mac starts", words: "login startup launch", tab: "General"),
+        .init(title: "Show in the menu bar", words: "menubar icon", tab: "General"),
+        .init(title: "Play sounds", words: "sound audio chime mute", tab: "General"),
+        .init(title: "Check for updates automatically", words: "update version new", tab: "General"),
+        .init(title: "Check setup", words: "problem fix diagnose speech model working", tab: "General"),
+        .init(title: "Help", words: "guide how support", tab: "General"),
+        .init(title: "Use AI to pick and order clips", words: "ai choose clips smart", tab: "AI"),
+        .init(title: "AI provider and key", words: "claude gemini openai gpt api key provider autoclip ai included", tab: "AI"),
+        .init(title: "Use on-device AI for simple jobs", words: "ollama local free private", tab: "AI"),
+        .init(title: "One-click Sunday", words: "automatic graphics every sermon", tab: "Clips"),
+        .init(title: "Make social graphics with every sermon", words: "carousel posts graphics", tab: "Clips"),
+        .init(title: "Find the sermon in a full service", words: "worship service trim start", tab: "Clips"),
+        .init(title: "Wide shot when the screen is mentioned", words: "screen slides wide camera", tab: "Clips"),
+        .init(title: "Length", words: "duration seconds long short", tab: "Clips"),
+        .init(title: "Movement", words: "zoom motion punch in", tab: "Clips"),
+        .init(title: "Hook animation", words: "opening text title animation", tab: "Clips"),
+        .init(title: "Save exports to", words: "folder export location drive", tab: "Clips"),
+        .init(title: "Autopilot", words: "watch folder automatic import new sermons", tab: "Autopilot"),
+        .init(title: "License", words: "activate key plan buy church solo trial", tab: "Plan"),
+    ]
 }
 
 private struct SettingsSection<Content: View>: View {
@@ -147,7 +233,9 @@ private struct AISettings: View {
                 }
                 if LLMClipService.includedAIReady && hasKey[.anthropic] != true {
                     Label(provider == .anthropic
-                          ? "AutoClip AI is included with your license, so Claude works without a key. Add your own key only if you'd rather be billed directly."
+                          ? (License.activeKey == nil
+                             ? "The free trial includes a little AutoClip AI, so Claude works without a key. Buy AutoClip for AI every month."
+                             : "AutoClip AI is included with your license, so Claude works without a key. Add your own key only if you'd rather be billed directly.")
                           : "AutoClip AI is included with your license: choose Claude above to use it without a key.",
                           systemImage: "sparkles")
                         .font(.ui(size: 12)).foregroundColor(Theme.good).fixedSize(horizontal: false, vertical: true)
