@@ -244,7 +244,24 @@ enum Relaunch {
         if NSApp.modalWindow != nil { NSApp.abortModal() }
         for w in NSApp.windows { if let sheet = w.attachedSheet { w.endSheet(sheet) } }
         afterQuit()
-        DispatchQueue.main.async { NSApp.terminate(nil) }
+        // A moment for the sheets to finish closing, then quit (asking again in case one was slow)
+        Task { @MainActor in
+            for _ in 0..<10 {
+                try? await Task.sleep(nanoseconds: 400_000_000)
+                for w in NSApp.windows { if let sheet = w.attachedSheet { w.endSheet(sheet) } }
+                NSApp.terminate(nil)
+            }
+            // Sharing the library with the other Mac may still be finishing (up to a minute)
+            for _ in 0..<150 where LibrarySync.shared.status != nil {
+                try? await Task.sleep(nanoseconds: 400_000_000)
+            }
+            // Still open: something is holding it, so save and close anyway.
+            // The reopen helper is already waiting, so AutoClip comes straight back.
+            AppLog.write("Quit was held up; closing directly to reopen")
+            AutoReelsStore.shared.saveNow()
+            UserDefaults.standard.synchronize()
+            exit(0)
+        }
     }
 
     static func afterQuit() {

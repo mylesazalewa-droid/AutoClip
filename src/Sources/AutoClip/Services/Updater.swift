@@ -133,12 +133,10 @@ final class Updater: ObservableObject {
             NSWorkspace.shared.recycle([backup]) { _, _ in }
 
             status = "Reopening…"
-            let pid = ProcessInfo.processInfo.processIdentifier
-            let p = Process()
-            p.executableURL = URL(fileURLWithPath: "/bin/sh")
-            p.arguments = ["-c", "while kill -0 \(pid) 2>/dev/null; do sleep 0.3; done; /usr/bin/open \"$0\"", app.path]
-            try p.run()
-            NSApp.terminate(nil)
+            AppLog.write("Updated to \(r.version); reopening")
+            // This window has to close first: macOS won't quit an app while a sheet is showing
+            showSheet = false
+            Relaunch.quitAndReopen()
         } catch {
             self.error = error.localizedDescription
             status = nil; progress = nil
