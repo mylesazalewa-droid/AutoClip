@@ -298,7 +298,7 @@ struct CarouselWindow: View {
             case .eyebrow: "Label"
             case .headline: "Words"
             case .body: "Text"
-            case .reference: "Reference"
+            case .reference: carousel.flatMap { c in items(c).indices.contains(selected) ? items(c)[selected].kind : nil } == .quote ? "Who said it" : "Reference"
             }
             let kp: WritableKeyPath<SermonCarousel.Slide, String> = switch f {
             case .eyebrow: \.eyebrow
@@ -583,8 +583,17 @@ struct CarouselWindow: View {
                         field("Label", text: itemBinding(\.eyebrow))
                         field(s.kind == .scripture ? "Verse" : s.kind == .quote ? "Quote" : "Headline", text: itemBinding(\.headline), lines: 4)
                         field("Words to highlight", text: itemBinding(\.emphasis))
-                        if s.kind == .scripture || s.kind == .quote {
-                            field(s.kind == .scripture ? "Reference" : "Who said it", text: itemBinding(\.reference))
+                        if s.kind == .scripture {
+                            field("Reference", text: itemBinding(\.reference))
+                        }
+                        if s.kind == .quote {
+                            let hidden = s.hideWho == true
+                            if !hidden { field("Who said it", text: itemBinding(\.reference)) }
+                            Toggle("No name under the quote", isOn: Binding(
+                                get: { itemBinding(\.hideWho).wrappedValue == true },
+                                set: { itemBinding(\.hideWho).wrappedValue = $0 ? true : nil }))
+                                .font(.ui(size: 13)).foregroundColor(Theme.text)
+                                .help(hidden ? "The quote shows with no name" : "Leave “Who said it” empty to show the church name instead")
                         }
                         if [.tension, .point, .question, .cta, .invite].contains(s.kind) {
                             field(s.kind == .invite ? "Times or details" : "Text", text: itemBinding(\.body), lines: 4)

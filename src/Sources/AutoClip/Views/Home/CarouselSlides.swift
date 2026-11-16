@@ -461,7 +461,7 @@ struct SlideCanvas: View {
                         .frame(height: 150, alignment: .top)
                 }
                 spoken(base: 86)
-                let who = slide.reference.isEmpty ? carousel.handle : slide.reference
+                let who = slide.hideWho == true ? "" : slide.reference.isEmpty ? carousel.handle : slide.reference
                 if !who.isEmpty {
                     editable(Text("— " + who).font(.system(size: 32, weight: .semibold)).foregroundColor(pal.soft), .reference)
                 }

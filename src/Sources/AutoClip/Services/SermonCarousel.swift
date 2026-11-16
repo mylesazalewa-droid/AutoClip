@@ -60,6 +60,8 @@ struct SermonCarousel: Codable, Equatable {
         var emphasis = ""
         var body = ""
         var reference = ""
+        /// A quote with no name under it (instead of the church name when "Who said it" is empty)
+        var hideWho: Bool?
         /// Source-video time of its photo
         var time: Double = 0
         var photo = false
